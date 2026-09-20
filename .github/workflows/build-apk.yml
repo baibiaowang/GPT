@@ -85,7 +85,7 @@ jobs:
       - name: Publish latest APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
+          tag_name: v1.3.0
           name: 股票判断机 GPT 最新版 v1.3.0
           body: |
             股票判断机 GPT 专用仓库最新版。
