@@ -8,9 +8,6 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
-import android.os.SystemClock;
-import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
 import android.webkit.ValueCallback;
 import android.webkit.WebView;
 
