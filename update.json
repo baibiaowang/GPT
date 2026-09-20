@@ -1,8 +1,8 @@
 {
-  "version":"1.2.0",
-  "versionCode":1200,
-  "published_at":"2026-09-20",
-  "repo":"baibiaowang/GPT",
-  "apk_url":"https://github.com/baibiaowang/GPT/releases/download/latest/app-debug.apk",
-  "notes":"修复手动激活码后无法加载数据；内置数据源不再要求手动保存；更新 Android 版本号至 1.2.0。"
+  "version": "1.3.0",
+  "versionCode": 1300,
+  "published_at": "2026-09-20",
+  "repo": "baibiaowang/GPT",
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/latest/app-debug.apk",
+  "notes": "修复详情页返回与底部菜单失效；公司概况支持 Android 真机双指缩放；更新 Android 版本号至 1.3.0。"
 }
