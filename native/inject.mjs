@@ -16,6 +16,6 @@ const p=path.join(OUT,ENTRY); let h=fs.readFileSync(p,'utf8');
 h=h.split('__DATA_URL__').join(jsSingle(urls));
 if(key){if(!/^[0-9a-fA-F]{64}$/.test(key)){console.error('::error::AES_KEY malformed');process.exit(1)}h=h.split('__AES_KEY__').join(jsSingle(key));}
 if(h.includes('__DATA_URL__')){console.error('::error::DATA_URL placeholder remains');process.exit(1)}
-const blocks=[...h.matchAll(/<script\b[^>]*>([\s\S]*?)<\\/script>/gi)].map(m=>m[1]);
+const blocks=[...h.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map(m=>m[1]);
 for(let i=0;i<blocks.length;i++){try{new Function(blocks[i])}catch(e){console.error('::error::injected JS parse failed #'+(i+1)+': '+e.message);process.exit(1)}}
 fs.writeFileSync(p,h);console.log('[inject] ok urls='+urls.split('\\n').length+' scripts='+blocks.length);
