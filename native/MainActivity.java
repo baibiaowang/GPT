@@ -75,6 +75,8 @@ public class MainActivity extends BridgeActivity {
     private static final String INCOMING_FILE = "incoming.txt";
     private static final String DATA_SOURCE_FILE = "data-source.txt";
     private static final String DATA_SOURCE_PART = "data-source.txt.part";
+    private static final String UPDATE_FILE = "update.json";
+    private static final String UPDATE_PART = "update.json.part";
     private static final int DATA_SOURCE_CHUNK = 196608;
     /** 与前端 POLL_MAX 保持一致：240 * 500ms = 120s */
     private static final int MAX_ATTEMPTS = 240;
@@ -125,19 +127,15 @@ public class MainActivity extends BridgeActivity {
                 }).start();
             }
             @JavascriptInterface public String readDataSourceChunk(final int offset, final int maxLength) {
-                int safeOffset = Math.max(0, offset);
-                int safeLength = Math.max(1, Math.min(DATA_SOURCE_CHUNK, maxLength));
-                File f = new File(getFilesDir(), DATA_SOURCE_FILE);
-                if (!f.exists() || safeOffset >= f.length()) return "";
-                int n = (int)Math.min((long)safeLength, f.length() - safeOffset);
-                byte[] buf = new byte[n];
-                try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r")) {
-                    raf.seek(safeOffset);
-                    raf.readFully(buf);
-                    return new String(buf, StandardCharsets.UTF_8);
-                } catch (Exception e) {
-                    throw new RuntimeException("读取数据文件失败：" + e.getMessage());
-                }
+                return readFileChunk(DATA_SOURCE_FILE, offset, maxLength, "数据文件");
+            }
+            @JavascriptInterface public void fetchUpdateManifest(final String url) {
+                new Thread(new Runnable() {
+                    @Override public void run() { fetchTextFileNative(url, UPDATE_FILE, UPDATE_PART, "更新清单", "window.__sjNativeUpdateResult"); }
+                }).start();
+            }
+            @JavascriptInterface public String readUpdateChunk(final int offset, final int maxLength) {
+                return readFileChunk(UPDATE_FILE, offset, maxLength, "更新清单");
             }
             @JavascriptInterface public void downloadApk(final String url, final String filename) {
                 runOnUiThread(new Runnable() {
@@ -192,10 +190,30 @@ public class MainActivity extends BridgeActivity {
         apkReceiverRegistered = true;
     }
 
+    private String readFileChunk(final String filename, final int offset, final int maxLength, final String label) {
+        int safeOffset = Math.max(0, offset);
+        int safeLength = Math.max(1, Math.min(DATA_SOURCE_CHUNK, maxLength));
+        File f = new File(getFilesDir(), filename);
+        if (!f.exists() || safeOffset >= f.length()) return "";
+        int n = (int)Math.min((long)safeLength, f.length() - safeOffset);
+        byte[] buf = new byte[n];
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r")) {
+            raf.seek(safeOffset);
+            raf.readFully(buf);
+            return new String(buf, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException("读取" + label + "失败：" + e.getMessage());
+        }
+    }
+
     private void fetchDataSourceNative(final String urlString) {
+        fetchTextFileNative(urlString, DATA_SOURCE_FILE, DATA_SOURCE_PART, "数据源", "window.__sjNativeDataSourceResult");
+    }
+
+    private void fetchTextFileNative(final String urlString, final String outName, final String partName, final String label, final String callbackFn) {
         HttpURLConnection conn = null;
-        File part = new File(getFilesDir(), DATA_SOURCE_PART);
-        File out = new File(getFilesDir(), DATA_SOURCE_FILE);
+        File part = new File(getFilesDir(), partName);
+        File out = new File(getFilesDir(), outName);
         try {
             if (urlString == null || !urlString.trim().startsWith("https://")) {
                 throw new Exception("数据源必须使用 HTTPS");
@@ -220,22 +238,22 @@ public class MainActivity extends BridgeActivity {
             if (!part.exists() || part.length() == 0) throw new Exception("服务器返回空文件");
             if (out.exists() && !out.delete()) throw new Exception("无法替换旧数据文件");
             if (!part.renameTo(out)) throw new Exception("无法保存数据文件");
-            notifyJsDataSourceResult(true, "数据源读取成功");
+            notifyJsTextResult(callbackFn, true, label + "读取成功");
         } catch (Exception e) {
             try { if (part.exists()) part.delete(); } catch (Exception ignored) { }
-            notifyJsDataSourceResult(false, "数据源读取失败：" + e.getMessage());
+            notifyJsTextResult(callbackFn, false, label + "读取失败：" + e.getMessage());
         } finally {
             if (conn != null) conn.disconnect();
         }
     }
 
-    private void notifyJsDataSourceResult(final boolean ok, final String message) {
+    private void notifyJsTextResult(final String callbackFn, final boolean ok, final String message) {
         runOnUiThread(new Runnable() {
             @Override public void run() {
                 WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
                 if (wv == null) return;
-                String js = "window.__sjNativeDataSourceResult&&window.__sjNativeDataSourceResult(" +
-                    (ok ? "true" : "false") + "," + jsStr(message) + ");";
+                String safeFn = (callbackFn == null || !callbackFn.matches("[A-Za-z0-9_.$]+")) ? "window.__sjNativeTextResult" : callbackFn;
+                String js = safeFn + "&&" + safeFn + "(" + (ok ? "true" : "false") + "," + jsStr(message) + ");";
                 try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
             }
         });
