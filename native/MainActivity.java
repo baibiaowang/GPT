@@ -32,6 +32,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.BufferedInputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import android.util.Base64;
 import android.os.Environment;
@@ -70,6 +73,9 @@ public class MainActivity extends BridgeActivity {
     };
 
     private static final String INCOMING_FILE = "incoming.txt";
+    private static final String DATA_SOURCE_FILE = "data-source.txt";
+    private static final String DATA_SOURCE_PART = "data-source.txt.part";
+    private static final int DATA_SOURCE_CHUNK = 196608;
     /** 与前端 POLL_MAX 保持一致：240 * 500ms = 120s */
     private static final int MAX_ATTEMPTS = 240;
     private static final long RETRY_MS = 500L;
@@ -112,6 +118,26 @@ public class MainActivity extends BridgeActivity {
                 new Thread(new Runnable() {
                     @Override public void run() { saveExportFile(filename, content); }
                 }).start();
+            }
+            @JavascriptInterface public void fetchDataSource(final String url) {
+                new Thread(new Runnable() {
+                    @Override public void run() { fetchDataSourceNative(url); }
+                }).start();
+            }
+            @JavascriptInterface public String readDataSourceChunk(final int offset, final int maxLength) {
+                int safeOffset = Math.max(0, offset);
+                int safeLength = Math.max(1, Math.min(DATA_SOURCE_CHUNK, maxLength));
+                File f = new File(getFilesDir(), DATA_SOURCE_FILE);
+                if (!f.exists() || safeOffset >= f.length()) return "";
+                int n = (int)Math.min((long)safeLength, f.length() - safeOffset);
+                byte[] buf = new byte[n];
+                try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r")) {
+                    raf.seek(safeOffset);
+                    raf.readFully(buf);
+                    return new String(buf, StandardCharsets.UTF_8);
+                } catch (Exception e) {
+                    throw new RuntimeException("读取数据文件失败：" + e.getMessage());
+                }
             }
             @JavascriptInterface public void downloadApk(final String url, final String filename) {
                 runOnUiThread(new Runnable() {
@@ -164,6 +190,55 @@ public class MainActivity extends BridgeActivity {
             registerReceiver(apkDownloadReceiver, new android.content.IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
         }
         apkReceiverRegistered = true;
+    }
+
+    private void fetchDataSourceNative(final String urlString) {
+        HttpURLConnection conn = null;
+        File part = new File(getFilesDir(), DATA_SOURCE_PART);
+        File out = new File(getFilesDir(), DATA_SOURCE_FILE);
+        try {
+            if (urlString == null || !urlString.trim().startsWith("https://")) {
+                throw new Exception("数据源必须使用 HTTPS");
+            }
+            URL url = new URL(urlString.trim());
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setInstanceFollowRedirects(true);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(30000);
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "text/plain,*/*");
+            conn.setRequestProperty("Cache-Control", "no-cache");
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
+            try (InputStream in = new BufferedInputStream(conn.getInputStream());
+                 OutputStream outStream = new FileOutputStream(part, false)) {
+                byte[] buf = new byte[32768];
+                int n;
+                while ((n = in.read(buf)) != -1) outStream.write(buf, 0, n);
+                outStream.flush();
+            }
+            if (!part.exists() || part.length() == 0) throw new Exception("服务器返回空文件");
+            if (out.exists() && !out.delete()) throw new Exception("无法替换旧数据文件");
+            if (!part.renameTo(out)) throw new Exception("无法保存数据文件");
+            notifyJsDataSourceResult(true, "数据源读取成功");
+        } catch (Exception e) {
+            try { if (part.exists()) part.delete(); } catch (Exception ignored) { }
+            notifyJsDataSourceResult(false, "数据源读取失败：" + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    private void notifyJsDataSourceResult(final boolean ok, final String message) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+                if (wv == null) return;
+                String js = "window.__sjNativeDataSourceResult&&window.__sjNativeDataSourceResult(" +
+                    (ok ? "true" : "false") + "," + jsStr(message) + ");";
+                try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
+            }
+        });
     }
 
     private void startApkDownload(final String url, final String filename) {

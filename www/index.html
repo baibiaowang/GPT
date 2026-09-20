@@ -192,14 +192,14 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 
 <script>
 const DEF_KEY='';
-const DEF_URLS='https://jsd.onmicrosoft.cn/gh/baibiaowang/stock-judge-app@main/data/stocks.txt';
-const APP_VERSION='1.6.6';
-const APP_VERSION_CODE=1606;
+const DEF_URLS='https://stocks-txt-file.app.workbuddy.host/stocks.txt';
+const APP_VERSION='1.6.7';
+const APP_VERSION_CODE=1607;
 const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
-const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.6.6/app.apk';
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.6.7/app.apk';
 const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2',saved:'sj.savedStocks.v1'};
 const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false,typeTab:'',conclusionTab:''};
 let favs=new Set(),cmts={},overrides={},savedStocks={};
@@ -224,7 +224,32 @@ function savedRecordList(test){const map=new Map(allRecords().map(r=>[keyOf(r),r
 function getUrls(){const custom=(localStorage.getItem(LS.urls)||'').split(/\s*\n\s*/).map(s=>s.trim()).filter(Boolean);if(custom.length)return custom;return String(DEF_URLS).split(/\s*\n\s*/).map(s=>s.trim()).filter(s=>s&&s.indexOf('__')!==0)}
 function getKeyHex(){const custom=(localStorage.getItem(LS.key)||'').trim();if(/^[0-9a-fA-F]{64}$/.test(custom))return custom;throw new Error('尚未配置激活码，请到“设置 → 激活码”填写')}
 async function decryptText(txt){const u=b64ToBytes(txt);if(u.length<33)throw new Error('密文过短');if(String.fromCharCode(u[0],u[1],u[2],u[3])!=='SJ01')throw new Error('数据格式不匹配');const iv=u.slice(5,17),data=u.slice(17),key=await crypto.subtle.importKey('raw',hexToBytes(getKeyHex()),{name:'AES-GCM'},false,['decrypt']);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,data);return JSON.parse(new TextDecoder().decode(plain))}
-async function loadFromUrl(url){const r=await fetch(url,{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);return decryptText(await r.text())}
+async function loadFromUrl(url){
+  if(window.AndroidNative&&AndroidNative.fetchDataSource&&AndroidNative.readDataSourceChunk){
+    await new Promise((resolve,reject)=>{
+      const done=(ok,message)=>{window.__sjNativeDataWaiter=null;ok?resolve():reject(new Error(message||'原生网络请求失败'))};
+      window.__sjNativeDataWaiter=done;
+      try{AndroidNative.fetchDataSource(url)}catch(e){window.__sjNativeDataWaiter=null;reject(e)}
+    });
+    let text='',offset=0;const chunk=196608;
+    for(;;){
+      const piece=AndroidNative.readDataSourceChunk(offset,chunk);
+      if(!piece)break;
+      text+=piece;
+      offset+=piece.length;
+      if(piece.length<chunk)break;
+    }
+    if(!text)throw new Error('数据文件为空');
+    return decryptText(text);
+  }
+  const r=await fetch(url,{cache:'no-cache'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return decryptText(await r.text());
+}
+window.__sjNativeDataSourceResult=function(ok,message){
+  const done=window.__sjNativeDataWaiter;
+  if(typeof done==='function')done(!!ok,String(message||''));
+};
 async function loadFromUrls(urls){const errs=[];for(const u of urls){try{return await loadFromUrl(u)}catch(e){errs.push(u.replace(/^https?:\/\//,'').slice(0,48)+' → '+e.message)}}throw new Error(errs.join('；'))}
 function statusColor(c){const m={'有利':'var(--good)','不利':'var(--bad)','待定':'var(--wait)','否决':'#5B0E1E'};return m[c]||'var(--gray)'}
 function allRecords(){return state.data&&Array.isArray(state.data.records)?state.data.records:[]}
@@ -335,7 +360,7 @@ async function boot(silent,force){
     if(!cached){
       pageSwitch('settings');
       $('dataStatus').textContent='数据加载失败：'+e.message;
-      toast('数据加载失败，请检查数据源和激活码',2800);
+      toast('数据加载失败：请检查数据源地址、网络和激活码',2800);
     }else{
       pageSwitch('home');
       toast('联网更新失败，继续显示缓存');

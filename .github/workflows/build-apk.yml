@@ -31,12 +31,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 本次小更新固定为 1.6.6，切换默认数据源并验证自动更新
+      # 本次小更新固定为 1.6.7，原生读取数据源并绕过 WebView CORS
       - name: Set release version
         run: |
           set -euo pipefail
-          CODE=1606
-          NAME="1.6.6"
+          CODE=1607
+          NAME="1.6.7"
           echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "version -> code=$CODE name=$NAME"
@@ -168,7 +168,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stock-judge-gpt-v1.6.6-apk
+          name: stock-judge-gpt-v1.6.7-apk
           path: dist/app.apk
           if-no-files-found: error
           retention-days: 30

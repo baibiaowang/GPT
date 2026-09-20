@@ -1,8 +1,8 @@
 {
-  "version": "1.6.6",
-  "versionCode": 1606,
+  "version": "1.6.7",
+  "versionCode": 1607,
   "published_at": "2026-09-20",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.6/app.apk",
-  "notes": "默认数据源切换为 https://jsd.onmicrosoft.cn/gh/baibiaowang/stock-judge-app@main/data/stocks.txt，并更新应用版本用于验证自动更新。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.7/app.apk",
+  "notes": "默认数据源改为 https://stocks-txt-file.app.workbuddy.host/stocks.txt；数据读取改为 Android 原生网络请求，绕过 WebView CORS 限制，并报告更具体的网络/HTTP错误。"
 }
