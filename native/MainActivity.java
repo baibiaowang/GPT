@@ -8,6 +8,9 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.os.SystemClock;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.webkit.ValueCallback;
 import android.webkit.WebView;
 
@@ -65,26 +68,38 @@ public class MainActivity extends BridgeActivity {
      * 用 OnBackPressedCallback 而不是覆写已废弃的 onBackPressed()，
      * 这样 Android 13+ 的预测性返回（predictive back）也走得通。
      */
+    private OnBackPressedCallback backCallback;
+
     private void installBackHandler() {
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+        backCallback = new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
-                if (wv != null && wv.canGoBack()) {
-                    wv.goBack();
-                    return;
+                final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+                if (wv == null) { finishActivityFromBack(); return; }
+                try {
+                    wv.evaluateJavascript(
+                        "(window.__sjHandleBack&&window.__sjHandleBack())===true;",
+                        new ValueCallback<String>() {
+                            @Override public void onReceiveValue(String value) {
+                                if ("true".equals(value)) return;
+                                if (wv.canGoBack()) { wv.goBack(); return; }
+                                finishActivityFromBack();
+                            }
+                        });
+                } catch (Exception e) {
+                    if (wv.canGoBack()) wv.goBack();
+                    else finishActivityFromBack();
                 }
-                setEnabled(false);
-                getOnBackPressedDispatcher().onBackPressed();
-                setEnabled(true);
             }
-        });
+        };
+        getOnBackPressedDispatcher().addCallback(this, backCallback);
     }
 
-    /**
-     * 公司概况（跨域 iframe）专用双指缩放：原生层识别 ScaleGesture，
-     * 前端根据双指焦点是否位于 .ov-frame 决定是否调整 iframe 比例。
-     */
+    private void finishActivityFromBack() {
+        if (backCallback != null) backCallback.setEnabled(false);
+        getOnBackPressedDispatcher().onBackPressed();
+    }
+
     private void installPinchZoom() {
         final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
         if (wv == null) {
@@ -96,35 +111,27 @@ public class MainActivity extends BridgeActivity {
         wv.getSettings().setSupportZoom(false);
         wv.getSettings().setBuiltInZoomControls(false);
 
-        final float density = getResources().getDisplayMetrics().density;
         final ScaleGestureDetector detector = new ScaleGestureDetector(this,
             new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                private float pendingScale = 1f;
-                private long lastDispatch = 0L;
+                private float pending = 1f;
+                private long last = 0L;
 
                 @Override public boolean onScaleBegin(ScaleGestureDetector d) {
-                    pendingScale = 1f;
-                    lastDispatch = 0L;
-                    return true;
+                    pending = 1f; last = 0L; return true;
                 }
-
                 @Override public boolean onScale(ScaleGestureDetector d) {
-                    pendingScale *= d.getScaleFactor();
+                    pending *= d.getScaleFactor();
                     final long now = SystemClock.uptimeMillis();
-                    if (now - lastDispatch >= 35L) {
-                        final float factor = pendingScale;
-                        pendingScale = 1f;
-                        lastDispatch = now;
-                        dispatchOverviewScale(wv, factor, d.getFocusX() / density, d.getFocusY() / density);
+                    if (now - last >= 35L) {
+                        final float factor = pending; pending = 1f; last = now;
+                        dispatchPinch(wv, factor);
                     }
                     return true;
                 }
-
                 @Override public void onScaleEnd(ScaleGestureDetector d) {
-                    if (Math.abs(pendingScale - 1f) > 0.001f) {
-                        final float factor = pendingScale;
-                        pendingScale = 1f;
-                        dispatchOverviewScale(wv, factor, d.getFocusX() / density, d.getFocusY() / density);
+                    if (Math.abs(pending - 1f) > 0.001f) {
+                        final float factor = pending; pending = 1f;
+                        dispatchPinch(wv, factor);
                     }
                 }
             });
@@ -137,11 +144,13 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
-    private void dispatchOverviewScale(WebView wv, float factor, float x, float y) {
+    private void dispatchPinch(WebView wv, float factor) {
         if (factor <= 0f) return;
-        final String js = "window.__sjPinchScale && window.__sjPinchScale(" +
-            Float.toString(factor) + "," + Float.toString(x) + "," + Float.toString(y) + ");";
-        try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
+        try {
+            wv.evaluateJavascript(
+                "window.__sjProfScale&&window.__sjProfScale(" + Float.toString(factor) + ");",
+                null);
+        } catch (Exception ignored) {}
     }
 
     @Override

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 const p='android/app/build.gradle';
-const code=Number(process.env.APP_VERSION_CODE||1300);
-const name=String(process.env.APP_VERSION_NAME||'1.3.0');
+const code=Number(process.env.APP_VERSION_CODE||1400);
+const name=String(process.env.APP_VERSION_NAME||'1.4.0');
 if(!fs.existsSync(p)){console.error('::error::android/app/build.gradle not found');process.exit(1);}
 let s=fs.readFileSync(p,'utf8');
 if(!/versionCode\s+\d+/.test(s)||!/versionName\s+"[^"]*"/.test(s)){console.error('::error::version fields not found');process.exit(1);}
