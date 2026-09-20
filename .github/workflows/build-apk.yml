@@ -187,26 +187,3 @@ jobs:
           make_latest: true
           overwrite_files: true
           files: dist/app.apk
-
-      # Release 发布成功后，同步手机检查更新使用的公开 update.json。
-      # update.json 不在 push 触发路径中，因此不会再次触发构建。
-      - name: Update public update manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > update.json <<EOF
-          {
-            "version": "${APP_VERSION_NAME}",
-            "versionCode": ${APP_VERSION_CODE},
-            "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "repo": "baibiaowang/GPT",
-            "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v${APP_VERSION_NAME}/app.apk",
-            "notes": "小更新：用于验证固定正式签名、覆盖安装和自动更新链路。"
-          }
-          EOF
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update.json
-          git diff --cached --quiet && exit 0
-          git commit -m "ci: sync update manifest for v${APP_VERSION_NAME}"
-          git push
