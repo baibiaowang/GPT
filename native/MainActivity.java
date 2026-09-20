@@ -5,6 +5,9 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.webkit.ValueCallback;
 import android.webkit.WebView;
 
@@ -40,6 +43,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         installBackHandler();
+        installPinchZoom();
         handle(getIntent());
     }
 
@@ -75,6 +79,69 @@ public class MainActivity extends BridgeActivity {
                 setEnabled(true);
             }
         });
+    }
+
+    /**
+     * 公司概况（跨域 iframe）专用双指缩放：原生层识别 ScaleGesture，
+     * 前端根据双指焦点是否位于 .ov-frame 决定是否调整 iframe 比例。
+     */
+    private void installPinchZoom() {
+        final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+        if (wv == null) {
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override public void run() { installPinchZoom(); }
+            }, 250L);
+            return;
+        }
+        wv.getSettings().setSupportZoom(false);
+        wv.getSettings().setBuiltInZoomControls(false);
+
+        final float density = getResources().getDisplayMetrics().density;
+        final ScaleGestureDetector detector = new ScaleGestureDetector(this,
+            new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                private float pendingScale = 1f;
+                private long lastDispatch = 0L;
+
+                @Override public boolean onScaleBegin(ScaleGestureDetector d) {
+                    pendingScale = 1f;
+                    lastDispatch = 0L;
+                    return true;
+                }
+
+                @Override public boolean onScale(ScaleGestureDetector d) {
+                    pendingScale *= d.getScaleFactor();
+                    final long now = SystemClock.uptimeMillis();
+                    if (now - lastDispatch >= 35L) {
+                        final float factor = pendingScale;
+                        pendingScale = 1f;
+                        lastDispatch = now;
+                        dispatchOverviewScale(wv, factor, d.getFocusX() / density, d.getFocusY() / density);
+                    }
+                    return true;
+                }
+
+                @Override public void onScaleEnd(ScaleGestureDetector d) {
+                    if (Math.abs(pendingScale - 1f) > 0.001f) {
+                        final float factor = pendingScale;
+                        pendingScale = 1f;
+                        dispatchOverviewScale(wv, factor, d.getFocusX() / density, d.getFocusY() / density);
+                    }
+                }
+            });
+
+        wv.setOnTouchListener(new android.view.View.OnTouchListener() {
+            @Override public boolean onTouch(android.view.View v, MotionEvent event) {
+                detector.onTouchEvent(event);
+                return detector.isInProgress();
+            }
+        });
+    }
+
+    private void dispatchOverviewScale(WebView wv, float factor, float x, float y) {
+        if (factor <= 0f) return;
+        final String js = "window.__sjPinchScale && window.__sjPinchScale(" +
+            Float.toString(factor) + "," + Float.toString(x) + "," + Float.toString(y) + ");";
+        try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
     }
 
     @Override
