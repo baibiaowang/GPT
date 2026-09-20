@@ -1,6 +1,9 @@
 package com.baibiaowang.stockjudge;
 
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -9,6 +12,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.webkit.JavascriptInterface;
@@ -48,6 +52,22 @@ public class MainActivity extends BridgeActivity {
     private String pendingExportName;
     private String pendingExportText;
 
+    private long apkDownloadId = -1L;
+    private String pendingInstallUri;
+    private DownloadManager apkDownloadManager;
+    private final Handler apkHandler = new Handler(Looper.getMainLooper());
+    private Runnable apkProgressTask;
+    private boolean apkReceiverRegistered = false;
+
+    private final BroadcastReceiver apkDownloadReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) return;
+            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
+            if (id != apkDownloadId) return;
+            checkApkDownload(true);
+        }
+    };
+
     private static final String INCOMING_FILE = "incoming.txt";
     /** 与前端 POLL_MAX 保持一致：240 * 500ms = 120s */
     private static final int MAX_ATTEMPTS = 240;
@@ -61,10 +81,23 @@ public class MainActivity extends BridgeActivity {
         installBackHandler();
         installPinchZoom();
         installNativeBridge();
+        registerApkDownloadReceiver();
         handle(getIntent());
     }
 
-    /** App-local JS bridge: export user backup to Downloads and open external links. */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (pendingInstallUri != null) {
+            final String uri = pendingInstallUri;
+            pendingInstallUri = null;
+            apkHandler.postDelayed(new Runnable() {
+                @Override public void run() { installDownloadedApk(uri); }
+            }, 250L);
+        }
+    }
+
+    /** App-local JS bridge: export user backup to Downloads, download updates, and open external links. */
     private void installNativeBridge() {
         final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
         if (wv == null) {
@@ -78,6 +111,11 @@ public class MainActivity extends BridgeActivity {
                 new Thread(new Runnable() {
                     @Override public void run() { saveExportFile(filename, content); }
                 }).start();
+            }
+            @JavascriptInterface public void downloadApk(final String url, final String filename) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() { startApkDownload(url, filename); }
+                });
             }
             @JavascriptInterface public void openBackupPicker() {
                 runOnUiThread(new Runnable() {
@@ -115,6 +153,202 @@ public class MainActivity extends BridgeActivity {
                 });
             }
         }, "AndroidNative");
+    }
+
+    private void registerApkDownloadReceiver() {
+        if (apkReceiverRegistered) return;
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(apkDownloadReceiver, new android.content.IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(apkDownloadReceiver, new android.content.IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        }
+        apkReceiverRegistered = true;
+    }
+
+    private void startApkDownload(final String url, final String filename) {
+        try {
+            Uri u = Uri.parse(url);
+            if (!"https".equalsIgnoreCase(u.getScheme())) {
+                notifyJsDownloadFailed("更新地址必须使用 HTTPS");
+                return;
+            }
+            if (apkDownloadManager == null) {
+                apkDownloadManager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            }
+            if (apkDownloadManager == null) {
+                notifyJsDownloadFailed("系统下载服务不可用");
+                return;
+            }
+
+            String safeName = (filename == null || filename.trim().isEmpty()) ? "stock-judge-update.apk" : filename.trim();
+            if (!safeName.toLowerCase().endsWith(".apk")) safeName += ".apk";
+            safeName = "股票判断机-" + safeName;
+
+            DownloadManager.Request req = new DownloadManager.Request(u);
+            req.setTitle("股票判断机更新");
+            req.setDescription("正在下载 " + safeName);
+            req.setMimeType("application/vnd.android.package-archive");
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            if (Build.VERSION.SDK_INT >= 24) {
+                req.setAllowedOverMetered(true);
+                req.setAllowedOverRoaming(true);
+            }
+            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "股票判断机/" + safeName);
+
+            apkDownloadId = apkDownloadManager.enqueue(req);
+            notifyJsDownloadProgress(0, "running", "正在下载…");
+            startApkProgressPolling();
+        } catch (Exception e) {
+            notifyJsDownloadFailed("APK 下载失败：" + e.getMessage());
+        }
+    }
+
+    private void startApkProgressPolling() {
+        if (apkProgressTask != null) apkHandler.removeCallbacks(apkProgressTask);
+        apkProgressTask = new Runnable() {
+            @Override public void run() {
+                if (apkDownloadId == -1L) return;
+                checkApkDownload(false);
+                if (apkDownloadId != -1L) apkHandler.postDelayed(this, 300L);
+            }
+        };
+        apkHandler.post(apkProgressTask);
+    }
+
+    private void checkApkDownload(boolean fromBroadcast) {
+        if (apkDownloadId == -1L) return;
+        DownloadManager.Query q = new DownloadManager.Query();
+        q.setFilterById(apkDownloadId);
+        try (android.database.Cursor c = apkDownloadManager.query(q)) {
+            if (c == null || !c.moveToFirst()) {
+                if (fromBroadcast) {
+                    notifyJsDownloadFailed("找不到下载任务");
+                    apkDownloadId = -1L;
+                }
+                return;
+            }
+
+            int status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+            if (status == DownloadManager.STATUS_PENDING) {
+                notifyJsDownloadProgress(0, "pending", "等待下载…");
+                return;
+            }
+            if (status == DownloadManager.STATUS_RUNNING) {
+                long done = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                long total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                int pct = total > 0 ? (int)Math.max(0, Math.min(99, Math.round(done * 100f / total))) : 0;
+                notifyJsDownloadProgress(pct, "running", total > 0 ? "正在下载 " + pct + "%" : "正在下载…");
+                return;
+            }
+            if (status == DownloadManager.STATUS_PAUSED) {
+                notifyJsDownloadProgress(0, "paused", "下载暂停，等待恢复…");
+                return;
+            }
+            if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                String localUri = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI));
+                apkDownloadId = -1L;
+                if (apkProgressTask != null) {
+                    apkHandler.removeCallbacks(apkProgressTask);
+                    apkProgressTask = null;
+                }
+                notifyJsDownloadComplete();
+                apkHandler.postDelayed(new Runnable() {
+                    @Override public void run() { installDownloadedApk(localUri); }
+                }, 350L);
+                return;
+            }
+
+            int reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON));
+            apkDownloadId = -1L;
+            if (apkProgressTask != null) {
+                apkHandler.removeCallbacks(apkProgressTask);
+                apkProgressTask = null;
+            }
+            notifyJsDownloadFailed("APK 下载失败（原因 " + reason + "）");
+        } catch (Exception e) {
+            notifyJsDownloadFailed("下载状态读取失败：" + e.getMessage());
+            apkDownloadId = -1L;
+        }
+    }
+
+    private void notifyJsDownloadProgress(final int percent, final String status, final String message) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+                if (wv == null) return;
+                String js = "window.__sjApkDownloadProgress&&window.__sjApkDownloadProgress(" +
+                    percent + "," + jsStr(status) + "," + jsStr(message) + ");";
+                try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
+            }
+        });
+    }
+
+    private void notifyJsDownloadComplete() {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+                if (wv == null) return;
+                try { wv.evaluateJavascript("window.__sjApkDownloadComplete&&window.__sjApkDownloadComplete();", null); }
+                catch (Exception ignored) { }
+            }
+        });
+    }
+
+    private void notifyJsDownloadFailed(final String message) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+                if (wv == null) return;
+                String js = "window.__sjApkDownloadFailed&&window.__sjApkDownloadFailed(" + jsStr(message) + ");";
+                try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
+            }
+        });
+    }
+
+    private void installDownloadedApk(String localUri) {
+        try {
+            if (localUri == null || localUri.trim().isEmpty()) throw new Exception("安装文件地址为空");
+            Uri uri = Uri.parse(localUri);
+            if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+                pendingInstallUri = localUri;
+                notifyJsInstallNeedsPermission();
+                try {
+                    Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName()));
+                    startActivity(settingsIntent);
+                } catch (Exception ignored) { }
+                return;
+            }
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(uri, "application/vnd.android.package-archive");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception e) {
+            final String msg = "安装 APK 失败：" + e.getMessage();
+            Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
+            notifyJsDownloadFailed(msg);
+        }
+    }
+
+    private void notifyJsInstallNeedsPermission() {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                Toast.makeText(MainActivity.this, "请允许“股票判断机”安装未知应用，然后返回继续安装。", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (apkProgressTask != null) {
+            apkHandler.removeCallbacks(apkProgressTask);
+            apkProgressTask = null;
+        }
+        if (apkReceiverRegistered) {
+            try { unregisterReceiver(apkDownloadReceiver); } catch (Exception ignored) { }
+            apkReceiverRegistered = false;
+        }
+        super.onDestroy();
     }
 
     private void saveExportFile(final String filename, final String content) {

@@ -9,6 +9,7 @@ import fs from 'node:fs';
 
 const P = 'android/app/src/main/AndroidManifest.xml';
 const MARK = 'sj-open-txt';
+const INSTALL_PERMISSION = 'android.permission.REQUEST_INSTALL_PACKAGES';
 
 if (!fs.existsSync(P)) {
   console.error('[patch-manifest] not found: ' + P);
@@ -16,6 +17,17 @@ if (!fs.existsSync(P)) {
 }
 
 let m = fs.readFileSync(P, 'utf8');
+
+if (m.indexOf('uses-permission android:name="' + INSTALL_PERMISSION + '"') < 0) {
+  const appIdx = m.indexOf('<application');
+  if (appIdx < 0) {
+    console.error('[patch-manifest] cannot find <application>');
+    process.exit(1);
+  }
+  m = m.slice(0, appIdx) +
+    '    <uses-permission android:name="' + INSTALL_PERMISSION + '" />\n' +
+    m.slice(appIdx);
+}
 
 if (m.indexOf(MARK) >= 0) {
   console.log('[patch-manifest] already patched, skip');

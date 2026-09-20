@@ -31,12 +31,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 本次小更新固定为 1.6.2，用于验证正式签名与覆盖安装
+      # 本次小更新固定为 1.6.3，用于验证 App 内 APK 下载与安装
       - name: Set release version
         run: |
           set -euo pipefail
-          CODE=1602
-          NAME="1.6.2"
+          CODE=1603
+          NAME="1.6.3"
           echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "version -> code=$CODE name=$NAME"
@@ -168,7 +168,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stock-judge-gpt-v${{ github.run_number }}-apk
+          name: stock-judge-gpt-v1.6.3-apk
           path: dist/app.apk
           if-no-files-found: error
           retention-days: 30
