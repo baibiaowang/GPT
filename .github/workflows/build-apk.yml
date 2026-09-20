@@ -35,8 +35,8 @@ jobs:
       - name: Set release version
         run: |
           set -euo pipefail
-          CODE=1604
-          NAME="1.6.4"
+          CODE=1605
+          NAME="1.6.5"
           echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "version -> code=$CODE name=$NAME"

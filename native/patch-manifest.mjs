@@ -24,7 +24,7 @@ if (m.indexOf('uses-permission android:name="' + INSTALL_PERMISSION + '"') < 0) 
 }
 
 if (m.indexOf(MARK) < 0) {
-  const re = /android:name="(?:[A-Za-z0-9_.]*\\.)?MainActivity"/;
+  const re = /android:name="(?:[A-Za-z0-9_.]*\.)?MainActivity"/;
   const mt = re.exec(m);
   if (!mt) {
     console.error('[patch-manifest] cannot find android:name=".MainActivity"');
@@ -55,7 +55,7 @@ const xmlDir = 'android/app/src/main/res/xml';
 fs.mkdirSync(xmlDir, {recursive: true});
 const pathsXml = `<?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="external_root" path="." />
+    <external-path name="stock_judge_downloads" path="Download/股票判断机" />
     <external-files-path name="external_files" path="." />
     <cache-path name="cache" path="." />
     <files-path name="files" path="." />
