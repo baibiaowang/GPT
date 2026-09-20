@@ -1,8 +1,8 @@
 {
-  "version": "1.6.4",
-  "versionCode": 1604,
+  "version": "1.6.5",
+  "versionCode": 1605,
   "published_at": "2026-09-20",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.4/app.apk",
-  "notes": "修复收藏/点评的本地永久保存：即使数据源删除股票，App 内仍保留收藏和点评；数据源以后恢复时自动重新关联。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.5/app.apk",
+  "notes": "修复 APK 更新安装时 file:// URI 被 Android 拒绝的问题，改用 FileProvider 安全安装。"
 }

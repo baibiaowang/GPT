@@ -23,6 +23,7 @@ import android.provider.MediaStore;
 import android.provider.DocumentsContract;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.content.FileProvider;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -309,6 +310,17 @@ public class MainActivity extends BridgeActivity {
         try {
             if (localUri == null || localUri.trim().isEmpty()) throw new Exception("安装文件地址为空");
             Uri uri = Uri.parse(localUri);
+            // DownloadManager 返回的本地文件通常是 file:// URI。Android 不允许
+            // 直接把 file:// 暴露给外部安装器，这里转换成安全的 content:// URI。
+            if ("file".equalsIgnoreCase(uri.getScheme())) {
+                File apkFile = new File(uri.getPath());
+                if (!apkFile.exists()) throw new Exception("安装文件不存在：" + apkFile.getAbsolutePath());
+                uri = FileProvider.getUriForFile(
+                    MainActivity.this,
+                    getPackageName() + ".fileprovider",
+                    apkFile
+                );
+            }
             if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
                 pendingInstallUri = localUri;
                 notifyJsInstallNeedsPermission();

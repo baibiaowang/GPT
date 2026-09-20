@@ -31,7 +31,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 本次小更新固定为 1.6.4，收藏/点评独立于数据源永久保存
+      # 本次小更新固定为 1.6.5，修复 Android file:// APK 安装异常
       - name: Set release version
         run: |
           set -euo pipefail
@@ -168,7 +168,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stock-judge-gpt-v1.6.4-apk
+          name: stock-judge-gpt-v1.6.5-apk
           path: dist/app.apk
           if-no-files-found: error
           retention-days: 30
