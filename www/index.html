@@ -10,26 +10,26 @@
   --bg:#f5f5f7;--card:#fff;--text:#1c1c1e;--muted:#6e6e73;--line:rgba(60,60,67,.12);
   --brand:#c8102e;--brand-deep:#8e0000;--brand-soft:rgba(200,16,46,.1);
   --good:#34c759;--bad:#ff3b30;--wait:#ff9500;--gray:#8e8e93;
-  --nav:rgba(249,249,249,.88);--shadow:0 1px 4px rgba(0,0,0,.06);--r:16px;--rs:11px;
+  --nav:rgba(249,249,249,.82);--shadow:0 1px 2px rgba(0,0,0,.04);--r:20px;--rs:13px;
 }
 @media (prefers-color-scheme:dark){
   :root{--bg:#000;--card:#1c1c1e;--text:#fff;--muted:#a1a1a6;--line:rgba(235,235,245,.12);--nav:rgba(28,28,30,.9);
-    --brand:#ff453a;--brand-deep:#b3122b;--brand-soft:rgba(255,69,58,.16);--shadow:none}
+    --brand:#0a84ff;--brand-deep:#006ee6;--brand-soft:rgba(10,132,255,.16);--shadow:none}
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;min-height:100%;max-width:100%;overflow-x:hidden;background:var(--bg);color:var(--text);
-  font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;
   -webkit-font-smoothing:antialiased}
 body{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
 button,input,textarea,select{font:inherit;color:inherit;font-family:inherit;max-width:100%}
 button{cursor:pointer}
 a{color:inherit;text-decoration:none}
 .wrap{width:100%;max-width:760px;margin:0 auto;padding:0 16px calc(104px + env(safe-area-inset-bottom))}
-.top{position:sticky;top:0;z-index:40;background:linear-gradient(158deg,#c8102e,#8e0000);
-  padding:calc(8px + env(safe-area-inset-top)) 16px 10px;border-bottom:.5px solid rgba(255,255,255,.2)}
-.top-title{font-size:18px;font-weight:800;color:#fff}
+.top{position:sticky;top:0;z-index:40;background:rgba(242,242,247,.82);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:.5px solid var(--line)}
+.top-title{font-size:23px;line-height:1.15;font-weight:800;letter-spacing:-.3px;color:var(--text)}
 .search{margin-top:8px}.search input{width:100%;height:38px;border:0;border-radius:12px;padding:0 13px;
-  background:rgba(255,255,255,.18);color:#fff;outline:none}.search input::placeholder{color:rgba(255,255,255,.8)}
+  background:rgba(118,118,128,.12);color:var(--text);outline:none}.search input::placeholder{color:var(--muted)}
 .hero-count{display:flex;align-items:center;justify-content:space-between;padding:14px 2px 8px}
 .count{font-size:16px;font-weight:700;color:var(--text)}
 .mini-note{font-size:12px;color:var(--muted)}
@@ -50,9 +50,9 @@ a{color:inherit;text-decoration:none}
 .empty{padding:52px 20px;text-align:center;color:var(--muted);line-height:1.7}
 .spin{width:22px;height:22px;border:2.5px solid rgba(142,142,147,.25);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.section-title{font-size:20px;font-weight:800;margin:18px 2px 8px}.tabbar{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin:0 -2px;scrollbar-width:none}.tabbar::-webkit-scrollbar{display:none}
-.tab{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-.tab b{font-size:11px;margin-left:5px;font-weight:800;opacity:.72}.tab.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 5px 14px rgba(200,16,46,.22)}
+.section-title{font-size:28px;font-weight:800;letter-spacing:-.5px;margin:22px 2px 8px}.tabbar{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin:0 -2px;scrollbar-width:none}.tabbar::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;border:0;background:rgba(118,118,128,.12);color:var(--muted);border-radius:999px;padding:9px 14px;font-size:13px;font-weight:700;box-shadow:none}
+.tab b{font-size:11px;margin-left:5px;font-weight:800;opacity:.72}.tab.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 4px 12px rgba(0,122,255,.20)}
 .tab-list{margin-top:2px}.tab-list .row{padding-top:13px;padding-bottom:13px}
 .external-company{display:flex;align-items:center;gap:12px;padding:16px}.external-icon{width:52px;height:52px;border-radius:15px;background:linear-gradient(145deg,#f1f5ff,#dfe7ff);color:#3767d8;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;letter-spacing:.5px;flex:0 0 auto}.external-main{flex:1;min-width:0}.external-title{font-size:16px;font-weight:800}.external-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-top:3px}.external-btn{border:0;background:var(--brand);color:#fff;border-radius:10px;padding:9px 11px;font-size:12px;font-weight:800;flex:0 0 auto}
 
@@ -62,9 +62,9 @@ a{color:inherit;text-decoration:none}
 .detail{position:fixed;inset:0;z-index:80;background:var(--bg);overflow:auto;transform:translateX(100%);
   transition:transform .25s cubic-bezier(.32,.72,0,1);padding-bottom:calc(100px + env(safe-area-inset-bottom))}
 .detail.show{transform:translateX(0)}
-.dnav{position:sticky;top:0;z-index:10;background:linear-gradient(158deg,#c8102e,#8e0000);
+.dnav{position:sticky;top:0;z-index:10;background:rgba(242,242,247,.82);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
   padding:calc(8px + env(safe-area-inset-top)) 12px 8px;display:flex;align-items:center;gap:8px}
-.back{border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:9px;padding:7px 10px;font-weight:600}.dt{flex:1;min-width:0;text-align:center;color:#fff;font-size:16px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.back{border:0;background:rgba(118,118,128,.12);color:var(--brand);border-radius:10px;padding:7px 10px;font-weight:600}.dt{flex:1;min-width:0;text-align:center;color:var(--text);font-size:16px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dbody{max-width:760px;margin:0 auto;padding:0 16px}
 .hero{padding:18px 2px 6px}.hero h1{margin:0;font-size:27px;line-height:1.18}.meta{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
 .result-main{padding:17px 16px}.result-label{font-size:12px;color:var(--muted);font-weight:700}.result-value{margin-top:6px;font-size:28px;line-height:1.1;font-weight:900}
@@ -74,7 +74,7 @@ a{color:inherit;text-decoration:none}
 select{width:100%;min-height:40px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:7px 10px;outline:none}
 .edit-rule{padding:12px 0;border-top:.5px solid var(--line)}.edit-rule:first-child{border-top:0}
 .rule-q{font-size:14px;line-height:1.4}.rule-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-.save-btn{width:100%;border:0;background:linear-gradient(158deg,#c8102e,#8e0000);color:#fff;border-radius:11px;padding:11px;font-weight:700;margin-top:14px}
+.save-btn{width:100%;border:0;background:rgba(242,242,247,.82);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);color:#fff;border-radius:11px;padding:11px;font-weight:700;margin-top:14px}
 .ann{padding:11px 16px;border-bottom:.5px solid var(--line)}.ann:last-child{border-bottom:0}.ann-title{font-size:14px;line-height:1.45}
 .ann-meta{margin-top:4px;font-size:11.5px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}
 .jrow{padding:12px 16px;border-bottom:.5px solid var(--line)}.jrow:last-child{border-bottom:0}.jq{font-size:14px}
@@ -86,7 +86,7 @@ select{width:100%;min-height:40px;border:1px solid var(--line);background:var(--
 .ov-help{padding:0 12px 10px;font-size:11.5px;color:var(--muted)}
 .setting-item{padding:14px 16px;border-bottom:.5px solid var(--line)}.setting-item:last-child{border-bottom:0}
 .setting-title{font-size:15px;font-weight:700}.setting-desc{margin-top:4px;font-size:12px;color:var(--muted);line-height:1.5}
-.setting-actions{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}.sbtn{border:0;background:rgba(120,120,128,.12);border-radius:10px;padding:9px 11px;font-size:13px}.sbtn.primary{background:var(--brand);color:#fff}
+.setting-actions{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}.sbtn{border:0;background:rgba(118,118,128,.12);border-radius:12px;padding:9px 11px;font-size:13px}.sbtn.primary{background:var(--brand);color:#fff}
 textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px;outline:none;resize:vertical}
 .bottom{position:fixed;left:0;right:0;bottom:0;z-index:100;background:var(--nav);backdrop-filter:saturate(180%) blur(18px);
   border-top:.5px solid var(--line);padding:7px 5px calc(7px + env(safe-area-inset-bottom));display:flex;gap:2px}
@@ -97,7 +97,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 .actions.show{display:flex}.actions button{flex:1;border:0;border-radius:11px;padding:10px 4px;background:rgba(120,120,128,.12);font-size:14px;font-weight:700}
 .actions button.primary{background:var(--brand);color:#fff}.actions button.on{background:rgba(255,149,0,.16);color:var(--wait)}
 .mask{position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.4);display:none;align-items:flex-end}.mask.show{display:flex}
-.sheet{width:100%;max-width:760px;margin:0 auto;background:var(--card);border-radius:18px 18px 0 0;max-height:90vh;overflow:auto;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.sheet{width:100%;max-width:760px;margin:0 auto;background:var(--card);border-radius:22px 22px 0 0;max-height:90vh;overflow:auto;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
 .sheet h3{margin:18px 20px 12px;font-size:18px}.sheet-grab{width:38px;height:5px;background:rgba(120,120,128,.25);border-radius:3px;margin:8px auto}
 .toast{position:fixed;left:50%;bottom:118px;transform:translate(-50%,8px);z-index:200;background:rgba(0,0,0,.84);color:#fff;
   padding:9px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;max-width:86vw;text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
@@ -146,12 +146,12 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
       </div>
       <div class="setting-item">
         <div class="setting-title">数据备份</div>
-        <div class="setting-desc">导出收藏、点评和手动修改记录。导出后自动保存到“下载 / 股票判断机”文件夹。</div>
-        <div class="setting-actions"><button class="sbtn primary" id="btnExport">导出数据</button><button class="sbtn" id="btnRestore">恢复备份</button></div>
+        <div class="setting-desc">完整备份当前数据、收藏、点评和手动修改。导出到“下载 / 股票判断机”，恢复备份默认也从这里打开。</div>
+        <div class="setting-actions"><button class="sbtn primary" id="btnExport">导出数据</button><button class="sbtn" id="btnRestore">从备份恢复</button></div><div class="setting-desc" style="margin-top:8px">导出与恢复统一使用“下载 / 股票判断机”，不用再到处找文件。</div>
       </div>
       <div class="setting-item">
         <div class="setting-title">应用更新</div>
-        <div class="setting-desc" id="updateDesc">当前版本 1.6.0。导出的备份自动保存到“下载 / 股票判断机”。</div>
+        <div class="setting-desc" id="updateDesc">当前版本 1.6.1。导出的备份自动保存到“下载 / 股票判断机”。</div>
         <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
       </div>
       <div class="setting-item">
@@ -189,13 +189,13 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script>
 const DEF_KEY='';
 const DEF_URLS='https://cdn.jsdelivr.net/gh/baibiaowang/stock-judge-app@main/data/stocks.txt\nhttps://raw.githubusercontent.com/baibiaowang/stock-judge-app/main/data/stocks.txt';
-const APP_VERSION='1.6.0';
-const APP_VERSION_CODE=1600;
+const APP_VERSION='1.6.1';
+const APP_VERSION_CODE=1601;
 const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
-const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.6.0/app-debug.apk';
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.6.1/app-debug.apk';
 const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2'};
 const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false,typeTab:'',conclusionTab:''};
 let favs=new Set(),cmts={},overrides={};
@@ -273,7 +273,7 @@ function closeSheet(){$('mask').classList.remove('show')}
 function sourceSheet(){openSheet('数据源','<div class="note">内置数据源已配置。你可以直接修改、增加或删除地址；每行一个。<br>全部留空 = 恢复内置数据源。</div><div style="padding:0 16px 8px"><textarea id="inUrls" placeholder="https://…/stocks.txt">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div class="sheet-actions" style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="sc">取消</button><button class="sbtn primary" id="ss">保存并加载</button></div>',()=>{$('sc').onclick=closeSheet;$('ss').onclick=()=>{const u=$('inUrls').value.trim();u?localStorage.setItem(LS.urls,u):localStorage.removeItem(LS.urls);closeSheet();boot(false,true)}})}
 function keySheet(){openSheet('激活码','<div class="note">必须由你自己输入；App 不内置、不从构建环境注入激活码。64 位十六进制。</div><div style="padding:0 16px 8px"><input id="inKey" type="text" value="'+esc(localStorage.getItem(LS.key)||'')+'" placeholder="请输入激活码" style="width:100%;height:42px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 10px;outline:none"></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="ks" style="width:100%">保存并加载</button></div>',()=>{$('ks').onclick=()=>{const k=$('inKey').value.trim();if(k&&!/^[0-9a-fA-F]{64}$/.test(k)){toast('激活码格式不正确');return}k?localStorage.setItem(LS.key,k):localStorage.removeItem(LS.key);closeSheet();boot(false,true)}})}
 function exportBackup(){const p={kind:'stock-judge-backup',version:4,exported_at:new Date().toISOString(),app_version:APP_VERSION,data:state.data,favorites:[...favs],comments:cmts,overrides};const filename='stock-judge-data-'+new Date().toISOString().slice(0,10)+'.json';const text=JSON.stringify(p,null,2);if(window.AndroidNative&&AndroidNative.saveTextFile){AndroidNative.saveTextFile(filename,text);toast('已导出完整数据到“下载 / 股票判断机”',2600);return}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('已导出完整数据')}
-function restoreBackup(){const el=document.createElement('input');el.type='file';el.accept='.json,application/json';el.onchange=()=>{const f=el.files&&el.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(Array.isArray(p.favorites))p.favorites.forEach(k=>favs.add(k));if(p.comments&&typeof p.comments==='object')Object.assign(cmts,p.comments);if(p.overrides&&typeof p.overrides==='object')Object.assign(overrides,p.overrides);saveFav();saveCmt();saveOverrides();renderAllPages();toast('备份已恢复')}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};el.click()}
+function applyBackupObject(p){if(!p||typeof p!=='object')throw new Error('备份格式无效');if(Array.isArray(p.favorites))p.favorites.forEach(k=>favs.add(k));if(p.comments&&typeof p.comments==='object')Object.assign(cmts,p.comments);if(p.overrides&&typeof p.overrides==='object')Object.assign(overrides,p.overrides);if(p.data&&typeof p.data==='object'){state.data=p.data;state.kind='local';Cache.set(p.data).catch(()=>{});}saveFav();saveCmt();saveOverrides();renderAllPages();toast('备份已恢复')} function restoreBackup(){if(window.AndroidNative&&AndroidNative.openBackupPicker){AndroidNative.openBackupPicker();return}const el=document.createElement('input');el.type='file';el.accept='.json,application/json';el.onchange=()=>{const f=el.files&&el.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{applyBackupObject(JSON.parse(rd.result))}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};el.click()} function restoreBackupText(txt){try{applyBackupObject(JSON.parse(txt))}catch(e){toast('恢复失败：'+e.message,2800)}}
 async function checkUpdate(){try{const errs=[];for(const u of UPDATE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const p=await r.json();const remoteCode=Number(p.versionCode||0);if(remoteCode>APP_VERSION_CODE){$('updateDesc').textContent='发现新版本 '+p.version+'，点击确认进入更新下载。';if(confirm('发现新版本 '+p.version+'。现在打开更新下载？'))window.open(p.apk_url||RELEASE_APK,'_blank');return}$('updateDesc').textContent='当前已是版本 '+APP_VERSION+'；更新时间 '+(p.published_at||'未知');return}catch(e){errs.push(e.message)}}throw new Error(errs.join('；'))}catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败',2600)}}
 function updateDataStatus(){const n=allRecords().length;const g=state.data&&state.data.meta&&state.data.meta.generated_at;$('dataStatus').textContent=n?(n+' 条记录 · '+(state.kind==='cache'?'缓存':state.kind==='local'?'本地导入':'实时')+(g?' · '+String(g).slice(0,16).replace('T',' '):'')):'未加载'}
 function hasUserConfig(){
