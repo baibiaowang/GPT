@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=yes">
+<meta name="theme-color" content="#C8102E">
+<title>股票判断机</title>
+<style>
+:root{
+  --bg:#f5f5f7;--card:#fff;--text:#1c1c1e;--muted:#6e6e73;--line:rgba(60,60,67,.12);
+  --brand:#c8102e;--brand-deep:#8e0000;--brand-soft:rgba(200,16,46,.1);
+  --good:#34c759;--bad:#ff3b30;--wait:#ff9500;--gray:#8e8e93;
+  --nav:rgba(249,249,249,.88);--shadow:0 1px 4px rgba(0,0,0,.06);--r:16px;--rs:11px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#000;--card:#1c1c1e;--text:#fff;--muted:#a1a1a6;--line:rgba(235,235,245,.12);--nav:rgba(28,28,30,.9);
+    --brand:#ff453a;--brand-deep:#b3122b;--brand-soft:rgba(255,69,58,.16);--shadow:none}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;max-width:100%;overflow-x:hidden;background:var(--bg);color:var(--text);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+body{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+button,input,textarea,select{font:inherit;color:inherit;font-family:inherit;max-width:100%}
+button{cursor:pointer}
+a{color:inherit;text-decoration:none}
+.wrap{width:100%;max-width:760px;margin:0 auto;padding:0 16px calc(104px + env(safe-area-inset-bottom))}
+.top{position:sticky;top:0;z-index:40;background:linear-gradient(158deg,#c8102e,#8e0000);
+  padding:calc(8px + env(safe-area-inset-top)) 16px 10px;border-bottom:.5px solid rgba(255,255,255,.2)}
+.top-title{font-size:18px;font-weight:800;color:#fff}
+.search{margin-top:8px}.search input{width:100%;height:38px;border:0;border-radius:12px;padding:0 13px;
+  background:rgba(255,255,255,.18);color:#fff;outline:none}.search input::placeholder{color:rgba(255,255,255,.8)}
+.hero-count{display:flex;align-items:center;justify-content:space-between;padding:14px 2px 8px}
+.count{font-size:16px;font-weight:700;color:var(--text)}
+.mini-note{font-size:12px;color:var(--muted)}
+.page{display:none}.page.on{display:block}
+.card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);margin:12px 0}
+.card-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px 10px;
+  border-bottom:.5px solid var(--line);font-size:13px;font-weight:700;color:var(--muted)}
+.card-hd .sub{font-size:12px;font-weight:400}
+.row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:.5px solid var(--line)}
+.row:last-child{border-bottom:0}.row:active{background:var(--brand-soft)}
+.main{flex:1;min-width:0}.t1{font-size:16px;font-weight:700;overflow-wrap:anywhere}.t2{margin-top:3px;font-size:12px;color:var(--muted);
+  display:flex;gap:5px;flex-wrap:wrap}.t3{margin-top:4px;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:7px;background:rgba(120,120,128,.12);font-size:11px;color:var(--muted)}
+.tag.cat{background:var(--brand-soft);color:var(--brand)}.tag.type{background:rgba(52,199,89,.11);color:#1f9e42}
+.pill{padding:4px 9px;border-radius:999px;color:#fff;font-size:11.5px;font-weight:700;white-space:nowrap;flex:0 0 auto}
+.chev{color:var(--muted);font-size:18px;flex:0 0 auto}
+.star{color:var(--wait);font-size:12px;margin-left:3px}
+.empty{padding:52px 20px;text-align:center;color:var(--muted);line-height:1.7}
+.spin{width:22px;height:22px;border:2.5px solid rgba(142,142,147,.25);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.section-title{font-size:20px;font-weight:800;margin:18px 2px 8px}
+.group-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:var(--card);border-bottom:.5px solid var(--line);font-weight:700}
+.group-head button{border:0;background:transparent;color:var(--brand);font-size:17px}.group-items{display:none}.group.open .group-items{display:block}
+.group{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);margin:12px 0}
+.detail{position:fixed;inset:0;z-index:80;background:var(--bg);overflow:auto;transform:translateX(100%);
+  transition:transform .25s cubic-bezier(.32,.72,0,1);padding-bottom:calc(100px + env(safe-area-inset-bottom))}
+.detail.show{transform:translateX(0)}
+.dnav{position:sticky;top:0;z-index:10;background:linear-gradient(158deg,#c8102e,#8e0000);
+  padding:calc(8px + env(safe-area-inset-top)) 12px 8px;display:flex;align-items:center;gap:8px}
+.back{border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:9px;padding:7px 10px;font-weight:600}.dt{flex:1;min-width:0;text-align:center;color:#fff;font-size:16px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dbody{max-width:760px;margin:0 auto;padding:0 16px}
+.hero{padding:18px 2px 6px}.hero h1{margin:0;font-size:27px;line-height:1.18}.meta{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.result-main{padding:17px 16px}.result-label{font-size:12px;color:var(--muted);font-weight:700}.result-value{margin-top:6px;font-size:28px;line-height:1.1;font-weight:900}
+.edit-toggle{width:100%;border:0;background:rgba(120,120,128,.08);border-radius:12px;padding:11px 12px;text-align:left;font-weight:700;display:flex;justify-content:space-between}
+.edit-panel{display:none;padding:0 16px 16px}.edit-panel.open{display:block}
+.form-row{margin-top:12px}.form-row label{display:block;font-size:12px;color:var(--muted);font-weight:700;margin-bottom:5px}
+select{width:100%;min-height:40px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:7px 10px;outline:none}
+.edit-rule{padding:12px 0;border-top:.5px solid var(--line)}.edit-rule:first-child{border-top:0}
+.rule-q{font-size:14px;line-height:1.4}.rule-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.save-btn{width:100%;border:0;background:linear-gradient(158deg,#c8102e,#8e0000);color:#fff;border-radius:11px;padding:11px;font-weight:700;margin-top:14px}
+.ann{padding:11px 16px;border-bottom:.5px solid var(--line)}.ann:last-child{border-bottom:0}.ann-title{font-size:14px;line-height:1.45}
+.ann-meta{margin-top:4px;font-size:11.5px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}
+.jrow{padding:12px 16px;border-bottom:.5px solid var(--line)}.jrow:last-child{border-bottom:0}.jq{font-size:14px}
+.jm{margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.hit{font-size:12px;font-weight:700}
+.overview{overflow:hidden}.ov-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:.5px solid var(--line)}
+.ov-btn{border:0;background:rgba(120,120,128,.12);border-radius:9px;padding:6px 9px;font-size:12px}.ov-group{display:flex;gap:6px;align-items:center}
+.ov-frame{height:72vh;min-height:460px;background:#fff;overflow:auto;-webkit-overflow-scrolling:touch}
+.ov-canvas{width:100%;height:100%;overflow:auto}.ov-frame iframe{display:block;border:0;transform-origin:top left}
+.ov-help{padding:0 12px 10px;font-size:11.5px;color:var(--muted)}
+.setting-item{padding:14px 16px;border-bottom:.5px solid var(--line)}.setting-item:last-child{border-bottom:0}
+.setting-title{font-size:15px;font-weight:700}.setting-desc{margin-top:4px;font-size:12px;color:var(--muted);line-height:1.5}
+.setting-actions{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}.sbtn{border:0;background:rgba(120,120,128,.12);border-radius:10px;padding:9px 11px;font-size:13px}.sbtn.primary{background:var(--brand);color:#fff}
+textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px;outline:none;resize:vertical}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:100;background:var(--nav);backdrop-filter:saturate(180%) blur(18px);
+  border-top:.5px solid var(--line);padding:7px 5px calc(7px + env(safe-area-inset-bottom));display:flex;gap:2px}
+.bottom button{flex:1;min-width:0;border:0;background:transparent;padding:5px 1px;color:var(--muted);font-size:10.5px}
+.bottom button .ic{display:block;font-size:18px;line-height:20px;margin-bottom:1px}.bottom button.on{color:var(--brand);font-weight:700}
+.actions{position:fixed;left:0;right:0;bottom:calc(60px + env(safe-area-inset-bottom));z-index:90;display:none;gap:8px;
+  padding:7px 12px;background:var(--nav);backdrop-filter:blur(15px);border-top:.5px solid var(--line)}
+.actions.show{display:flex}.actions button{flex:1;border:0;border-radius:11px;padding:10px 4px;background:rgba(120,120,128,.12);font-size:14px;font-weight:700}
+.actions button.primary{background:var(--brand);color:#fff}.actions button.on{background:rgba(255,149,0,.16);color:var(--wait)}
+.mask{position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.4);display:none;align-items:flex-end}.mask.show{display:flex}
+.sheet{width:100%;max-width:760px;margin:0 auto;background:var(--card);border-radius:18px 18px 0 0;max-height:90vh;overflow:auto;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.sheet h3{margin:18px 20px 12px;font-size:18px}.sheet-grab{width:38px;height:5px;background:rgba(120,120,128,.25);border-radius:3px;margin:8px auto}
+.toast{position:fixed;left:50%;bottom:118px;transform:translate(-50%,8px);z-index:200;background:rgba(0,0,0,.84);color:#fff;
+  padding:9px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;max-width:86vw;text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
+.note{padding:0 16px 12px;color:var(--muted);font-size:12px}.danger{color:var(--bad)}
+@media(max-width:520px){.rule-meta{grid-template-columns:1fr}.bottom button{font-size:10px}.bottom button .ic{font-size:17px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-title" id="topTitle">股票判断机</div>
+  <div class="search"><input id="q" type="search" placeholder="搜索名称 / 代码" autocomplete="off"></div>
+</header>
+
+<main class="wrap">
+  <section id="page-home" class="page on">
+    <div class="hero-count"><div class="count" id="countTitle">共 0 条</div><div class="mini-note" id="dataNote">正在加载…</div></div>
+    <div id="homeList"><div class="empty"><div class="spin"></div>正在加载…</div></div>
+  </section>
+  <section id="page-types" class="page">
+    <div class="section-title">类型</div><div class="mini-note">点击分组展开股票</div><div id="typesList"></div>
+  </section>
+  <section id="page-conclusions" class="page">
+    <div class="section-title">结论</div><div class="mini-note">按实际数据中的结论动态分组</div><div id="conclusionList"></div>
+  </section>
+  <section id="page-comments" class="page">
+    <div class="section-title">点评</div><div class="mini-note">已写点评的股票</div><div id="commentList"></div>
+  </section>
+  <section id="page-favorites" class="page">
+    <div class="section-title">收藏</div><div class="mini-note">已收藏的股票</div><div id="favList"></div>
+  </section>
+  <section id="page-settings" class="page">
+    <div class="section-title">设置</div><div class="mini-note">数据、备份、更新统一放在这里</div>
+    <div class="card">
+      <div class="setting-item">
+        <div class="setting-title">数据源</div>
+        <div class="setting-desc">数据地址与激活码分开管理。每行一个地址，按顺序尝试。</div>
+        <div class="setting-actions"><button class="sbtn primary" id="btnSource">配置数据源</button><button class="sbtn" id="btnReload">重新加载数据</button></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-title">激活码</div>
+        <div class="setting-desc">用于解密公告数据。不会写入数据文件。</div>
+        <div class="setting-actions"><button class="sbtn" id="btnKey">修改激活码</button></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-title">数据备份</div>
+        <div class="setting-desc">备份收藏、点评和你手动修改过的判定/性质。</div>
+        <div class="setting-actions"><button class="sbtn" id="btnExport">导出备份</button><button class="sbtn" id="btnRestore">恢复备份</button></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-title">应用更新</div>
+        <div class="setting-desc" id="updateDesc">当前版本 1.1.0。检查 GitHub 上 GPT 仓库的最新版本。</div>
+        <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-title">当前数据状态</div>
+        <div class="setting-desc" id="dataStatus">未加载</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="detail" id="detail">
+  <div class="dnav"><button class="back" id="btnBack">‹ 返回</button><div class="dt" id="dTitle"></div><div style="width:56px"></div></div>
+  <div class="dbody">
+    <div id="dHero"></div>
+    <div id="dBody"></div>
+  </div>
+</div>
+
+<div class="actions" id="actions">
+  <button id="aFav">收藏</button><button id="aCmt">点评</button><button id="aCopy" class="primary">复制代码</button>
+</div>
+
+<nav class="bottom" id="bottomNav">
+  <button data-page="home" class="on"><span class="ic">⌂</span>首页</button>
+  <button data-page="types"><span class="ic">☷</span>类型</button>
+  <button data-page="conclusions"><span class="ic">◉</span>结论</button>
+  <button data-page="comments"><span class="ic">✎</span>点评</button>
+  <button data-page="favorites"><span class="ic">★</span>收藏</button>
+  <button data-page="settings"><span class="ic">⚙</span>设置</button>
+</nav>
+
+<div class="mask" id="mask"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const DEF_KEY='__AES_KEY__';
+const DEF_URLS='__DATA_URL__';
+const APP_VERSION='1.1.0';
+const UPDATE_URLS=[
+  'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
+  'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
+];
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/latest/stock-judge-gpt-debug.apk';
+const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2'};
+const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30};
+let favs=new Set(),cmts={},overrides={};
+const $=id=>document.getElementById(id);
+function toast(msg,ms){const e=$('toast');e.textContent=msg;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),ms||1800)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function hexToBytes(hex){const s=String(hex||'').trim();if(!/^[0-9a-fA-F]{64}$/.test(s))throw new Error('激活码需为64位十六进制');const a=new Uint8Array(32);for(let i=0;i<32;i++)a[i]=parseInt(s.substr(i*2,2),16);return a}
+function b64ToBytes(b64){const bin=atob(String(b64).replace(/[^A-Za-z0-9+/=]/g,''));const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a}
+function keyOf(r){return String(r.code||'')+'|'+String(r.category||'')}
+const IDB=(()=>{const DB='stockjudge-gpt',STORE='kv',VER=1;let p=null;function open(){if(p)return p;p=new Promise((res,rej)=>{const q=indexedDB.open(DB,VER);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(STORE))q.result.createObjectStore(STORE)};q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});return p}function tx(mode,fn){return open().then(db=>new Promise((res,rej)=>{const t=db.transaction(STORE,mode),s=t.objectStore(STORE);let r;try{r=fn(s)}catch(e){rej(e);return}t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error)}))}return{get:k=>tx('readonly',s=>s.get(k)),set:(k,v)=>tx('readwrite',s=>s.put(v,k)),del:k=>tx('readwrite',s=>s.delete(k))}})();
+const Cache={get:async()=>{try{const v=await IDB.get('data');if(v)return v}catch(e){}try{return JSON.parse(localStorage.getItem('sj.cache.v4')||'null')}catch(e){return null}},set:async d=>{try{await IDB.set('data',d);localStorage.removeItem('sj.cache.v4');return true}catch(e){try{localStorage.setItem('sj.cache.v4',JSON.stringify(d));return true}catch(e2){return false}}}};
+function loadLocal(){try{favs=new Set(JSON.parse(localStorage.getItem(LS.fav)||'[]'))}catch(e){favs=new Set()}try{cmts=JSON.parse(localStorage.getItem(LS.cmt)||'{}')}catch(e){cmts={}}try{overrides=JSON.parse(localStorage.getItem(LS.override)||'{}')}catch(e){overrides={}}}
+const saveFav=()=>localStorage.setItem(LS.fav,JSON.stringify([...favs]));
+const saveCmt=()=>localStorage.setItem(LS.cmt,JSON.stringify(cmts));
+const saveOverrides=()=>localStorage.setItem(LS.override,JSON.stringify(overrides));
+function getUrls(){const custom=(localStorage.getItem(LS.urls)||'').split(/\s*\n\s*/).map(s=>s.trim()).filter(Boolean);if(custom.length)return custom;return String(DEF_URLS).split(/\s*\n\s*/).map(s=>s.trim()).filter(s=>s&&s.indexOf('__')!==0)}
+function getKeyHex(){const custom=(localStorage.getItem(LS.key)||'').trim();if(/^[0-9a-fA-F]{64}$/.test(custom))return custom;const builtin=String(DEF_KEY).trim();if(/^[0-9a-fA-F]{64}$/.test(builtin))return builtin;throw new Error('尚未配置激活码，请到“设置 → 激活码”填写')}
+async function decryptText(txt){const u=b64ToBytes(txt);if(u.length<33)throw new Error('密文过短');if(String.fromCharCode(u[0],u[1],u[2],u[3])!=='SJ01')throw new Error('数据格式不匹配');const iv=u.slice(5,17),data=u.slice(17),key=await crypto.subtle.importKey('raw',hexToBytes(getKeyHex()),{name:'AES-GCM'},false,['decrypt']);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,data);return JSON.parse(new TextDecoder().decode(plain))}
+async function loadFromUrl(url){const r=await fetch(url,{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);return decryptText(await r.text())}
+async function loadFromUrls(urls){const errs=[];for(const u of urls){try{return await loadFromUrl(u)}catch(e){errs.push(u.replace(/^https?:\/\//,'').slice(0,48)+' → '+e.message)}}throw new Error(errs.join('；'))}
+function statusColor(c){const m={'有利':'var(--good)','不利':'var(--bad)','待定':'var(--wait)','否决':'#5B0E1E'};return m[c]||'var(--gray)'}
+function allRecords(){return state.data&&Array.isArray(state.data.records)?state.data.records:[]}
+function getOverride(r){return overrides[keyOf(r)]||{}}
+function getConclusion(r){return getOverride(r).conclusion!=null?getOverride(r).conclusion:(r.conclusion||'未设置')}
+function propertyOptions(){const s=new Set();allRecords().forEach(r=>{const t=state.data.judge_tables&&state.data.judge_tables[r.category];(t&&t.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))})});['有利','不利','中性','待定'].forEach(x=>s.add(x));return [...s]}
+function judgmentOptions(){const s=new Set(['不确定','命中','未命中']);allRecords().forEach(r=>(r.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));return [...s]}
+function buildRows(r){const t=state.data&&state.data.judge_tables&&state.data.judge_tables[r.category];if(!t)return[];const ov=getOverride(r);return(t.rows||[]).map((row,i)=>({i,q:row[0]||'',property:(ov.properties&&ov.properties[i]!=null?ov.properties[i]:row[1]||'待定'),judge:(ov.judges&&ov.judges[i]!=null?ov.judges[i]:((r.judge||[])[i]||'不确定')),role:row[2]||''}))}
+function renderList(container,records){container.innerHTML=records.length?records.map(rowHtml).join(''):'<div class="empty">暂无内容</div>'}
+function rowHtml(r){const c=cmts[keyOf(r)],k=keyOf(r);return '<div class="row" data-code="'+esc(r.code)+'" data-cat="'+esc(r.category)+'"><div class="main"><div class="t1">'+esc(r.name||r.code)+(favs.has(k)?'<span class="star">★</span>':'')+'</div><div class="t2"><span class="tag">'+esc(r.code)+'</span><span class="tag cat">'+esc(r.category||'')+'</span></div>'+(c?'<div class="t3">✎ '+esc(c)+'</div>':'')+'</div><span class="pill" style="background:'+statusColor(getConclusion(r))+'">'+esc(getConclusion(r))+'</span><span class="chev">›</span></div>'}
+function filtered(){const q=state.query.trim().toLowerCase();return allRecords().filter(r=>!q||String(r.name||'').toLowerCase().includes(q)||String(r.code||'').includes(q))}
+function renderHome(){const rs=filtered();$('countTitle').textContent='共 '+rs.length+' 条';$('dataNote').textContent=state.data?(state.kind==='cache'?'缓存数据':state.kind==='local'?'本地导入':'实时数据'):'未加载';renderList($('homeList'),rs)}
+function dynamicGroups(){const map=new Map();allRecords().forEach(r=>{const k=r.category||'未分类';if(!map.has(k))map.set(k,[]);map.get(k).push(r)});return [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'zh-CN'))}
+function renderTypes(){const groups=dynamicGroups();$('typesList').innerHTML=groups.length?groups.map(([name,rs],idx)=>'<div class="group '+(idx===0?'open':'')+'"><div class="group-head"><span>'+esc(name)+' · '+rs.length+'</span><button>⌄</button></div><div class="group-items">'+rs.map(rowHtml).join('')+'</div></div>').join(''):'<div class="empty">暂无类型数据</div>'}
+function renderConclusions(){const map=new Map();allRecords().forEach(r=>{const k=getConclusion(r);if(!map.has(k))map.set(k,[]);map.get(k).push(r)});const pref=['有利','不利','待定','否决'];const groups=[...map.entries()].sort((a,b)=>{const ia=pref.indexOf(a[0]),ib=pref.indexOf(b[0]);return(ia<0?99:ia)-(ib<0?99:ib)||a[0].localeCompare(b[0],'zh-CN')});$('conclusionList').innerHTML=groups.length?groups.map(([name,rs])=>'<div class="group"><div class="group-head"><span>'+esc(name)+' · '+rs.length+'</span><button>⌄</button></div><div class="group-items">'+rs.map(rowHtml).join('')+'</div></div>').join(''):'<div class="empty">暂无结论数据</div>'}
+function renderComments(){const rs=allRecords().filter(r=>cmts[keyOf(r)]);$('commentList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">暂无点评</div>'}
+function renderFavorites(){const rs=allRecords().filter(r=>favs.has(keyOf(r)));$('favList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">还没有收藏</div>'}
+function renderAllPages(){renderHome();renderTypes();renderConclusions();renderComments();renderFavorites();updateDataStatus()}
+function pageSwitch(page){state.page=page;document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+page));document.querySelectorAll('.bottom button').forEach(x=>x.classList.toggle('on',x.dataset.page===page));if(page==='home')$('q').focus()}
+
+function announcementTypes(a){const raw=a&&(a.types||a.type||a.categories||a.category||'');if(Array.isArray(raw))return raw.filter(Boolean).map(String);return String(raw||'').split(/[、,，/|]+/).map(s=>s.trim()).filter(Boolean)}
+function announcementsFor(r){const arr=(state.data&&state.data.announcements&&state.data.announcements[r.code])||[];return [...arr].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))}
+function annHtml(r){const arr=announcementsFor(r);if(!arr.length)return '<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">0 条</span></div><div class="empty">暂无公告</div></div>';const show=arr.slice(0,state.annShown);return '<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">最新在前 · 共 '+arr.length+' 条</span></div>'+show.map(a=>'<a class="ann" href="'+esc(a.url||'#')+'" target="_blank" rel="noopener"><div class="ann-title">'+esc(a.title||'未命名公告')+'</div><div class="ann-meta">'+(a.date?'<span>'+esc(a.date)+'</span>':'')+announcementTypes(a).map(t=>'<span class="tag type">'+esc(t)+'</span>').join('')+'</div></a>').join('')+(arr.length>state.annShown?'<button class="edit-toggle" style="margin:8px 12px;width:calc(100% - 24px);text-align:center" id="annMore">展开全部</button>':'')+'</div>'}
+function editHtml(r){const rows=buildRows(r),props=propertyOptions(),judges=judgmentOptions(),ov=getOverride(r),concs=[...new Set(allRecords().map(getConclusion).concat([getConclusion(r)]))];const phtml=props.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join(''),jhtml=judges.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join(''),chtml=concs.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');return '<div class="card"><button class="edit-toggle" id="editToggle"><span>修改判定与性质</span><span>'+(state.editOpen?'⌃':'⌄')+'</span></button><div class="edit-panel '+(state.editOpen?'open':'')+'" id="editPanel"><div class="form-row"><label>最终判定结果</label><select id="editConclusion">'+chtml+'</select></div>'+rows.map(x=>'<div class="edit-rule"><div class="rule-q">'+esc(x.q)+'</div><div class="rule-meta"><div><label>性质</label><select data-prop="'+x.i+'">'+phtml+'</select></div><div><label>判定</label><select data-judge="'+x.i+'">'+jhtml+'</select></div></div><div class="setting-desc">'+esc(x.role)+'</div></div>').join('')+'<button class="save-btn" id="saveEdit">保存修改</button></div></div>'}
+function overviewHtml(r){const url='https://basic.10jqka.com.cn/'+encodeURIComponent(r.code)+'/';return '<div class="card overview"><div class="card-hd"><span>公司概况</span><span class="sub">'+esc(r.code)+'</span></div><div class="ov-toolbar"><span class="mini-note">默认整页展示</span><div class="ov-group"><button class="ov-btn" id="ovMinus">−</button><button class="ov-btn" id="ovReset">整页</button><button class="ov-btn" id="ovPlus">＋</button><button class="ov-btn" id="ovOpen">↗</button></div></div><div class="ov-frame"><div class="ov-canvas"><iframe id="ovFrame" title="公司概况" src="'+url+'" loading="lazy" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe></div></div><div class="ov-help">支持缩放；“整页”恢复默认比例。站点若禁止内嵌，会保留“↗”按钮在浏览器打开。</div></div>'}
+function detailJudgeHtml(r){const rows=buildRows(r);if(!rows.length)return '';let h='<div class="card"><div class="card-hd"><span>判定与性质</span><span class="sub">'+rows.length+' 条条件</span></div>';let last='';rows.forEach(x=>{if(x.property!==last){h+='<div style="padding:6px 16px;background:var(--brand-soft);color:var(--brand);font-size:12px;font-weight:700">'+esc(x.property)+'</div>';last=x.property}h+='<div class="jrow"><div class="jq">'+esc(x.q)+'</div><div class="jm"><span class="hit" style="color:'+(x.judge==='命中'?'var(--good)':x.judge==='未命中'?'var(--bad)':'var(--muted)')+'">'+esc(x.judge)+'</span><span class="tag">'+esc(x.property)+'</span></div></div>'});return h+'</div>'}
+function openDetail(r){state.cur=r;state.editOpen=false;state.annShown=30;const co=getConclusion(r);$('dTitle').textContent=r.name||r.code;$('dHero').innerHTML='<div class="hero"><h1>'+esc(r.name||r.code)+'</h1><div class="meta"><span class="tag">'+esc(r.code)+'</span><span class="tag cat">'+esc(r.category||'')+'</span></div></div><div class="card"><div class="result-main"><div class="result-label">判定结果</div><div class="result-value" style="color:'+statusColor(co)+'">'+esc(co)+'</div></div>'+editHtml(r)+'</div>';$('dBody').innerHTML=detailJudgeHtml(r)+ '<div class="card"><div class="card-hd"><span>AI 总结</span></div><div class="result-main" style="font-size:14px;white-space:pre-wrap">'+esc(r.summary||'—')+'</div></div>'+overviewHtml(r)+annHtml(r)+'<div class="card"><div class="card-hd"><span>我的点评</span></div><div class="result-main" style="font-size:14px;white-space:pre-wrap">'+esc(cmts[keyOf(r)]||'还没有点评')+'</div></div>';$('detail').classList.add('show');$('actions').classList.add('show');syncActions();bindEdit(r);bindOverview();const more=$('annMore');if(more)more.onclick=()=>{state.annShown=announcementsFor(r).length;openDetail(r)};$('detail').scrollTop=0}
+function bindEdit(r){const t=$('editToggle');if(!t)return;t.onclick=()=>{state.editOpen=!state.editOpen;openDetail(r)};const c=$('editConclusion');if(c)c.value=getConclusion(r);document.querySelectorAll('select[data-prop]').forEach(s=>{const i=+s.dataset.prop;const x=buildRows(r).find(y=>y.i===i);s.value=x?x.property:''});document.querySelectorAll('select[data-judge]').forEach(s=>{const i=+s.dataset.judge;const x=buildRows(r).find(y=>y.i===i);s.value=x?x.judge:''});const save=$('saveEdit');if(!save)return;save.onclick=()=>{const k=keyOf(r),ov=overrides[k]||{};ov.conclusion=c.value;ov.properties=ov.properties||{};ov.judges=ov.judges||{};document.querySelectorAll('select[data-prop]').forEach(s=>{ov.properties[s.dataset.prop]=s.value});document.querySelectorAll('select[data-judge]').forEach(s=>{ov.judges[s.dataset.judge]=s.value});overrides[k]=ov;saveOverrides();state.editOpen=false;renderAllPages();openDetail(r);toast('修改已保存')}}
+function applyZoom(){const f=$('ovFrame'),wrap=document.querySelector('.ov-canvas');if(!f||!wrap)return;const z=state.overviewZoom;f.style.width=(100/z)+'%';f.style.height=(100/z)+'%';f.style.transform='scale('+z+')';wrap.style.height=(72)+'vh';wrap.style.minHeight='460px';wrap.style.overflow='auto'}
+function bindOverview(){const f=$('ovFrame');if(!f)return;applyZoom();$('ovMinus').onclick=()=>{state.overviewZoom=Math.max(.45,+(state.overviewZoom-.08).toFixed(2));applyZoom()};$('ovPlus').onclick=()=>{state.overviewZoom=Math.min(1.2,+(state.overviewZoom+.08).toFixed(2));applyZoom()};$('ovReset').onclick=()=>{state.overviewZoom=.72;applyZoom()};$('ovOpen').onclick=()=>window.open('https://basic.10jqka.com.cn/'+encodeURIComponent(state.cur.code)+'/','_blank')}
+function closeDetail(){state.cur=null;$('detail').classList.remove('show');$('actions').classList.remove('show')}
+function syncActions(){if(!state.cur)return;const on=favs.has(keyOf(state.cur));$('aFav').textContent=on?'已收藏':'收藏';$('aFav').classList.toggle('on',on)}
+function openSheet(title,html,bind){$('sheet').innerHTML='<div class="sheet-grab"></div><h3>'+title+'</h3>'+html;$('mask').classList.add('show');if(bind)bind()}
+function closeSheet(){$('mask').classList.remove('show')}
+function sourceSheet(){openSheet('数据源','<div class="note">数据地址（每行一个）</div><div style="padding:0 16px 8px"><textarea id="inUrls" placeholder="https://…/stocks.txt">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div class="sheet-actions" style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="sc">取消</button><button class="sbtn primary" id="ss">保存并加载</button></div>',()=>{$('sc').onclick=closeSheet;$('ss').onclick=()=>{const u=$('inUrls').value.trim();u?localStorage.setItem(LS.urls,u):localStorage.removeItem(LS.urls);closeSheet();boot(false,true)}})}
+function keySheet(){openSheet('激活码','<div class="note">64 位十六进制激活码</div><div style="padding:0 16px 8px"><input id="inKey" type="text" value="'+esc(localStorage.getItem(LS.key)||'')+'" placeholder="请输入激活码" style="width:100%;height:42px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 10px;outline:none"></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="ks" style="width:100%">保存并加载</button></div>',()=>{$('ks').onclick=()=>{const k=$('inKey').value.trim();if(k&&!/^[0-9a-fA-F]{64}$/.test(k)){toast('激活码格式不正确');return}k?localStorage.setItem(LS.key,k):localStorage.removeItem(LS.key);closeSheet();boot(false,true)}})}
+function exportBackup(){const p={kind:'stock-judge-backup',version:2,exported_at:new Date().toISOString(),favorites:[...favs],comments:cmts,overrides};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(p,null,2)],{type:'application/json'}));a.download='stock-judge-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('已导出备份')}
+function restoreBackup(){const el=document.createElement('input');el.type='file';el.accept='.json,application/json';el.onchange=()=>{const f=el.files&&el.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(Array.isArray(p.favorites))p.favorites.forEach(k=>favs.add(k));if(p.comments&&typeof p.comments==='object')Object.assign(cmts,p.comments);if(p.overrides&&typeof p.overrides==='object')Object.assign(overrides,p.overrides);saveFav();saveCmt();saveOverrides();renderAllPages();toast('备份已恢复')}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};el.click()}
+async function checkUpdate(){try{const errs=[];for(const u of UPDATE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const p=await r.json();if(p.version&&p.version!==APP_VERSION){$('updateDesc').textContent='发现新版本 '+p.version+'，点击确认进入更新下载。';if(confirm('发现新版本 '+p.version+'。现在打开更新下载？'))window.open(p.apk_url||RELEASE_APK,'_blank');return}$('updateDesc').textContent='当前已是版本 '+APP_VERSION+'；更新时间 '+(p.published_at||'未知');return}catch(e){errs.push(e.message)}}throw new Error(errs.join('；'))}catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败',2600)}}
+function updateDataStatus(){const n=allRecords().length;const g=state.data&&state.data.meta&&state.data.meta.generated_at;$('dataStatus').textContent=n?(n+' 条记录 · '+(state.kind==='cache'?'缓存':state.kind==='local'?'本地导入':'实时')+(g?' · '+String(g).slice(0,16).replace('T',' '):'')):'未加载'}
+async function boot(silent,force){loadLocal();if(state.kind==='local'&&!force){if(!silent)toast('当前是本地导入数据');return}const cached=await Cache.get();if(cached)apply(cached,'cache');const urls=getUrls();if(!urls.length){$('homeList').innerHTML='<div class="empty">没有数据地址。请到“设置 → 数据源”配置。</div>';return}try{const d=await loadFromUrls(urls);await Cache.set(d);apply(d,'remote');if(silent)toast('已更新到最新数据')}catch(e){if(!cached){$('homeList').innerHTML='<div class="empty">加载失败<br><br>'+esc(e.message)+'<br><br>请到“设置”检查数据源和激活码。</div>'}else toast('联网更新失败，继续显示缓存')}}
+function apply(d,kind){state.data=d;state.kind=kind;renderAllPages()}
+document.querySelectorAll('.bottom button').forEach(b=>b.onclick=()=>pageSwitch(b.dataset.page));
+document.addEventListener('click',e=>{const row=e.target.closest('.row');if(row){const r=allRecords().find(x=>String(x.code)===String(row.dataset.code)&&String(x.category||'')===String(row.dataset.cat||''));if(r)openDetail(r)}const gh=e.target.closest('.group-head');if(gh){gh.parentElement.classList.toggle('open')}});
+$('q').addEventListener('input',e=>{state.query=e.target.value;renderHome()});
+$('btnBack').onclick=closeDetail;
+$('aFav').onclick=()=>{if(!state.cur)return;const k=keyOf(state.cur);favs.has(k)?(favs.delete(k),toast('已取消收藏')):(favs.add(k),toast('已收藏'));saveFav();syncActions();renderAllPages()};
+$('aCmt').onclick=()=>{if(!state.cur)return;const k=keyOf(state.cur);openSheet('点评 · '+esc(state.cur.name||state.cur.code),'<div style="padding:0 16px 10px"><textarea id="inCmt" placeholder="写下你的判断…">'+esc(cmts[k]||'')+'</textarea></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="cs" style="width:100%">保存</button></div>',()=>{$('cs').onclick=()=>{const v=$('inCmt').value.trim();if(v)cmts[k]=v;else delete cmts[k];saveCmt();closeSheet();renderAllPages();openDetail(state.cur);toast('点评已保存')}})};
+$('aCopy').onclick=()=>{if(!state.cur)return;const t=state.cur.code||'';if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast('已复制 '+t),()=>toast('复制失败'));else{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('已复制 '+t)}catch(e){toast('复制失败')}ta.remove()}};
+$('mask').onclick=e=>{if(e.target===$('mask'))closeSheet()};
+$('btnSource').onclick=sourceSheet;$('btnKey').onclick=keySheet;$('btnReload').onclick=()=>boot(false,true);$('btnExport').onclick=exportBackup;$('btnRestore').onclick=restoreBackup;$('btnUpdate').onclick=checkUpdate;
+window.onpopstate=()=>{if($('mask').classList.contains('show'))closeSheet();else if($('detail').classList.contains('show'))closeDetail()};
+history.replaceState({root:true},'','');
+(function(){let pushed=false;const oldOpen=openDetail;window.openDetail=function(r){if(!pushed){history.pushState({detail:true},'','?stock='+encodeURIComponent(keyOf(r)));pushed=true}oldOpen(r)};const oldClose=closeDetail;window.closeDetail=function(){if(pushed){pushed=false;history.back()}else oldClose()}})();
+boot(false);
+</script>
+</body>
+</html>
