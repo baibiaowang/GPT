@@ -151,7 +151,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
       </div>
       <div class="setting-item">
         <div class="setting-title">应用更新</div>
-        <div class="setting-desc" id="updateDesc">当前版本 1.6.8。收藏/点评过的股票会完整保存在本地，即使数据源后续删除也可继续查看，并可随备份导出/恢复。</div>
+        <div class="setting-desc" id="updateDesc">当前版本 1.6.9。收藏/点评过的股票会完整保存在本地；检查更新改用 Android 原生网络，失败会显示具体原因。</div>
         <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
         <div class="update-progress" id="updateProgress">
           <div class="update-progress-top"><span id="updateProgressText">准备下载…</span><span id="updateProgressPct">0%</span></div>
@@ -193,13 +193,13 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script>
 const DEF_KEY='';
 const DEF_URLS='https://stocks-txt-file.app.workbuddy.host/stocks.txt';
-const APP_VERSION='1.6.8';
-const APP_VERSION_CODE=1608;
+const APP_VERSION='1.6.9';
+const APP_VERSION_CODE=1609;
 const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
-const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.6.8/app.apk';
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.6.9/app.apk';
 const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2',saved:'sj.savedStocks.v1',archive:'sj.archivedRecords.v1'};
 const IDB_ARCHIVE_KEY='savedArchives.v1';
 const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false,typeTab:'',conclusionTab:''};
@@ -317,10 +317,53 @@ function keySheet(){openSheet('激活码','<div class="note">必须由你自己�
 function exportBackup(){const p={kind:'stock-judge-backup',version:6,exported_at:new Date().toISOString(),app_version:APP_VERSION,data:state.data,favorites:[...favs],comments:cmts,overrides,saved_stocks:savedStocks,saved_archives:savedArchives};const filename='stock-judge-data-'+new Date().toISOString().slice(0,10)+'.json';const text=JSON.stringify(p,null,2);if(window.AndroidNative&&AndroidNative.saveTextFile){AndroidNative.saveTextFile(filename,text);toast('已导出完整数据到“下载 / 股票判断机”',2600);return}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('已导出完整数据')}
 function applyBackupObject(p){if(!p||typeof p!=='object')throw new Error('备份格式无效');if(Array.isArray(p.favorites))p.favorites.forEach(k=>favs.add(k));if(p.comments&&typeof p.comments==='object')Object.assign(cmts,p.comments);if(p.overrides&&typeof p.overrides==='object')Object.assign(overrides,p.overrides);if(p.saved_stocks&&typeof p.saved_stocks==='object')Object.assign(savedStocks,p.saved_stocks);if(p.saved_archives&&typeof p.saved_archives==='object')Object.assign(savedArchives,p.saved_archives);ensureSavedStockMeta();if(p.data&&typeof p.data==='object'){state.data=p.data;state.kind='local';hydrateSavedArchives();Cache.set(p.data).catch(()=>{});}saveFav();saveCmt();saveOverrides();saveSavedStocks();saveArchives();renderAllPages();toast('备份已恢复')} function restoreBackup(){if(window.AndroidNative&&AndroidNative.openBackupPicker){AndroidNative.openBackupPicker();return}const el=document.createElement('input');el.type='file';el.accept='.json,application/json';el.onchange=()=>{const f=el.files&&el.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{applyBackupObject(JSON.parse(rd.result))}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};el.click()} function restoreBackupText(txt){try{applyBackupObject(JSON.parse(txt))}catch(e){toast('恢复失败：'+e.message,2800)}}
 function updateProgressShow(text,pct){const wrap=$('updateProgress');if(!wrap)return;wrap.classList.add('show');$('updateProgressText').textContent=text||'正在下载…';const n=Math.max(0,Math.min(100,Number(pct)||0));$('updateProgressPct').textContent=Math.round(n)+'%';$('updateProgressFill').style.width=n+'%'}
+async function loadUpdateManifest(url){
+  if(window.AndroidNative&&AndroidNative.fetchUpdateManifest&&AndroidNative.readUpdateChunk){
+    await new Promise((resolve,reject)=>{
+      const done=(ok,message)=>{window.__sjNativeUpdateWaiter=null;ok?resolve():reject(new Error(message||'原生更新清单读取失败'))};
+      window.__sjNativeUpdateWaiter=done;
+      try{AndroidNative.fetchUpdateManifest(url)}catch(e){window.__sjNativeUpdateWaiter=null;reject(e)}
+    });
+    let text='',offset=0;const chunk=65536;
+    for(;;){const piece=AndroidNative.readUpdateChunk(offset,chunk);if(!piece)break;text+=piece;offset+=piece.length;if(piece.length<chunk)break}
+    if(!text)throw new Error('更新清单为空');
+    return JSON.parse(text);
+  }
+  const r=await fetch(url+'?t='+Date.now(),{cache:'no-store',headers:{Accept:'application/json'}});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json();
+}
+window.__sjNativeUpdateResult=function(ok,message){const done=window.__sjNativeUpdateWaiter;if(typeof done==='function')done(!!ok,String(message||''))}
 window.__sjApkDownloadProgress=function(percent,status,message){updateProgressShow(message||'正在下载…',percent)}
 window.__sjApkDownloadComplete=function(){updateProgressShow('下载完成，正在打开安装…',100);$('updateDesc').textContent='APK 已下载完成，正在进入安装界面。';toast('下载完成，正在安装',2400)}
 window.__sjApkDownloadFailed=function(message){updateProgressShow(message||'下载失败',0);$('updateDesc').textContent=message||'APK 下载失败';toast(message||'APK 下载失败',2800)}
-async function checkUpdate(){try{const errs=[];for(const u of UPDATE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const p=await r.json();const remoteCode=Number(p.versionCode||0);if(remoteCode>APP_VERSION_CODE){$('updateDesc').textContent='发现新版本 '+p.version+'，点击确认开始下载。';if(confirm('发现新版本 '+p.version+'。现在下载并安装？')){const apk=p.apk_url||RELEASE_APK;if(window.AndroidNative&&AndroidNative.downloadApk){updateProgressShow('准备下载…',0);AndroidNative.downloadApk(apk,'stock-judge-'+p.version+'.apk')}else{window.open(apk,'_blank')}}return}$('updateDesc').textContent='当前已是版本 '+APP_VERSION+'；更新时间 '+(p.published_at||'未知');return}catch(e){errs.push(e.message)}}throw new Error(errs.join('；'))}catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败：'+e.message,2600)}}
+async function checkUpdate(){
+  $('updateDesc').textContent='正在检查最新版本…';
+  try{
+    const errs=[];
+    for(const u of UPDATE_URLS){
+      try{
+        const p=await loadUpdateManifest(u);
+        const remoteCode=Number(p.versionCode||0);
+        if(!remoteCode)throw new Error('更新清单缺少 versionCode');
+        if(remoteCode>APP_VERSION_CODE){
+          $('updateDesc').textContent='发现新版本 '+(p.version||remoteCode)+'，点击确认开始下载。';
+          toast('发现新版本 v'+(p.version||remoteCode),2200);
+          if(confirm('发现新版本 '+(p.version||remoteCode)+'。现在下载并安装？')){
+            const apk=p.apk_url||RELEASE_APK;
+            if(window.AndroidNative&&AndroidNative.downloadApk){updateProgressShow('准备下载…',0);AndroidNative.downloadApk(apk,'stock-judge-'+(p.version||remoteCode)+'.apk')}
+            else{window.open(apk,'_blank')}
+          }
+          return;
+        }
+        $('updateDesc').textContent='当前已是最新版本 v'+APP_VERSION+'（版本号 '+APP_VERSION_CODE+'） · 更新日期 '+(p.published_at||'未知');
+        toast('当前已是最新版本 v'+APP_VERSION,2200);
+        return;
+      }catch(e){errs.push(u.replace(/^https?:\/\//,'').slice(0,42)+' → '+e.message)}
+    }
+    throw new Error(errs.join('；'));
+  }catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败：'+e.message,3200)}
+}
 function updateDataStatus(){const n=allRecords().length;const g=state.data&&state.data.meta&&state.data.meta.generated_at;$('dataStatus').textContent=n?(n+' 条记录 · '+(state.kind==='cache'?'缓存':state.kind==='local'?'本地导入':'实时')+(g?' · '+String(g).slice(0,16).replace('T',' '):'')):'未加载'}
 function hasUserConfig(){
   const savedKey=(localStorage.getItem(LS.key)||'').trim();
