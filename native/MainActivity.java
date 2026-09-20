@@ -86,7 +86,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         if (pendingInstallUri != null) {
             final String uri = pendingInstallUri;
@@ -339,7 +339,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         if (apkProgressTask != null) {
             apkHandler.removeCallbacks(apkProgressTask);
             apkProgressTask = null;
