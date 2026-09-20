@@ -1,8 +1,8 @@
 {
-  "version": "1.6.7",
-  "versionCode": 1607,
+  "version": "1.6.8",
+  "versionCode": 1608,
   "published_at": "2026-09-20",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.7/app.apk",
-  "notes": "默认数据源改为 https://stocks-txt-file.app.workbuddy.host/stocks.txt；数据读取改为 Android 原生网络请求，绕过 WebView CORS 限制，并报告更具体的网络/HTTP错误。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.8/app.apk",
+  "notes": "新增收藏/点评完整数据本地归档；更换或更新数据源后，即使股票从线上数据消失，收藏与点评仍可继续打开，并可随备份导出/恢复。"
 }
