@@ -182,7 +182,8 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script>
 const DEF_KEY='__AES_KEY__';
 const DEF_URLS='__DATA_URL__';
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.2.0';
+const APP_VERSION_CODE=1200;
 const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
@@ -241,25 +242,28 @@ function closeDetail(){state.cur=null;$('detail').classList.remove('show');$('ac
 function syncActions(){if(!state.cur)return;const on=favs.has(keyOf(state.cur));$('aFav').textContent=on?'已收藏':'收藏';$('aFav').classList.toggle('on',on)}
 function openSheet(title,html,bind){$('sheet').innerHTML='<div class="sheet-grab"></div><h3>'+title+'</h3>'+html;$('mask').classList.add('show');if(bind)bind()}
 function closeSheet(){$('mask').classList.remove('show')}
-function sourceSheet(){openSheet('数据源','<div class="note">数据地址（每行一个）</div><div style="padding:0 16px 8px"><textarea id="inUrls" placeholder="https://…/stocks.txt">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div class="sheet-actions" style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="sc">取消</button><button class="sbtn primary" id="ss">保存并加载</button></div>',()=>{$('sc').onclick=closeSheet;$('ss').onclick=()=>{const u=$('inUrls').value.trim();u?localStorage.setItem(LS.urls,u):localStorage.removeItem(LS.urls);closeSheet();boot(false,true)}})}
+function sourceSheet(){openSheet('数据源','<div class="note">数据地址（每行一个）<br>留空使用内置数据地址</div><div style="padding:0 16px 8px"><textarea id="inUrls" placeholder="https://…/stocks.txt">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div class="sheet-actions" style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="sc">取消</button><button class="sbtn primary" id="ss">保存并加载</button></div>',()=>{$('sc').onclick=closeSheet;$('ss').onclick=()=>{const u=$('inUrls').value.trim();u?localStorage.setItem(LS.urls,u):localStorage.removeItem(LS.urls);closeSheet();boot(false,true)}})}
 function keySheet(){openSheet('激活码','<div class="note">64 位十六进制激活码</div><div style="padding:0 16px 8px"><input id="inKey" type="text" value="'+esc(localStorage.getItem(LS.key)||'')+'" placeholder="请输入激活码" style="width:100%;height:42px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 10px;outline:none"></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="ks" style="width:100%">保存并加载</button></div>',()=>{$('ks').onclick=()=>{const k=$('inKey').value.trim();if(k&&!/^[0-9a-fA-F]{64}$/.test(k)){toast('激活码格式不正确');return}k?localStorage.setItem(LS.key,k):localStorage.removeItem(LS.key);closeSheet();boot(false,true)}})}
 function exportBackup(){const p={kind:'stock-judge-backup',version:2,exported_at:new Date().toISOString(),favorites:[...favs],comments:cmts,overrides};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(p,null,2)],{type:'application/json'}));a.download='stock-judge-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('已导出备份')}
 function restoreBackup(){const el=document.createElement('input');el.type='file';el.accept='.json,application/json';el.onchange=()=>{const f=el.files&&el.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(Array.isArray(p.favorites))p.favorites.forEach(k=>favs.add(k));if(p.comments&&typeof p.comments==='object')Object.assign(cmts,p.comments);if(p.overrides&&typeof p.overrides==='object')Object.assign(overrides,p.overrides);saveFav();saveCmt();saveOverrides();renderAllPages();toast('备份已恢复')}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};el.click()}
-async function checkUpdate(){try{const errs=[];for(const u of UPDATE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const p=await r.json();if(p.version&&p.version!==APP_VERSION){$('updateDesc').textContent='发现新版本 '+p.version+'，点击确认进入更新下载。';if(confirm('发现新版本 '+p.version+'。现在打开更新下载？'))window.open(p.apk_url||RELEASE_APK,'_blank');return}$('updateDesc').textContent='当前已是版本 '+APP_VERSION+'；更新时间 '+(p.published_at||'未知');return}catch(e){errs.push(e.message)}}throw new Error(errs.join('；'))}catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败',2600)}}
+async function checkUpdate(){try{const errs=[];for(const u of UPDATE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const p=await r.json();const remoteCode=Number(p.versionCode||0);if(remoteCode>APP_VERSION_CODE){$('updateDesc').textContent='发现新版本 '+p.version+'，点击确认进入更新下载。';if(confirm('发现新版本 '+p.version+'。现在打开更新下载？'))window.open(p.apk_url||RELEASE_APK,'_blank');return}$('updateDesc').textContent='当前已是版本 '+APP_VERSION+'；更新时间 '+(p.published_at||'未知');return}catch(e){errs.push(e.message)}}throw new Error(errs.join('；'))}catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败',2600)}}
 function updateDataStatus(){const n=allRecords().length;const g=state.data&&state.data.meta&&state.data.meta.generated_at;$('dataStatus').textContent=n?(n+' 条记录 · '+(state.kind==='cache'?'缓存':state.kind==='local'?'本地导入':'实时')+(g?' · '+String(g).slice(0,16).replace('T',' '):'')):'未加载'}
 function hasUserConfig(){
-  const savedUrls=(localStorage.getItem(LS.urls)||'').split(/\s*\n\s*/).map(s=>s.trim()).filter(Boolean);
   const savedKey=(localStorage.getItem(LS.key)||'').trim();
-  return savedUrls.length>0 && /^[0-9a-fA-F]{64}$/.test(savedKey);
+  /* 数据源有内置默认地址，不要求用户必须手动保存 URL；激活码才是解密必需项。 */
+  const hasKey=/^[0-9a-fA-F]{64}$/.test(savedKey) || /^[0-9a-fA-F]{64}$/.test(String(DEF_KEY).trim());
+  const hasUrls=getUrls().length>0;
+  return hasKey && hasUrls;
 }
 async function boot(silent,force){
   loadLocal();
 
-  /* 启动规则：数据源和激活码必须都配置过，才能默认进入首页。 */
+  /* 启动规则：有可用激活码 + 有可用数据地址 → 首页；否则设置。 */
   if(!hasUserConfig()){
     pageSwitch('settings');
-    $('dataStatus').textContent='请先配置数据源和激活码';
-    if(!silent)toast('请先配置数据源和激活码',2600);
+    const hasKey=/^[0-9a-fA-F]{64}$/.test((localStorage.getItem(LS.key)||'').trim()) || /^[0-9a-fA-F]{64}$/.test(String(DEF_KEY).trim());
+    $('dataStatus').textContent=hasKey ? '数据地址可用，但数据尚未成功加载' : '请先配置激活码';
+    if(!silent)toast(hasKey ? '正在准备数据，请检查数据源' : '请先配置激活码',2600);
     return;
   }
 
