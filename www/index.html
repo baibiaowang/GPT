@@ -225,7 +225,7 @@ function renderConclusions(){const map=new Map();allRecords().forEach(r=>{const 
 function renderComments(){const rs=allRecords().filter(r=>cmts[keyOf(r)]);$('commentList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">暂无点评</div>'}
 function renderFavorites(){const rs=allRecords().filter(r=>favs.has(keyOf(r)));$('favList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">还没有收藏</div>'}
 function renderAllPages(){renderHome();renderTypes();renderConclusions();renderComments();renderFavorites();updateDataStatus()}
-function pageSwitch(page){state.page=page;document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+page));document.querySelectorAll('.bottom button').forEach(x=>x.classList.toggle('on',x.dataset.page===page));if(page==='home')$('q').focus()}
+function pageSwitch(page){state.page=page;document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+page));document.querySelectorAll('.bottom button').forEach(x=>x.classList.toggle('on',x.dataset.page===page));window.scrollTo(0,0)}
 
 function announcementTypes(a){const raw=a&&(a.types||a.type||a.categories||a.category||'');if(Array.isArray(raw))return raw.filter(Boolean).map(String);return String(raw||'').split(/[、,，/|]+/).map(s=>s.trim()).filter(Boolean)}
 function announcementsFor(r){const arr=(state.data&&state.data.announcements&&state.data.announcements[r.code])||[];return [...arr].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))}
@@ -247,7 +247,55 @@ function exportBackup(){const p={kind:'stock-judge-backup',version:2,exported_at
 function restoreBackup(){const el=document.createElement('input');el.type='file';el.accept='.json,application/json';el.onchange=()=>{const f=el.files&&el.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(Array.isArray(p.favorites))p.favorites.forEach(k=>favs.add(k));if(p.comments&&typeof p.comments==='object')Object.assign(cmts,p.comments);if(p.overrides&&typeof p.overrides==='object')Object.assign(overrides,p.overrides);saveFav();saveCmt();saveOverrides();renderAllPages();toast('备份已恢复')}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};el.click()}
 async function checkUpdate(){try{const errs=[];for(const u of UPDATE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const p=await r.json();if(p.version&&p.version!==APP_VERSION){$('updateDesc').textContent='发现新版本 '+p.version+'，点击确认进入更新下载。';if(confirm('发现新版本 '+p.version+'。现在打开更新下载？'))window.open(p.apk_url||RELEASE_APK,'_blank');return}$('updateDesc').textContent='当前已是版本 '+APP_VERSION+'；更新时间 '+(p.published_at||'未知');return}catch(e){errs.push(e.message)}}throw new Error(errs.join('；'))}catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败',2600)}}
 function updateDataStatus(){const n=allRecords().length;const g=state.data&&state.data.meta&&state.data.meta.generated_at;$('dataStatus').textContent=n?(n+' 条记录 · '+(state.kind==='cache'?'缓存':state.kind==='local'?'本地导入':'实时')+(g?' · '+String(g).slice(0,16).replace('T',' '):'')):'未加载'}
-async function boot(silent,force){loadLocal();if(!silent&&!state._startupRouted){state._startupRouted=true;const savedUrls=(localStorage.getItem(LS.urls)||'').split(/\\s*\\n\\s*/).map(s=>s.trim()).filter(Boolean);const savedKey=(localStorage.getItem(LS.key)||'').trim();if(!savedUrls.length||!/^[0-9a-fA-F]{64}$/.test(savedKey)){pageSwitch('settings');toast('首次使用：请先配置数据源和激活码',2600)}else{pageSwitch('home')}}if(state.kind==='local'&&!force){if(!silent)toast('当前是本地导入数据');return}const cached=await Cache.get();if(cached)apply(cached,'cache');const urls=getUrls();if(!urls.length){$('homeList').innerHTML='<div class="empty">没有数据地址。请到“设置 → 数据源”配置。</div>';return}try{const d=await loadFromUrls(urls);await Cache.set(d);apply(d,'remote');if(silent)toast('已更新到最新数据')}catch(e){if(!cached){$('homeList').innerHTML='<div class="empty">加载失败<br><br>'+esc(e.message)+'<br><br>请到“设置”检查数据源和激活码。</div>'}else toast('联网更新失败，继续显示缓存')}}
+function hasUserConfig(){
+  const savedUrls=(localStorage.getItem(LS.urls)||'').split(/\s*\n\s*/).map(s=>s.trim()).filter(Boolean);
+  const savedKey=(localStorage.getItem(LS.key)||'').trim();
+  return savedUrls.length>0 && /^[0-9a-fA-F]{64}$/.test(savedKey);
+}
+async function boot(silent,force){
+  loadLocal();
+
+  /* 启动规则：数据源和激活码必须都配置过，才能默认进入首页。 */
+  if(!hasUserConfig()){
+    pageSwitch('settings');
+    $('dataStatus').textContent='请先配置数据源和激活码';
+    if(!silent)toast('请先配置数据源和激活码',2600);
+    return;
+  }
+
+  if(state.kind==='local'&&!force){
+    if(!silent)toast('当前是本地导入数据');
+    return;
+  }
+
+  pageSwitch('home');
+  const cached=await Cache.get();
+  if(cached)apply(cached,'cache');
+
+  const urls=getUrls();
+  if(!urls.length){
+    pageSwitch('settings');
+    $('dataStatus').textContent='数据源为空，请配置数据源';
+    return;
+  }
+
+  try{
+    const d=await loadFromUrls(urls);
+    await Cache.set(d);
+    apply(d,'remote');
+    pageSwitch('home');
+    if(silent)toast('已更新到最新数据');
+  }catch(e){
+    if(!cached){
+      pageSwitch('settings');
+      $('dataStatus').textContent='数据加载失败：'+e.message;
+      toast('数据加载失败，请检查数据源和激活码',2800);
+    }else{
+      pageSwitch('home');
+      toast('联网更新失败，继续显示缓存');
+    }
+  }
+}
 function apply(d,kind){state.data=d;state.kind=kind;renderAllPages()}
 document.querySelectorAll('.bottom button').forEach(b=>b.onclick=()=>pageSwitch(b.dataset.page));
 document.addEventListener('click',e=>{const row=e.target.closest('.row');if(row){const r=allRecords().find(x=>String(x.code)===String(row.dataset.code)&&String(x.category||'')===String(row.dataset.cat||''));if(r)openDetail(r)}const gh=e.target.closest('.group-head');if(gh){gh.parentElement.classList.toggle('open')}});
