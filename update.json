@@ -1,8 +1,8 @@
 {
-  "version": "1.6.1",
-  "versionCode": 1601,
+  "version": "1.6.2",
+  "versionCode": 1602,
   "published_at": "2026-09-20",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.1/app-debug.apk",
-  "notes": "统一备份导出/恢复入口，恢复默认打开下载目录；完整备份可恢复数据集；整体改为更接近苹果系统的半透明、圆角、分组卡片风格。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.2/app.apk",
+  "notes": "小更新：用于验证固定正式签名、覆盖安装和自动更新链路。"
 }
