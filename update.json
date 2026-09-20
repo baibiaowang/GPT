@@ -1,8 +1,8 @@
 {
-  "version": "1.6.8",
-  "versionCode": 1608,
+  "version": "1.6.9",
+  "versionCode": 1609,
   "published_at": "2026-09-20",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.8/app.apk",
-  "notes": "新增收藏/点评完整数据本地归档；更换或更新数据源后，即使股票从线上数据消失，收藏与点评仍可继续打开，并可随备份导出/恢复。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.9/app.apk",
+  "notes": "修复 Android 真机检查更新无反馈；更新清单改用原生网络读取，并明确显示已是最新版本或具体失败原因。继续保留收藏/点评完整本地归档。"
 }
