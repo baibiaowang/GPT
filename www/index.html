@@ -151,7 +151,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
       </div>
       <div class="setting-item">
         <div class="setting-title">应用更新</div>
-        <div class="setting-desc" id="updateDesc">当前版本 1.6.1。导出的备份自动保存到“下载 / 股票判断机”。</div>
+        <div class="setting-desc" id="updateDesc">当前版本 1.6.2。导出的备份自动保存到“下载 / 股票判断机”。本次为固定签名与自动更新链路测试。</div>
         <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
       </div>
       <div class="setting-item">
@@ -189,13 +189,13 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script>
 const DEF_KEY='';
 const DEF_URLS='https://cdn.jsdelivr.net/gh/baibiaowang/stock-judge-app@main/data/stocks.txt\nhttps://raw.githubusercontent.com/baibiaowang/stock-judge-app/main/data/stocks.txt';
-const APP_VERSION='1.6.1';
-const APP_VERSION_CODE=1601;
+const APP_VERSION='1.6.2';
+const APP_VERSION_CODE=1602;
 const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
-const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.6.1/app-debug.apk';
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.6.2/app.apk';
 const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2'};
 const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false,typeTab:'',conclusionTab:''};
 let favs=new Set(),cmts={},overrides={};
