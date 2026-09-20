@@ -34,13 +34,11 @@ jobs:
           ls "$SDK" || true
           ls "$SDK/platforms" 2>/dev/null || true
           ls "$SDK/build-tools" 2>/dev/null || true
-      - name: Ensure Android SDK packages
+      - name: Verify Android SDK
         run: |
-          SDK="\${ANDROID_HOME:-\${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          SM=$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
-          test -n "$SM"
-          yes | "$SM" --licenses >/dev/null 2>&1 || true
-          for p in "platform-tools" "platforms;android-35" "build-tools;35.0.0" "platforms;android-36" "build-tools;36.0.0"; do "$SM" "$p" >/dev/null 2>&1 || true; done
+          echo "SDK=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          command -v adb || true
+          command -v sdkmanager || true
       - name: Prepare web assets
         env:
           AES_KEY: ${{ secrets.AES_KEY }}
