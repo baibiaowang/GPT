@@ -19,12 +19,11 @@ env:
   # ★ 2026-09-20 改：原来从私有仓 APKSecrets 取 keystore，需要额外的
   #   APKSECRETS_TOKEN（一直没配，构建必然失败，见 run 35501438918）。
   #   现在改成直接用本仓库的 Secret（base64），少一个依赖、少一个失败点。
-  # ★ versionCode 单调递增是覆盖安装的前提，用 run_number 自动递增（1600 起，避开早期 1601）。
+  # ★ versionCode 在 Compute version 里算 —— GitHub 表达式不支持算术运算符，
+  #   写 ${{ 1600 + github.run_number }} 会让整个 workflow 编译失败（0 个 job）。
   ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
   ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
   ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-  APP_VERSION_CODE: ${{ 1600 + github.run_number }}
-  APP_VERSION_NAME: 1.6.${{ github.run_number }}
 
 jobs:
   build:
@@ -32,6 +31,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # versionCode 必须单调递增，否则覆盖安装报 INSTALL_FAILED_VERSION_DOWNGRADE
+      - name: Compute version
+        run: |
+          set -euo pipefail
+          CODE=$((1600 + ${{ github.run_number }}))
+          NAME="1.6.${{ github.run_number }}"
+          echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
+          echo "APP_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "version -> code=$CODE name=$NAME"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -44,7 +53,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # ★ 固定签名第一步：从本仓库 Secret 恢复 keystore（放在仓库根，不依赖 android/）
+      # ★ 固定签名第一步：从本仓库 Secret 恢复 keystore（放仓库根，不依赖 android/）
       - name: Prepare fixed signing material
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
