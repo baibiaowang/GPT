@@ -1,6 +1,6 @@
 {
   "name":"stock-judge-gpt",
-  "version":"1.6.8",
+  "version":"1.6.9",
   "private":true,
   "description":"股票判断机 Android app - GPT dedicated repository",
   "engines":{"node":">=22"},
