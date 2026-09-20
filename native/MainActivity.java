@@ -1,15 +1,21 @@
 package com.baibiaowang.stockjudge;
 
+import android.content.ContentValues;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebView;
+import android.widget.Toast;
+import android.provider.MediaStore;
 
 import androidx.activity.OnBackPressedCallback;
 
@@ -19,6 +25,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import android.util.Base64;
+import android.os.Environment;
 
 /**
  * 支持「用其他应用打开」一个 txt 文件后直接解密。
@@ -32,6 +42,10 @@ import java.io.InputStream;
  */
 public class MainActivity extends BridgeActivity {
 
+    private static final int EXPORT_REQUEST = 9917;
+    private String pendingExportName;
+    private String pendingExportText;
+
     private static final String INCOMING_FILE = "incoming.txt";
     /** 与前端 POLL_MAX 保持一致：240 * 500ms = 120s */
     private static final int MAX_ATTEMPTS = 240;
@@ -44,7 +58,80 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         installBackHandler();
         installPinchZoom();
+        installNativeBridge();
         handle(getIntent());
+    }
+
+    /** App-local JS bridge: export user backup to Downloads and open external links. */
+    private void installNativeBridge() {
+        final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+        if (wv == null) {
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override public void run() { installNativeBridge(); }
+            }, 250L);
+            return;
+        }
+        wv.addJavascriptInterface(new Object() {
+            @JavascriptInterface public void saveTextFile(final String filename, final String content) {
+                new Thread(new Runnable() {
+                    @Override public void run() { saveExportFile(filename, content); }
+                }).start();
+            }
+            @JavascriptInterface public void openUrl(final String url) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        try {
+                            Uri u = Uri.parse(url);
+                            if (!"https".equalsIgnoreCase(u.getScheme())) return;
+                            Intent i = new Intent(Intent.ACTION_VIEW, u);
+                            startActivity(i);
+                        } catch (Exception ignored) { }
+                    }
+                });
+            }
+        }, "AndroidNative");
+    }
+
+    private void saveExportFile(final String filename, final String content) {
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
+                values.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/股票判断机");
+                values.put(MediaStore.Downloads.IS_PENDING, 1);
+                Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) throw new Exception("无法创建下载文件");
+                try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                    if (out == null) throw new Exception("无法打开下载文件");
+                    out.write(content.getBytes(StandardCharsets.UTF_8));
+                }
+                values.clear();
+                values.put(MediaStore.Downloads.IS_PENDING, 0);
+                getContentResolver().update(uri, values, null, null);
+                runOnUiThread(new Runnable(){@Override public void run(){Toast.makeText(MainActivity.this,"已保存到 下载 / 股票判断机",Toast.LENGTH_LONG).show();}});
+                return;
+            }
+            pendingExportName = filename;
+            pendingExportText = content;
+            Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            i.setType("application/json");
+            i.putExtra(Intent.EXTRA_TITLE, filename);
+            startActivityForResult(i, EXPORT_REQUEST);
+        } catch (Exception e) {
+            runOnUiThread(new Runnable(){@Override public void run(){Toast.makeText(MainActivity.this,"导出失败："+e.getMessage(),Toast.LENGTH_LONG).show();}});
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != EXPORT_REQUEST || resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+            if (out == null) throw new Exception("无法打开目标文件");
+            out.write((pendingExportText == null ? "" : pendingExportText).getBytes(StandardCharsets.UTF_8));
+            Toast.makeText(this,"导出成功",Toast.LENGTH_LONG).show();
+        } catch (Exception e) { Toast.makeText(this,"导出失败："+e.getMessage(),Toast.LENGTH_LONG).show(); }
+        pendingExportName=null; pendingExportText=null;
     }
 
     /**

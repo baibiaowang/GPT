@@ -16,8 +16,8 @@ permissions:
   contents: write
 
 env:
-  APP_VERSION_CODE: '1500'
-  APP_VERSION_NAME: '1.5.0'
+  APP_VERSION_CODE: '1600'
+  APP_VERSION_NAME: '1.6.0'
 
 jobs:
   build:
@@ -73,7 +73,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stock-judge-gpt-v1.5.0-apk
+          name: stock-judge-gpt-v1.6.0-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -81,11 +81,11 @@ jobs:
       - name: Publish latest APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.5.0
-          name: 股票判断机 GPT 最新版 v1.5.0
+          tag_name: v1.6.0
+          name: 股票判断机 GPT 最新版 v1.6.0
           body: |
             股票判断机 GPT 专用仓库最新版。
-            版本：v1.5.0
+            版本：v1.6.0
           prerelease: false
           make_latest: true
           overwrite_files: true

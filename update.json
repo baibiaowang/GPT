@@ -1,8 +1,8 @@
 {
-  "version": "1.5.0",
-  "versionCode": 1500,
+  "version": "1.6.0",
+  "versionCode": 1600,
   "published_at": "2026-09-20",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.5.0/app-debug.apk",
-  "notes": "恢复原 GPT 详情页与底部菜单逻辑；仅保留公司概况内嵌网页双指缩放；数据源内置且可修改/增加；激活码不再内置，必须由用户自行输入。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.6.0/app-debug.apk",
+  "notes": "类型/结论改为横向标签切换，取消折叠；公司详情改为默认浏览器打开同花顺；导出备份保存到 下载/股票判断机；整体视觉优化。"
 }
