@@ -16,12 +16,15 @@ permissions:
   contents: write
 
 env:
-  APP_VERSION_CODE: '1601'
-  APP_VERSION_NAME: '1.6.1'
-  APKSECRETS_TOKEN: ${{ secrets.APKSECRETS_TOKEN }}
+  # ★ 2026-09-20 改：原来从私有仓 APKSecrets 取 keystore，需要额外的
+  #   APKSECRETS_TOKEN（一直没配，构建必然失败，见 run 35501438918）。
+  #   现在改成直接用本仓库的 Secret（base64），少一个依赖、少一个失败点。
+  # ★ versionCode 单调递增是覆盖安装的前提，用 run_number 自动递增（1600 起，避开早期 1601）。
   ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
   ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
   ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+  APP_VERSION_CODE: ${{ 1600 + github.run_number }}
+  APP_VERSION_NAME: 1.6.${{ github.run_number }}
 
 jobs:
   build:
@@ -29,39 +32,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate and checkout private signing repository
-        uses: actions/checkout@v4
-        with:
-          repository: baibiaowang/APKSecrets
-          token: ${{ secrets.APKSECRETS_TOKEN }}
-          path: .apksecrets
-          persist-credentials: false
-
-      - name: Prepare fixed signing material
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${APKSECRETS_TOKEN:-}" ]]; then
-            echo "::error::Missing GitHub Actions secret APKSECRETS_TOKEN."
-            exit 1
-          fi
-
-          if [[ -z "${ANDROID_KEYSTORE_PASSWORD:-}" || -z "${ANDROID_KEY_ALIAS:-}" || -z "${ANDROID_KEY_PASSWORD:-}" ]]; then
-            echo "::error::Missing one or more Android signing secrets: ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD."
-            exit 1
-          fi
-
-          mapfile -t KEYSTORES < <(find .apksecrets -type f \( -iname '*.jks' -o -iname '*.keystore' \) -print)
-          if [[ "${#KEYSTORES[@]}" -ne 1 ]]; then
-            echo "::error::APKSecrets must contain exactly one .jks or .keystore file; found ${#KEYSTORES[@]}."
-            printf '%s\n' "${KEYSTORES[@]:-<none>}"
-            exit 1
-          fi
-
-          echo "SIGNING_KEYSTORE_PATH=$(realpath "${KEYSTORES[0]}")" >> "$GITHUB_ENV"
-          echo "Using the fixed private signing key from APKSecrets."
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -73,6 +43,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      # ★ 固定签名第一步：从本仓库 Secret 恢复 keystore（放在仓库根，不依赖 android/）
+      - name: Prepare fixed signing material
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          MISSING=""
+          [ -z "${ANDROID_KEYSTORE_BASE64:-}" ] && MISSING="$MISSING ANDROID_KEYSTORE_BASE64"
+          [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] && MISSING="$MISSING ANDROID_KEYSTORE_PASSWORD"
+          [ -z "${ANDROID_KEY_ALIAS:-}" ] && MISSING="$MISSING ANDROID_KEY_ALIAS"
+          [ -z "${ANDROID_KEY_PASSWORD:-}" ] && MISSING="$MISSING ANDROID_KEY_PASSWORD"
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing Android signing secrets:$MISSING"
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > signing.p12
+          echo "SIGNING_KEYSTORE_PATH=$(pwd)/signing.p12" >> "$GITHUB_ENV"
+          echo "[signing] keystore restored ($(wc -c < signing.p12) bytes)"
 
       - name: Prepare web assets
         run: node native/inject.mjs
@@ -92,6 +81,7 @@ jobs:
           node native/patch-manifest.mjs
           APP_VERSION_CODE="$APP_VERSION_CODE" APP_VERSION_NAME="$APP_VERSION_NAME" node native/patch-version.mjs
 
+      # ★ 固定签名第二步：注入 signingConfigs（android/ 是 cap add 生成的，每次都要重新注入）
       - name: Configure fixed release signing
         shell: bash
         run: |
@@ -155,19 +145,22 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
-      - name: Normalize APK
+      # ★ 当场验收签名，签错就在这步炸
+      - name: Normalize and verify APK
         run: |
           set -euo pipefail
           APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
           test -f "$APK_SRC"
+          BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/ 2>/dev/null | sort -V | tail -1)
+          "${BT}apksigner" verify --print-certs "$APK_SRC" | head -12
           mkdir -p dist
           cp "$APK_SRC" dist/app.apk
-          echo "Built stock judge app v$APP_VERSION_NAME (code $APP_VERSION_CODE) with fixed release signing."
+          echo "Built GPT app v$APP_VERSION_NAME (code $APP_VERSION_CODE) with fixed release signing."
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stock-judge-gpt-v1.6.1-apk
+          name: stock-judge-gpt-v${{ github.run_number }}-apk
           path: dist/app.apk
           if-no-files-found: error
           retention-days: 30
@@ -175,12 +168,13 @@ jobs:
       - name: Publish latest APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6.1
-          name: 股票判断机 GPT 最新版 v1.6.1
+          tag_name: v${{ env.APP_VERSION_NAME }}
+          name: 股票判断机 GPT v${{ env.APP_VERSION_NAME }}
           body: |
-            股票判断机 GPT 专用仓库最新版。
-            版本：v1.6.1
-            签名：固定正式签名密钥（来自私有仓库 APKSecrets）。
+            自动构建（run #${{ github.run_number }}）。
+            - versionName: v${{ env.APP_VERSION_NAME }}
+            - versionCode: ${{ env.APP_VERSION_CODE }}
+            - 签名：固定正式签名密钥（每次一致，可直接覆盖安装）
           prerelease: false
           make_latest: true
           overwrite_files: true
