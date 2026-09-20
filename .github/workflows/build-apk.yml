@@ -18,6 +18,11 @@ permissions:
 env:
   APP_VERSION_CODE: '1601'
   APP_VERSION_NAME: '1.6.1'
+  APKSECRETS_TOKEN: ${{ secrets.APKSECRETS_TOKEN }}
+  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+  SIGNING_READY: 'false'
 
 jobs:
   build:
@@ -25,6 +30,42 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout private signing repository
+        if: ${{ env.APKSECRETS_TOKEN != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: baibiaowang/APKSecrets
+          token: ${{ env.APKSECRETS_TOKEN }}
+          path: .apksecrets
+          persist-credentials: false
+
+      - name: Prepare signing material
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${APKSECRETS_TOKEN:-}" ]]; then
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            echo "APK signing: not configured yet; keeping debug build."
+            exit 0
+          fi
+
+          if [[ -z "${ANDROID_KEYSTORE_PASSWORD:-}" || -z "${ANDROID_KEY_ALIAS:-}" || -z "${ANDROID_KEY_PASSWORD:-}" ]]; then
+            echo "::error::APKSECRETS_TOKEN is configured, but one or more Android signing secrets are missing."
+            exit 1
+          fi
+
+          mapfile -t KEYSTORES < <(find .apksecrets -type f \( -iname '*.jks' -o -iname '*.keystore' \) -print)
+          if [[ "${#KEYSTORES[@]}" -ne 1 ]]; then
+            echo "::error::APKSecrets must contain exactly one .jks or .keystore file; found ${#KEYSTORES[@]}."
+            printf '%s\n' "${KEYSTORES[@]:-<none>}"
+            exit 1
+          fi
+
+          echo "SIGNING_KEYSTORE_PATH=$(realpath "${KEYSTORES[0]}")" >> "$GITHUB_ENV"
+          echo "SIGNING_READY=true" >> "$GITHUB_ENV"
+          echo "APK_SRC=android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_ENV"
+          echo "Using the fixed private signing key from APKSecrets."
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -55,26 +96,97 @@ jobs:
           node native/patch-manifest.mjs
           APP_VERSION_CODE="$APP_VERSION_CODE" APP_VERSION_NAME="$APP_VERSION_NAME" node native/patch-version.mjs
 
+      - name: Configure fixed release signing
+        if: ${{ env.SIGNING_READY == 'true' }}
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const p = 'android/app/build.gradle';
+          if (!fs.existsSync(p)) {
+            console.error('::error::android/app/build.gradle not found');
+            process.exit(1);
+          }
+
+          let s = fs.readFileSync(p, 'utf8');
+          if (!/android\s*\{/.test(s) || !/buildTypes\s*\{/.test(s)) {
+            console.error('::error::Unexpected Android Gradle file layout.');
+            process.exit(1);
+          }
+
+          if (!/signingConfigs\s*\{/.test(s)) {
+            s = s.replace(
+              /buildTypes\s*\{/,
+              `signingConfigs {
+                  release {
+                      storeFile file(System.getenv('SIGNING_KEYSTORE_PATH'))
+                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                  }
+              }
+
+              buildTypes {`
+            );
+          }
+
+          const releaseBlock = /buildTypes\s*\{\s*release\s*\{/;
+          if (!releaseBlock.test(s)) {
+            console.error('::error::release buildType not found.');
+            process.exit(1);
+          }
+
+          if (!/buildTypes\s*\{\s*release\s*\{[^}]*signingConfig\s+signingConfigs\.release/s.test(s)) {
+            s = s.replace(
+              releaseBlock,
+              `buildTypes {
+                  release {
+                      signingConfig signingConfigs.release`
+            );
+          }
+
+          fs.writeFileSync(p, s);
+          console.log('[signing] release signing configured.');
+          NODE
+
       - name: Sync web assets
         run: |
           npx cap sync android
 
-      - name: Build debug APK
+      - name: Build signed release APK
+        if: ${{ env.SIGNING_READY == 'true' }}
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Build debug APK (fallback)
+        if: ${{ env.SIGNING_READY != 'true' }}
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+          echo "APK_SRC=android/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_ENV"
 
-      - name: Verify APK version
+      - name: Normalize APK
         run: |
-          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          test -f "$APK_SRC"
+          mkdir -p dist
+          cp "$APK_SRC" dist/app.apk
           echo "Built stock judge app v$APP_VERSION_NAME (code $APP_VERSION_CODE)"
+          if [[ "${SIGNING_READY:-false}" == "true" ]]; then
+            echo "Build type: fixed-signed release"
+          else
+            echo "Build type: debug fallback"
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: stock-judge-gpt-v1.6.1-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: dist/app.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -86,7 +198,8 @@ jobs:
           body: |
             股票判断机 GPT 专用仓库最新版。
             版本：v1.6.1
+            签名：GitHub Actions 使用固定签名密钥时为正式签名；未配置密钥时为 debug 备用构建。
           prerelease: false
           make_latest: true
           overwrite_files: true
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: dist/app.apk
