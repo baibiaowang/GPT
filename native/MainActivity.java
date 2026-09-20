@@ -16,6 +16,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebView;
 import android.widget.Toast;
 import android.provider.MediaStore;
+import android.provider.DocumentsContract;
 
 import androidx.activity.OnBackPressedCallback;
 
@@ -43,6 +44,7 @@ import android.os.Environment;
 public class MainActivity extends BridgeActivity {
 
     private static final int EXPORT_REQUEST = 9917;
+    private static final int IMPORT_REQUEST = 9918;
     private String pendingExportName;
     private String pendingExportText;
 
@@ -76,6 +78,29 @@ public class MainActivity extends BridgeActivity {
                 new Thread(new Runnable() {
                     @Override public void run() { saveExportFile(filename, content); }
                 }).start();
+            }
+            @JavascriptInterface public void openBackupPicker() {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        try {
+                            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                            i.addCategory(Intent.CATEGORY_OPENABLE);
+                            i.setType("application/json");
+                            if (Build.VERSION.SDK_INT >= 26) {
+                                Uri downloads = DocumentsContract.buildDocumentUri("com.android.providers.downloads.documents", "downloads");
+                                i.putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloads);
+                            }
+                            startActivityForResult(i, IMPORT_REQUEST);
+                        } catch (Exception e) {
+                            try {
+                                Intent fallback = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                                fallback.setType("*/*");
+                                startActivityForResult(fallback, IMPORT_REQUEST);
+                            } catch (Exception ignored) { }
+                        }
+                    }
+                });
             }
             @JavascriptInterface public void openUrl(final String url) {
                 runOnUiThread(new Runnable() {
@@ -125,6 +150,31 @@ public class MainActivity extends BridgeActivity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == IMPORT_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            final Uri uri = data.getData();
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    String text = null;
+                    try (InputStream in = getContentResolver().openInputStream(uri)) {
+                        if (in == null) throw new Exception("无法读取备份文件");
+                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                        byte[] buf = new byte[16384]; int n;
+                        while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                        text = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                    } catch (Exception e) {
+                        final String msg = "恢复失败："+e.getMessage();
+                        runOnUiThread(new Runnable(){@Override public void run(){Toast.makeText(MainActivity.this,msg,Toast.LENGTH_LONG).show();}});
+                        return;
+                    }
+                    final String payload = text;
+                    runOnUiThread(new Runnable(){@Override public void run(){
+                        WebView wv = (getBridge()==null)?null:getBridge().getWebView();
+                        if(wv!=null) wv.evaluateJavascript("window.restoreBackupText && window.restoreBackupText("+jsStr(payload)+");", null);
+                    }});
+                }
+            }).start();
+            return;
+        }
         if (requestCode != EXPORT_REQUEST || resultCode != RESULT_OK || data == null || data.getData() == null) return;
         try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
             if (out == null) throw new Exception("无法打开目标文件");
