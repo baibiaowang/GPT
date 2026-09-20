@@ -2,1774 +2,317 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="color-scheme" content="light dark">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=yes">
 <meta name="theme-color" content="#C8102E">
 <title>股票判断机</title>
 <style>
-/* ==================================================================
-   设计令牌
-   - 主视觉：浓郁红（品牌区 / 选中态 / 主按钮）
-   - 语义色：只用在「结论 / 命中」这类数据上，不参与品牌表达
-   - 圆角卡片 + 半透明底栏（Apple 风）
-   ================================================================== */
 :root{
-  --bg:#f5f5f7; --bg-elev:#ffffff; --bg-group:#ffffff;
-  --fill-1:rgba(120,120,128,.12); --fill-2:rgba(120,120,128,.16); --fill-3:rgba(120,120,128,.08);
-  --text:#1c1c1e; --text-2:rgba(60,60,67,.62); --text-3:rgba(60,60,67,.32);
-  --sep:rgba(60,60,67,.29); --sep-op:rgba(60,60,67,.10);
-
-  --brand:#C8102E; --brand-deep:#8E0000;
-  --brand-soft:rgba(200,16,46,.10); --brand-line:rgba(200,16,46,.22);
-  --grad:linear-gradient(158deg,#C8102E 0%,#8E0000 100%);
-  --on-brand:#ffffff; --on-brand-2:rgba(255,255,255,.82);
-  --fill-on-brand:rgba(255,255,255,.20); --fill-on-brand-2:rgba(255,255,255,.30);
-
-  --c-good:#34c759; --c-bad:#ff3b30; --c-wait:#ff9500; --c-veto:#5B0E1E;
-  --gray:#8e8e93;
-
-  --nav-bg:rgba(249,249,249,.80);
-  --radius:16px; --radius-sm:11px;
-  --shadow:0 1px 3px rgba(0,0,0,.06);
+  --bg:#f5f5f7;--card:#fff;--text:#1c1c1e;--muted:#6e6e73;--line:rgba(60,60,67,.12);
+  --brand:#c8102e;--brand-deep:#8e0000;--brand-soft:rgba(200,16,46,.1);
+  --good:#34c759;--bad:#ff3b30;--wait:#ff9500;--gray:#8e8e93;
+  --nav:rgba(249,249,249,.88);--shadow:0 1px 4px rgba(0,0,0,.06);--r:16px;--rs:11px;
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#000; --bg-elev:#1c1c1e; --bg-group:#1c1c1e;
-    --fill-1:rgba(120,120,128,.24); --fill-2:rgba(120,120,128,.32); --fill-3:rgba(120,120,128,.18);
-    --text:#fff; --text-2:rgba(235,235,245,.62); --text-3:rgba(235,235,245,.32);
-    --sep:rgba(84,84,88,.65); --sep-op:rgba(84,84,88,.42);
-
-    --brand:#ff453a; --brand-deep:#C8102E;
-    --brand-soft:rgba(255,69,58,.16); --brand-line:rgba(255,69,58,.32);
-    --grad:linear-gradient(158deg,#B00020 0%,#5A0000 100%);
-    --on-brand:#ffffff; --on-brand-2:rgba(255,255,255,.80);
-    --fill-on-brand:rgba(255,255,255,.20); --fill-on-brand-2:rgba(255,255,255,.30);
-
-    --c-good:#30d158; --c-bad:#ff453a; --c-wait:#ff9f0a; --c-veto:#E8A9B8;
-    --gray:#98989d;
-
-    --nav-bg:rgba(28,28,30,.80);
-    --shadow:none;
-  }
+@media (prefers-color-scheme:dark){
+  :root{--bg:#000;--card:#1c1c1e;--text:#fff;--muted:#a1a1a6;--line:rgba(235,235,245,.12);--nav:rgba(28,28,30,.9);
+    --brand:#ff453a;--brand-deep:#b3122b;--brand-soft:rgba(255,69,58,.16);--shadow:none}
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-/* ★ 宽度铁律：整页绝不横向滚动（原先 table{min-width:430px} 是元凶，已整表删除） */
-html,body{margin:0;height:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-y:none}
-body{
-  background:var(--bg);color:var(--text);
-  font:17px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
-  -webkit-font-smoothing:antialiased;
-}
-img,svg,canvas,video{max-width:100%;height:auto}
-button,input,textarea{font:inherit;color:inherit;font-family:inherit;max-width:100%}
+html,body{margin:0;min-height:100%;max-width:100%;overflow-x:hidden;background:var(--bg);color:var(--text);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+body{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+button,input,textarea,select{font:inherit;color:inherit;font-family:inherit;max-width:100%}
+button{cursor:pointer}
 a{color:inherit;text-decoration:none}
-.wrap,.card,.row,.ann,.jrow,.card-pad,.jq,.jrole,.t1,.t2,.t3{overflow-wrap:anywhere;word-break:break-word}
-
-/* ==================================================================
-   顶栏（品牌红，粘顶，含安全区）
-   ================================================================== */
-.nav{
-  position:sticky;top:0;z-index:30;
-  background:var(--grad);
-  border-bottom:.5px solid var(--brand-line);
-  padding:0 0 8px;
-  padding-top:env(safe-area-inset-top);
-}
-.nav-row{display:flex;align-items:center;gap:8px;padding:8px 16px 0;min-height:44px}
-.nav-title{flex:1;min-width:0;font-size:17px;font-weight:700;letter-spacing:-.2px;color:var(--on-brand);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nav-btn{
-  border:0;background:var(--fill-on-brand);color:var(--on-brand);border-radius:50%;
-  width:32px;height:32px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-  font-size:15px;padding:0;transition:transform .12s,background .12s;
-}
-.nav-btn:active{transform:scale(.9);background:var(--fill-on-brand-2)}
-.nav-btn.on{background:#fff;color:var(--brand)}
-.search{padding:8px 16px 8px}
-.search input{
-  width:100%;height:36px;border:0;border-radius:var(--radius-sm);padding:0 12px;
-  background:var(--fill-on-brand);outline:none;font-size:16px;color:var(--on-brand);
-}
-.search input::placeholder{color:var(--on-brand-2)}
-.segs-wrap{padding:0 16px 6px}
-/* 分段控件：自动换行。
-   原来是 overflow-x:auto 横向滚动，最右一个分类会被切一半 ——
-   和「一页完全显示」的要求直接冲突，改成换行后彻底不出滚动条。 */
-.segs{
-  display:flex;flex-wrap:wrap;gap:4px;background:var(--fill-on-brand);
-  border-radius:9px;padding:3px;
-}
-.seg{
-  flex:1 1 auto;min-width:0;border:0;background:transparent;color:var(--on-brand-2);
-  font-size:13px;font-weight:500;padding:6px 10px;border-radius:7px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  transition:background .15s,color .15s;
-}
-.seg.on{background:#fff;color:var(--brand);font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.16)}
-
-/* ==================================================================
-   列表
-   ================================================================== */
-.wrap{padding:0 16px calc(96px + env(safe-area-inset-bottom))}
-.big{padding:18px 2px 8px}
-.big h1{margin:0;font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-.7px;color:var(--brand)}
-.big-sub{margin-top:5px;font-size:13px;color:var(--text-2)}
-
-.group{background:var(--bg-group);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin-bottom:14px}
-.group-hd{
-  font-size:13px;color:var(--text-2);padding:2px 4px 6px;
-  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
-}
-.row{
-  display:flex;align-items:center;gap:12px;padding:11px 16px;
-  border-bottom:.5px solid var(--sep-op);transition:background .12s;
-  position:relative;
-}
-.row:last-child{border-bottom:0}
-.row:active{background:var(--brand-soft)}
-.row .main{flex:1;min-width:0}
-.row .t1{font-size:16px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:5px}
-.row .t2{font-size:13px;color:var(--text-2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.row .t3{font-size:12.5px;color:var(--text-2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.star{color:var(--c-wait);font-size:13px}
-.tag{
-  font-size:11.5px;padding:1.5px 7px;border-radius:6px;
-  background:var(--fill-1);color:var(--text-2);font-weight:500;
-}
-.tag.cat{background:var(--brand-soft);color:var(--brand)}
-.pill{
-  font-size:12px;font-weight:700;padding:3px 10px;border-radius:100px;color:#fff;
-  letter-spacing:.2px;flex:0 0 auto;white-space:nowrap;
-}
-.chev{color:var(--text-3);font-size:15px;flex:0 0 auto}
-
-/* ==================================================================
-   详情
-   ================================================================== */
-.detail{
-  position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;
-  -webkit-overflow-scrolling:touch;
-  transform:translateX(100%);transition:transform .28s cubic-bezier(.32,.72,0,1);
-  padding-bottom:calc(176px + env(safe-area-inset-bottom));
-}
+.wrap{width:100%;max-width:760px;margin:0 auto;padding:0 16px calc(104px + env(safe-area-inset-bottom))}
+.top{position:sticky;top:0;z-index:40;background:linear-gradient(158deg,#c8102e,#8e0000);
+  padding:calc(8px + env(safe-area-inset-top)) 16px 10px;border-bottom:.5px solid rgba(255,255,255,.2)}
+.top-title{font-size:18px;font-weight:800;color:#fff}
+.search{margin-top:8px}.search input{width:100%;height:38px;border:0;border-radius:12px;padding:0 13px;
+  background:rgba(255,255,255,.18);color:#fff;outline:none}.search input::placeholder{color:rgba(255,255,255,.8)}
+.hero-count{display:flex;align-items:center;justify-content:space-between;padding:14px 2px 8px}
+.count{font-size:16px;font-weight:700;color:var(--text)}
+.mini-note{font-size:12px;color:var(--muted)}
+.page{display:none}.page.on{display:block}
+.card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);margin:12px 0}
+.card-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px 10px;
+  border-bottom:.5px solid var(--line);font-size:13px;font-weight:700;color:var(--muted)}
+.card-hd .sub{font-size:12px;font-weight:400}
+.row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:.5px solid var(--line)}
+.row:last-child{border-bottom:0}.row:active{background:var(--brand-soft)}
+.main{flex:1;min-width:0}.t1{font-size:16px;font-weight:700;overflow-wrap:anywhere}.t2{margin-top:3px;font-size:12px;color:var(--muted);
+  display:flex;gap:5px;flex-wrap:wrap}.t3{margin-top:4px;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:7px;background:rgba(120,120,128,.12);font-size:11px;color:var(--muted)}
+.tag.cat{background:var(--brand-soft);color:var(--brand)}.tag.type{background:rgba(52,199,89,.11);color:#1f9e42}
+.pill{padding:4px 9px;border-radius:999px;color:#fff;font-size:11.5px;font-weight:700;white-space:nowrap;flex:0 0 auto}
+.chev{color:var(--muted);font-size:18px;flex:0 0 auto}
+.star{color:var(--wait);font-size:12px;margin-left:3px}
+.empty{padding:52px 20px;text-align:center;color:var(--muted);line-height:1.7}
+.spin{width:22px;height:22px;border:2.5px solid rgba(142,142,147,.25);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.section-title{font-size:20px;font-weight:800;margin:18px 2px 8px}
+.group-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:var(--card);border-bottom:.5px solid var(--line);font-weight:700}
+.group-head button{border:0;background:transparent;color:var(--brand);font-size:17px}.group-items{display:none}.group.open .group-items{display:block}
+.group{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);margin:12px 0}
+.detail{position:fixed;inset:0;z-index:80;background:var(--bg);overflow:auto;transform:translateX(100%);
+  transition:transform .25s cubic-bezier(.32,.72,0,1);padding-bottom:calc(100px + env(safe-area-inset-bottom))}
 .detail.show{transform:translateX(0)}
-/* ★ 返回按钮被状态栏压住的根因：先写 padding 简写、再写 padding-top 覆盖。
-   顺序反了就白写。这里必须「简写在前、padding-top 在后」。 */
-.dnav{
-  position:sticky;top:0;z-index:5;background:var(--grad);
-  border-bottom:.5px solid var(--brand-line);
-  padding:8px 12px;
-  padding-top:calc(8px + env(safe-area-inset-top));
-  display:flex;align-items:center;gap:6px;min-height:48px;
-}
-.dnav .back{border:0;background:none;color:var(--on-brand);font-size:17px;padding:4px 2px;display:flex;align-items:center;gap:2px;flex:0 0 auto}
-.dnav .back:active{opacity:.5}
-.dnav .dt{flex:1;min-width:0;font-size:16px;font-weight:700;color:var(--on-brand);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
-.dnav .pad{width:52px;flex:0 0 auto}
-.dbody{padding:14px 16px 0}
-.hero{padding:18px 16px 14px}
-.hero h1{margin:14px 0 0;font-size:27px;font-weight:800;letter-spacing:-.6px;line-height:1.15}
-.result-card{background:var(--bg-elev);border-radius:16px;padding:14px 16px;margin-bottom:8px;border:1px solid var(--brand-line)}
-.result-label{font-size:12px;color:var(--text-2);font-weight:700}.result-value{margin-top:5px;font-size:28px;font-weight:900;line-height:1.1}
-.hero .meta{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-
-.card{background:var(--bg-group);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin-bottom:14px}
-.card-hd{
-  font-size:13px;font-weight:700;color:var(--text-2);
-  padding:11px 16px 9px;border-bottom:.5px solid var(--sep-op);
-  display:flex;justify-content:space-between;align-items:center;gap:8px;
-}
-.card-hd .sub{font-weight:400;color:var(--text-3);font-size:12px;text-align:right;min-width:0}
-.card-pad{padding:14px 16px;font-size:15.5px;line-height:1.65;color:var(--text);white-space:pre-wrap}
-
-/* 判断机结果：纵向卡片（替代原来的横向 table，列错位与横向滚动一并消失） */
-.jgrp{font-size:12px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:6px 16px;letter-spacing:.2px}
-.jrow{padding:11px 16px;border-bottom:.5px solid var(--sep-op)}
-.jrow:last-child{border-bottom:0}
-.jq{font-size:14.5px;line-height:1.45;color:var(--text)}
-.jm{margin-top:6px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.jhit{font-size:12.5px;font-weight:700;flex:0 0 auto}
-.jrole{font-size:12.5px;color:var(--text-2);flex:1;min-width:0}
-
-/* 公告列表 */
-.ann{display:block;padding:11px 16px;border-bottom:.5px solid var(--sep-op);transition:background .12s}
-.ann:last-child{border-bottom:0}
-.ann:active{background:var(--brand-soft)}
-.ann .at{font-size:14.5px;line-height:1.45;color:var(--text);display:flex;gap:8px;align-items:flex-start}
-.ann .at .tx{flex:1;min-width:0}
-.ann .at .ext{color:var(--text-3);font-size:12px;flex:0 0 auto;margin-top:2px}
-.ann .am{font-size:12px;color:var(--text-2);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap}
-.more{
-  width:100%;border:0;background:transparent;color:var(--brand);
-  font-size:14.5px;font-weight:600;padding:13px;border-top:.5px solid var(--sep-op);
-}
-.more:active{background:var(--brand-soft)}
-.empty-row{padding:20px 16px;text-align:center;color:var(--text-3);font-size:14px}
-.empty{text-align:center;color:var(--text-2);padding:56px 24px;font-size:15px;line-height:1.7;overflow-wrap:anywhere}
-
-/* 底部操作条（半透明） */
-.acts{
-  position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));z-index:75;
-  background:var(--nav-bg);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
-  border-top:.5px solid var(--sep-op);
-  display:flex;gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));
-  transform:translateY(110%);transition:transform .28s cubic-bezier(.32,.72,0,1);
-}
-.acts.show{transform:translateY(0)}
-.acts button{
-  flex:1;min-width:0;border:0;background:var(--fill-1);border-radius:var(--radius-sm);padding:11px 0;
-  font-size:15px;font-weight:600;transition:transform .12s,background .12s;
-}
-.acts button:active{transform:scale(.96)}
-.acts button.primary{background:var(--grad);color:#fff}
-.acts button.fav-on{background:rgba(255,149,0,.16);color:var(--c-wait)}
-
-/* ==================================================================
-   弹层（sheet）
-   ================================================================== */
-.mask{
-  position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.4);
-  display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s;
-}
-.mask.show{opacity:1;pointer-events:auto}
-.sheet{
-  width:100%;max-width:100%;background:var(--bg-elev);border-radius:18px 18px 0 0;
-  padding:0 0 calc(12px + env(safe-area-inset-bottom));
-  transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);
-  max-height:88vh;overflow-y:auto;
-}
-.mask.show .sheet{transform:translateY(0)}
-.sheet-grab{width:36px;height:5px;border-radius:3px;background:var(--fill-2);margin:8px auto 4px}
-.sheet h3{margin:6px 20px 12px;font-size:17px;font-weight:700;overflow-wrap:anywhere}
-.sheet .grp{margin:0 16px 14px;background:var(--bg);border-radius:var(--radius);overflow:hidden}
-.sheet label{display:block;font-size:13px;color:var(--text-2);padding:12px 14px 4px}
-.sheet input[type=text],.sheet textarea{
-  width:100%;border:0;background:transparent;padding:8px 14px 12px;outline:none;
-  font-size:14px;line-height:1.5;
-}
-.sheet textarea{height:96px;resize:none;font-family:ui-monospace,Menlo,Consolas,monospace}
-.sheet .hint{font-size:12px;color:var(--text-3);padding:0 14px 12px;line-height:1.5}
-.sheet-item{
-  display:flex;align-items:center;gap:12px;padding:14px 16px;font-size:16px;
-  border-bottom:.5px solid var(--sep-op);width:100%;border-left:0;border-right:0;border-top:0;
-  background:transparent;text-align:left;
-}
-.sheet-item:last-child{border-bottom:0}
-.sheet-item:active{background:var(--fill-3)}
-.sheet-item .ic{width:22px;text-align:center;color:var(--brand);flex:0 0 auto}
-.sheet-item .tx{flex:1;min-width:0;overflow-wrap:anywhere}
-.sheet-item .chev{color:var(--text-3);font-size:15px;flex:0 0 auto}
-.sheet-btns{display:flex;gap:10px;padding:0 16px 8px}
-.sheet-btns button{
-  flex:1;min-width:0;border:0;border-radius:var(--radius-sm);padding:12px 0;font-size:16px;font-weight:600;
-  background:var(--fill-1);
-}
-.sheet-btns button.primary{background:var(--grad);color:#fff}
-.sheet-btns button:active{transform:scale(.97)}
-
-/* toast */
-.toast{
-  position:fixed;left:50%;bottom:120px;transform:translateX(-50%) translateY(8px);z-index:200;
-  background:rgba(0,0,0,.84);color:#fff;padding:9px 18px;border-radius:100px;font-size:14px;
-  opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:84vw;text-align:center;
-}
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.spin{
-  width:22px;height:22px;border:2.5px solid var(--fill-2);border-top-color:var(--brand);
-  border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 14px;
-}
-@keyframes sp{to{transform:rotate(360deg)}}
-
-/* ==================================================================
-   2026-09-20 新增：底部菜单 / 整页容器 / 折叠 / 公司概况 / 手动标记
-   ================================================================== */
-.big{padding:10px 2px 6px}
-.big-mini{font-size:12.5px;color:var(--text-2)}
-.manual{font-size:10px;font-weight:700;color:#fff;background:var(--brand);border-radius:5px;padding:1px 5px;margin-left:5px}
-
-.tabbar{
-  position:fixed;left:0;right:0;bottom:0;z-index:80;
-  background:var(--nav-bg);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
-  border-top:.5px solid var(--sep-op);
-  display:flex;padding:6px 0 calc(6px + env(safe-area-inset-bottom));
-  transform:translateY(0);transition:transform .25s cubic-bezier(.32,.72,0,1);
-}
-.tabbar.hide{transform:translateY(130%)}
-.tabbar button{
-  flex:1;min-width:0;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;
-  padding:4px 0;font-size:11px;color:var(--text-2);
-}
-.tabbar button .ti{font-size:18px;line-height:1.1}
-.tabbar button.on{color:var(--brand);font-weight:700}
-.tabbar button:active{opacity:.6}
-
-.page{display:none;padding:8px 16px calc(96px + env(safe-area-inset-bottom))}
-.page.show{display:block}
-.set-sec{font-size:12px;font-weight:700;color:var(--text-2);padding:12px 4px 6px}
-.fold{background:var(--bg-group);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin-bottom:14px}
-.fold-hd{
-  display:flex;align-items:center;gap:10px;padding:13px 16px;font-size:15.5px;font-weight:600;
-  width:100%;border:0;background:transparent;text-align:left;color:inherit;
-}
-.fold-hd:active{background:var(--fill-3)}
-.fold-hd .fn{flex:1;min-width:0}
-.fold-hd .fc{font-size:13px;font-weight:500;color:var(--text-2)}
-.fold-hd .fx{color:var(--text-3);font-size:13px}
-.fold-bd{border-top:.5px solid var(--sep-op);padding:6px 8px 10px}
-
-.set-item{
-  display:flex;align-items:center;gap:12px;padding:14px 16px;font-size:16px;
-  border-bottom:.5px solid var(--sep-op);width:100%;background:transparent;
-  border-left:0;border-right:0;border-top:0;text-align:left;color:inherit;
-}
-.set-item:last-child{border-bottom:0}
-.set-item:active{background:var(--fill-3)}
-.set-item .ic{width:22px;text-align:center;color:var(--brand);flex:0 0 auto}
-.set-item .tx{flex:1;min-width:0}
-.set-item .vv{font-size:12.5px;color:var(--text-2);flex:0 0 auto}
-.set-item .chev{color:var(--text-3);font-size:15px;flex:0 0 auto}
-
-.editable{cursor:pointer}
-.editable::after{content:' \270F';font-size:10px;margin-left:4px;opacity:.7}
-.jnat{border:0;background:var(--brand-soft);color:var(--brand);font-size:12px;font-weight:600;
-  border-radius:6px;padding:2px 8px;flex:0 0 auto}
-.jnat:active{opacity:.6}
-.anty{font-size:11px;padding:1.5px 7px;border-radius:6px;background:var(--brand-soft);color:var(--brand);font-weight:600}
-
-.prof{position:fixed;inset:0;z-index:100;background:var(--bg);display:none;flex-direction:column}
-.prof.show{display:flex}
-.prof-bar{
-  background:var(--grad);padding:8px 12px;padding-top:calc(8px + env(safe-area-inset-top));
-  display:flex;align-items:center;gap:8px;min-height:48px;
-}
-.prof-bar .back{border:0;background:none;color:var(--on-brand);font-size:17px;flex:0 0 auto}
-.prof-bar .tt{flex:1;min-width:0;color:var(--on-brand);font-weight:700;font-size:16px;text-align:center;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.prof-bar .btn{border:0;background:var(--fill-on-brand-2);color:var(--on-brand);border-radius:9px;
-  padding:6px 10px;font-size:13px;flex:0 0 auto}
-.prof-tip{padding:8px 14px;font-size:12px;color:var(--text-2);background:var(--bg-elev)}
-.prof-view{flex:1;overflow:auto;background:var(--bg)}
-.prof-stage{transform-origin:top left}
-.prof-stage iframe{border:0;display:block;width:100%;height:100%}
+.dnav{position:sticky;top:0;z-index:10;background:linear-gradient(158deg,#c8102e,#8e0000);
+  padding:calc(8px + env(safe-area-inset-top)) 12px 8px;display:flex;align-items:center;gap:8px}
+.back{border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:9px;padding:7px 10px;font-weight:600}.dt{flex:1;min-width:0;text-align:center;color:#fff;font-size:16px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dbody{max-width:760px;margin:0 auto;padding:0 16px}
+.hero{padding:18px 2px 6px}.hero h1{margin:0;font-size:27px;line-height:1.18}.meta{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.result-main{padding:17px 16px}.result-label{font-size:12px;color:var(--muted);font-weight:700}.result-value{margin-top:6px;font-size:28px;line-height:1.1;font-weight:900}
+.edit-toggle{width:100%;border:0;background:rgba(120,120,128,.08);border-radius:12px;padding:11px 12px;text-align:left;font-weight:700;display:flex;justify-content:space-between}
+.edit-panel{display:none;padding:0 16px 16px}.edit-panel.open{display:block}
+.form-row{margin-top:12px}.form-row label{display:block;font-size:12px;color:var(--muted);font-weight:700;margin-bottom:5px}
+select{width:100%;min-height:40px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:7px 10px;outline:none}
+.edit-rule{padding:12px 0;border-top:.5px solid var(--line)}.edit-rule:first-child{border-top:0}
+.rule-q{font-size:14px;line-height:1.4}.rule-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.save-btn{width:100%;border:0;background:linear-gradient(158deg,#c8102e,#8e0000);color:#fff;border-radius:11px;padding:11px;font-weight:700;margin-top:14px}
+.ann{padding:11px 16px;border-bottom:.5px solid var(--line)}.ann:last-child{border-bottom:0}.ann-title{font-size:14px;line-height:1.45}
+.ann-meta{margin-top:4px;font-size:11.5px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}
+.jrow{padding:12px 16px;border-bottom:.5px solid var(--line)}.jrow:last-child{border-bottom:0}.jq{font-size:14px}
+.jm{margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.hit{font-size:12px;font-weight:700}
+.overview{overflow:hidden}.ov-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:.5px solid var(--line)}
+.ov-btn{border:0;background:rgba(120,120,128,.12);border-radius:9px;padding:6px 9px;font-size:12px}.ov-group{display:flex;gap:6px;align-items:center}
+.ov-frame{height:72vh;min-height:460px;background:#fff;overflow:auto;-webkit-overflow-scrolling:touch}
+.ov-canvas{width:100%;height:100%;overflow:auto}.ov-frame iframe{display:block;border:0;transform-origin:top left}
+.ov-help{padding:0 12px 10px;font-size:11.5px;color:var(--muted)}
+.setting-item{padding:14px 16px;border-bottom:.5px solid var(--line)}.setting-item:last-child{border-bottom:0}
+.setting-title{font-size:15px;font-weight:700}.setting-desc{margin-top:4px;font-size:12px;color:var(--muted);line-height:1.5}
+.setting-actions{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}.sbtn{border:0;background:rgba(120,120,128,.12);border-radius:10px;padding:9px 11px;font-size:13px}.sbtn.primary{background:var(--brand);color:#fff}
+textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px;outline:none;resize:vertical}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:100;background:var(--nav);backdrop-filter:saturate(180%) blur(18px);
+  border-top:.5px solid var(--line);padding:7px 5px calc(7px + env(safe-area-inset-bottom));display:flex;gap:2px}
+.bottom button{flex:1;min-width:0;border:0;background:transparent;padding:5px 1px;color:var(--muted);font-size:10.5px}
+.bottom button .ic{display:block;font-size:18px;line-height:20px;margin-bottom:1px}.bottom button.on{color:var(--brand);font-weight:700}
+.actions{position:fixed;left:0;right:0;bottom:calc(60px + env(safe-area-inset-bottom));z-index:90;display:none;gap:8px;
+  padding:7px 12px;background:var(--nav);backdrop-filter:blur(15px);border-top:.5px solid var(--line)}
+.actions.show{display:flex}.actions button{flex:1;border:0;border-radius:11px;padding:10px 4px;background:rgba(120,120,128,.12);font-size:14px;font-weight:700}
+.actions button.primary{background:var(--brand);color:#fff}.actions button.on{background:rgba(255,149,0,.16);color:var(--wait)}
+.mask{position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.4);display:none;align-items:flex-end}.mask.show{display:flex}
+.sheet{width:100%;max-width:760px;margin:0 auto;background:var(--card);border-radius:18px 18px 0 0;max-height:90vh;overflow:auto;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.sheet h3{margin:18px 20px 12px;font-size:18px}.sheet-grab{width:38px;height:5px;background:rgba(120,120,128,.25);border-radius:3px;margin:8px auto}
+.toast{position:fixed;left:50%;bottom:118px;transform:translate(-50%,8px);z-index:200;background:rgba(0,0,0,.84);color:#fff;
+  padding:9px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;max-width:86vw;text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
+.note{padding:0 16px 12px;color:var(--muted);font-size:12px}.danger{color:var(--bad)}
+@media(max-width:520px){.rule-meta{grid-template-columns:1fr}.bottom button{font-size:10px}.bottom button .ic{font-size:17px}}
 </style>
+<!-- GPT dedicated build 1.3.0 -->
 </head>
 <body>
+<header class="top">
+  <div class="top-title" id="topTitle">股票判断机</div>
+  <div class="search"><input id="q" type="search" placeholder="搜索名称 / 代码" autocomplete="off"></div>
+</header>
 
-<!-- 顶栏（★ / ⋯ 与两行筛选已移到底部菜单） -->
-<div class="nav">
-  <div class="nav-row">
-    <div class="nav-title" id="navTitle">股票</div>
-  </div>
-  <div class="search" id="searchBox"><input id="q" type="search" placeholder="搜索名称 / 代码" autocomplete="off"></div>
-</div>
+<main class="wrap">
+  <section id="page-home" class="page on">
+    <div class="hero-count"><div class="count" id="countTitle">共 0 条</div><div class="mini-note" id="dataNote">正在加载…</div></div>
+    <div id="homeList"><div class="empty"><div class="spin"></div>正在加载…</div></div>
+  </section>
+  <section id="page-types" class="page">
+    <div class="section-title">类型</div><div class="mini-note">点击分组展开股票</div><div id="typesList"></div>
+  </section>
+  <section id="page-conclusions" class="page">
+    <div class="section-title">结论</div><div class="mini-note">按实际数据中的结论动态分组</div><div id="conclusionList"></div>
+  </section>
+  <section id="page-comments" class="page">
+    <div class="section-title">点评</div><div class="mini-note">已写点评的股票</div><div id="commentList"></div>
+  </section>
+  <section id="page-favorites" class="page">
+    <div class="section-title">收藏</div><div class="mini-note">已收藏的股票</div><div id="favList"></div>
+  </section>
+  <section id="page-settings" class="page">
+    <div class="section-title">设置</div><div class="mini-note">数据、备份、更新统一放在这里</div>
+    <div class="card">
+      <div class="setting-item">
+        <div class="setting-title">数据源</div>
+        <div class="setting-desc">数据地址与激活码分开管理。每行一个地址，按顺序尝试。</div>
+        <div class="setting-actions"><button class="sbtn primary" id="btnSource">配置数据源</button><button class="sbtn" id="btnReload">重新加载数据</button></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-title">激活码</div>
+        <div class="setting-desc">用于解密公告数据。不会写入数据文件。</div>
+        <div class="setting-actions"><button class="sbtn" id="btnKey">修改激活码</button></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-title">数据备份</div>
+        <div class="setting-desc">备份收藏、点评和你手动修改过的判定/性质。</div>
+        <div class="setting-actions"><button class="sbtn" id="btnExport">导出备份</button><button class="sbtn" id="btnRestore">恢复备份</button></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-title">应用更新</div>
+        <div class="setting-desc" id="updateDesc">当前版本 1.3.0。检查 GitHub 上 GPT 仓库的最新版本。</div>
+        <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-title">当前数据状态</div>
+        <div class="setting-desc" id="dataStatus">未加载</div>
+      </div>
+    </div>
+  </section>
+</main>
 
-<!-- 首页：只展示股票 -->
-<div class="wrap" id="viewList">
-  <div class="big"><div class="big-mini" id="bigSub">正在加载…</div></div>
-  <div id="listWrap">
-    <div class="empty"><div class="spin"></div>正在加载…</div>
-  </div>
-</div>
-
-<!-- 底部菜单：整页切换 -->
-<div class="page" id="viewType"></div>
-<div class="page" id="viewConcl"></div>
-<div class="page" id="viewCmt"></div>
-<div class="page" id="viewFav"></div>
-<div class="page" id="viewSet"></div>
-
-<div class="tabbar" id="tabbar">
-  <button data-tab="list" class="on"><span class="ti">⌂</span><span>首页</span></button>
-  <button data-tab="type"><span class="ti">▤</span><span>类型</span></button>
-  <button data-tab="concl"><span class="ti">◑</span><span>结论</span></button>
-  <button data-tab="cmt"><span class="ti">✎</span><span>点评</span></button>
-  <button data-tab="fav"><span class="ti">★</span><span>收藏</span></button>
-  <button data-tab="set"><span class="ti">⚙</span><span>设置</span></button>
-</div>
-
-<!-- 详情 -->
 <div class="detail" id="detail">
-  <div class="dnav">
-    <button class="back" id="btnBack">‹ 返回</button>
-    <div class="dt" id="dTitle"></div>
-    <div class="pad"></div>
+  <div class="dnav"><button class="back" id="btnBack">‹ 返回</button><div class="dt" id="dTitle"></div><div style="width:56px"></div></div>
+  <div class="dbody">
+    <div id="dHero"></div>
+    <div id="dBody"></div>
   </div>
-  <div id="dHero"></div>
-  <div class="dbody" id="dBody"></div>
 </div>
 
-<!-- 底部操作 -->
-<div class="acts" id="acts">
-  <button id="aFav">收藏</button>
-  <button id="aCmt">点评</button>
-  <button id="aCopy" class="primary">复制代码</button>
+<div class="actions" id="actions">
+  <button id="aFav">收藏</button><button id="aCmt">点评</button><button id="aCopy" class="primary">复制代码</button>
 </div>
 
-<!-- 公司概况（App 内 iframe，同花顺 F10） -->
-<div class="prof" id="prof">
-  <div class="prof-bar">
-    <button class="back" id="btnProfBack">‹ 返回</button>
-    <div class="tt" id="profTitle">公司概况</div>
-    <button class="btn" id="btnProfFit">适应屏宽</button>
-  </div>
-  <div class="prof-tip">这是电脑版页面，已按屏宽缩放；横屏或双指放大看得更清楚。</div>
-  <div class="prof-view" id="profView"><div class="prof-stage" id="profStage"></div></div>
-</div>
+<nav class="bottom" id="bottomNav">
+  <button data-page="home" class="on"><span class="ic">⌂</span>首页</button>
+  <button data-page="types"><span class="ic">☷</span>类型</button>
+  <button data-page="conclusions"><span class="ic">◉</span>结论</button>
+  <button data-page="comments"><span class="ic">✎</span>点评</button>
+  <button data-page="favorites"><span class="ic">★</span>收藏</button>
+  <button data-page="settings"><span class="ic">⚙</span>设置</button>
+</nav>
 
-<!-- 弹层 -->
 <div class="mask" id="mask"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
-/* ==================================================================
-   构建时注入（可被 App 内设置覆盖）
-   ================================================================== */
-const DEF_KEY  = '__AES_KEY__';
-const DEF_URLS = '__DATA_URL__';
-
-const LS = {
-  fav: 'sj.fav.v3', cmt: 'sj.cmt.v3', cache: 'sj.cache.v4',
-  urls: 'sj.urls.v4', key: 'sj.activation.v4', ovr: 'sj.overrides.v2',
-};
-const APP_VERSION = '1.4.0';
-const UPDATE_URLS = [
+const DEF_KEY='';
+const DEF_URLS='https://cdn.jsdelivr.net/gh/baibiaowang/stock-judge-app@main/data/stocks.txt\nhttps://raw.githubusercontent.com/baibiaowang/stock-judge-app/main/data/stocks.txt';
+const APP_VERSION='1.5.0';
+const APP_VERSION_CODE=1500;
+const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.5.0/app-debug.apk';
+const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2'};
+const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false};
+let favs=new Set(),cmts={},overrides={};
+const $=id=>document.getElementById(id);
+function toast(msg,ms){const e=$('toast');e.textContent=msg;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),ms||1800)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function hexToBytes(hex){const s=String(hex||'').trim();if(!/^[0-9a-fA-F]{64}$/.test(s))throw new Error('激活码需为64位十六进制');const a=new Uint8Array(32);for(let i=0;i<32;i++)a[i]=parseInt(s.substr(i*2,2),16);return a}
+function b64ToBytes(b64){const bin=atob(String(b64).replace(/[^A-Za-z0-9+/=]/g,''));const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a}
+function keyOf(r){return String(r.code||'')+'|'+String(r.category||'')}
+const IDB=(()=>{const DB='stockjudge-gpt',STORE='kv',VER=1;let p=null;function open(){if(p)return p;p=new Promise((res,rej)=>{const q=indexedDB.open(DB,VER);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(STORE))q.result.createObjectStore(STORE)};q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});return p}function tx(mode,fn){return open().then(db=>new Promise((res,rej)=>{const t=db.transaction(STORE,mode),s=t.objectStore(STORE);let r;try{r=fn(s)}catch(e){rej(e);return}t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error)}))}return{get:k=>tx('readonly',s=>s.get(k)),set:(k,v)=>tx('readwrite',s=>s.put(v,k)),del:k=>tx('readwrite',s=>s.delete(k))}})();
+const Cache={get:async()=>{try{const v=await IDB.get('data');if(v)return v}catch(e){}try{return JSON.parse(localStorage.getItem('sj.cache.v4')||'null')}catch(e){return null}},set:async d=>{try{await IDB.set('data',d);localStorage.removeItem('sj.cache.v4');return true}catch(e){try{localStorage.setItem('sj.cache.v4',JSON.stringify(d));return true}catch(e2){return false}}}};
+function loadLocal(){try{favs=new Set(JSON.parse(localStorage.getItem(LS.fav)||'[]'))}catch(e){favs=new Set()}try{cmts=JSON.parse(localStorage.getItem(LS.cmt)||'{}')}catch(e){cmts={}}try{overrides=JSON.parse(localStorage.getItem(LS.override)||'{}')}catch(e){overrides={}}}
+const saveFav=()=>localStorage.setItem(LS.fav,JSON.stringify([...favs]));
+const saveCmt=()=>localStorage.setItem(LS.cmt,JSON.stringify(cmts));
+const saveOverrides=()=>localStorage.setItem(LS.override,JSON.stringify(overrides));
+function getUrls(){const custom=(localStorage.getItem(LS.urls)||'').split(/\s*\n\s*/).map(s=>s.trim()).filter(Boolean);if(custom.length)return custom;return String(DEF_URLS).split(/\s*\n\s*/).map(s=>s.trim()).filter(s=>s&&s.indexOf('__')!==0)}
+function getKeyHex(){const custom=(localStorage.getItem(LS.key)||'').trim();if(/^[0-9a-fA-F]{64}$/.test(custom))return custom;throw new Error('尚未配置激活码，请到“设置 → 激活码”填写')}
+async function decryptText(txt){const u=b64ToBytes(txt);if(u.length<33)throw new Error('密文过短');if(String.fromCharCode(u[0],u[1],u[2],u[3])!=='SJ01')throw new Error('数据格式不匹配');const iv=u.slice(5,17),data=u.slice(17),key=await crypto.subtle.importKey('raw',hexToBytes(getKeyHex()),{name:'AES-GCM'},false,['decrypt']);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,data);return JSON.parse(new TextDecoder().decode(plain))}
+async function loadFromUrl(url){const r=await fetch(url,{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);return decryptText(await r.text())}
+async function loadFromUrls(urls){const errs=[];for(const u of urls){try{return await loadFromUrl(u)}catch(e){errs.push(u.replace(/^https?:\/\//,'').slice(0,48)+' → '+e.message)}}throw new Error(errs.join('；'))}
+function statusColor(c){const m={'有利':'var(--good)','不利':'var(--bad)','待定':'var(--wait)','否决':'#5B0E1E'};return m[c]||'var(--gray)'}
+function allRecords(){return state.data&&Array.isArray(state.data.records)?state.data.records:[]}
+function getOverride(r){return overrides[keyOf(r)]||{}}
+function getConclusion(r){return getOverride(r).conclusion!=null?getOverride(r).conclusion:(r.conclusion||'未设置')}
+function propertyOptions(){const s=new Set();allRecords().forEach(r=>{const t=state.data.judge_tables&&state.data.judge_tables[r.category];(t&&t.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))})});['有利','不利','中性','待定'].forEach(x=>s.add(x));return [...s]}
+function judgmentOptions(){const s=new Set(['不确定','命中','未命中']);allRecords().forEach(r=>(r.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));return [...s]}
+function buildRows(r){const t=state.data&&state.data.judge_tables&&state.data.judge_tables[r.category];if(!t)return[];const ov=getOverride(r);return(t.rows||[]).map((row,i)=>({i,q:row[0]||'',property:(ov.properties&&ov.properties[i]!=null?ov.properties[i]:row[1]||'待定'),judge:(ov.judges&&ov.judges[i]!=null?ov.judges[i]:((r.judge||[])[i]||'不确定')),role:row[2]||''}))}
+function renderList(container,records){container.innerHTML=records.length?records.map(rowHtml).join(''):'<div class="empty">暂无内容</div>'}
+function rowHtml(r){const c=cmts[keyOf(r)],k=keyOf(r);return '<div class="row" data-code="'+esc(r.code)+'" data-cat="'+esc(r.category)+'"><div class="main"><div class="t1">'+esc(r.name||r.code)+(favs.has(k)?'<span class="star">★</span>':'')+'</div><div class="t2"><span class="tag">'+esc(r.code)+'</span><span class="tag cat">'+esc(r.category||'')+'</span></div>'+(c?'<div class="t3">✎ '+esc(c)+'</div>':'')+'</div><span class="pill" style="background:'+statusColor(getConclusion(r))+'">'+esc(getConclusion(r))+'</span><span class="chev">›</span></div>'}
+function filtered(){const q=state.query.trim().toLowerCase();return allRecords().filter(r=>!q||String(r.name||'').toLowerCase().includes(q)||String(r.code||'').includes(q))}
+function renderHome(){const rs=filtered();$('countTitle').textContent='共 '+rs.length+' 条';$('dataNote').textContent=state.data?(state.kind==='cache'?'缓存数据':state.kind==='local'?'本地导入':'实时数据'):'未加载';renderList($('homeList'),rs)}
+function dynamicGroups(){const map=new Map();allRecords().forEach(r=>{const k=r.category||'未分类';if(!map.has(k))map.set(k,[]);map.get(k).push(r)});return [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'zh-CN'))}
+function renderTypes(){const groups=dynamicGroups();$('typesList').innerHTML=groups.length?groups.map(([name,rs],idx)=>'<div class="group '+(idx===0?'open':'')+'"><div class="group-head"><span>'+esc(name)+' · '+rs.length+'</span><button>⌄</button></div><div class="group-items">'+rs.map(rowHtml).join('')+'</div></div>').join(''):'<div class="empty">暂无类型数据</div>'}
+function renderConclusions(){const map=new Map();allRecords().forEach(r=>{const k=getConclusion(r);if(!map.has(k))map.set(k,[]);map.get(k).push(r)});const pref=['有利','不利','待定','否决'];const groups=[...map.entries()].sort((a,b)=>{const ia=pref.indexOf(a[0]),ib=pref.indexOf(b[0]);return(ia<0?99:ia)-(ib<0?99:ib)||a[0].localeCompare(b[0],'zh-CN')});$('conclusionList').innerHTML=groups.length?groups.map(([name,rs])=>'<div class="group"><div class="group-head"><span>'+esc(name)+' · '+rs.length+'</span><button>⌄</button></div><div class="group-items">'+rs.map(rowHtml).join('')+'</div></div>').join(''):'<div class="empty">暂无结论数据</div>'}
+function renderComments(){const rs=allRecords().filter(r=>cmts[keyOf(r)]);$('commentList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">暂无点评</div>'}
+function renderFavorites(){const rs=allRecords().filter(r=>favs.has(keyOf(r)));$('favList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">还没有收藏</div>'}
+function renderAllPages(){renderHome();renderTypes();renderConclusions();renderComments();renderFavorites();updateDataStatus()}
+function pageSwitch(page){if($('detail').classList.contains('show'))closeDetail(false);state.page=page;document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+page));document.querySelectorAll('.bottom button').forEach(x=>x.classList.toggle('on',x.dataset.page===page));window.scrollTo(0,0)}
 
-const PAGE = 200;          /* 每批渲染条数（触底自动续，不再截断） */
-const ANN_STEP = 30;       /* 公告每次展开条数 */
-const POLL_MAX = 240;      /* 外部文件轮询上限：240 × 500ms = 120 秒 */
-
-/* ==================================================================
-   状态
-   kind: remote（线上拉取）| cache（本地缓存）| local（外部/本地文件导入）
-   local 的数据不会被后台刷新覆盖
-   ================================================================== */
-const state = {
-  data: null, kind: null,
-  query: '', cat: '', concl: '', onlyFav: false,
-  cur: null, annShown: ANN_STEP, shown: PAGE,
-  tab: 'list', openCat: '', openConcl: '', profCode: '', ovr: {},
-};
-let favs = new Set(), cmts = {};
-
-const $ = (id) => document.getElementById(id);
-
-function toast(msg, ms) {
-  const el = $('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('show'), ms || 1800);
+function announcementTypes(a){const raw=a&&(a.types||a.type||a.categories||a.category||'');if(Array.isArray(raw))return raw.filter(Boolean).map(String);return String(raw||'').split(/[、,，/|]+/).map(s=>s.trim()).filter(Boolean)}
+function announcementsFor(r){const arr=(state.data&&state.data.announcements&&state.data.announcements[r.code])||[];return [...arr].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))}
+function annHtml(r){const arr=announcementsFor(r);if(!arr.length)return '<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">0 条</span></div><div class="empty">暂无公告</div></div>';const show=arr.slice(0,state.annShown);return '<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">最新在前 · 共 '+arr.length+' 条</span></div>'+show.map(a=>'<a class="ann" href="'+esc(a.url||'#')+'" target="_blank" rel="noopener"><div class="ann-title">'+esc(a.title||'未命名公告')+'</div><div class="ann-meta">'+(a.date?'<span>'+esc(a.date)+'</span>':'')+announcementTypes(a).map(t=>'<span class="tag type">'+esc(t)+'</span>').join('')+'</div></a>').join('')+(arr.length>state.annShown?'<button class="edit-toggle" style="margin:8px 12px;width:calc(100% - 24px);text-align:center" id="annMore">展开全部</button>':'')+'</div>'}
+function editHtml(r){const rows=buildRows(r),props=propertyOptions(),judges=judgmentOptions(),ov=getOverride(r),concs=[...new Set(allRecords().map(getConclusion).concat([getConclusion(r)]))];const phtml=props.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join(''),jhtml=judges.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join(''),chtml=concs.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');return '<div class="card"><button class="edit-toggle" id="editToggle"><span>修改判定与性质</span><span>'+(state.editOpen?'⌃':'⌄')+'</span></button><div class="edit-panel '+(state.editOpen?'open':'')+'" id="editPanel"><div class="form-row"><label>最终判定结果</label><select id="editConclusion">'+chtml+'</select></div>'+rows.map(x=>'<div class="edit-rule"><div class="rule-q">'+esc(x.q)+'</div><div class="rule-meta"><div><label>性质</label><select data-prop="'+x.i+'">'+phtml+'</select></div><div><label>判定</label><select data-judge="'+x.i+'">'+jhtml+'</select></div></div><div class="setting-desc">'+esc(x.role)+'</div></div>').join('')+'<button class="save-btn" id="saveEdit">保存修改</button></div></div>'}
+function overviewHtml(r){const url='https://basic.10jqka.com.cn/'+encodeURIComponent(r.code)+'/';return '<div class="card overview"><div class="card-hd"><span>公司概况</span><span class="sub">'+esc(r.code)+'</span></div><div class="ov-toolbar"><span class="mini-note">默认整页展示</span><div class="ov-group"><button class="ov-btn" id="ovMinus">−</button><button class="ov-btn" id="ovReset">整页</button><button class="ov-btn" id="ovPlus">＋</button><button class="ov-btn" id="ovOpen">↗</button></div></div><div class="ov-frame"><div class="ov-canvas"><iframe id="ovFrame" title="公司概况" src="'+url+'" loading="lazy" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe></div></div><div class="ov-help">公司概况支持双指缩放；“整页”恢复默认比例，也可用 ± 调整。站点若禁止内嵌，可用“↗”在浏览器打开。</div></div>'}
+function detailJudgeHtml(r){const rows=buildRows(r);if(!rows.length)return '';let h='<div class="card"><div class="card-hd"><span>判定与性质</span><span class="sub">'+rows.length+' 条条件</span></div>';let last='';rows.forEach(x=>{if(x.property!==last){h+='<div style="padding:6px 16px;background:var(--brand-soft);color:var(--brand);font-size:12px;font-weight:700">'+esc(x.property)+'</div>';last=x.property}h+='<div class="jrow"><div class="jq">'+esc(x.q)+'</div><div class="jm"><span class="hit" style="color:'+(x.judge==='命中'?'var(--good)':x.judge==='未命中'?'var(--bad)':'var(--muted)')+'">'+esc(x.judge)+'</span><span class="tag">'+esc(x.property)+'</span></div></div>'});return h+'</div>'}
+function openDetail(r){if(!state.detailPushed){history.pushState({detail:true,stock:keyOf(r)},'','?stock='+encodeURIComponent(keyOf(r)));state.detailPushed=true}state.cur=r;state.editOpen=false;state.annShown=30;const co=getConclusion(r);$('dTitle').textContent=r.name||r.code;$('dHero').innerHTML='<div class="hero"><h1>'+esc(r.name||r.code)+'</h1><div class="meta"><span class="tag">'+esc(r.code)+'</span><span class="tag cat">'+esc(r.category||'')+'</span></div></div><div class="card"><div class="result-main"><div class="result-label">判定结果</div><div class="result-value" style="color:'+statusColor(co)+'">'+esc(co)+'</div></div>'+editHtml(r)+'</div>';$('dBody').innerHTML=detailJudgeHtml(r)+ '<div class="card"><div class="card-hd"><span>AI 总结</span></div><div class="result-main" style="font-size:14px;white-space:pre-wrap">'+esc(r.summary||'—')+'</div></div>'+overviewHtml(r)+annHtml(r)+'<div class="card"><div class="card-hd"><span>我的点评</span></div><div class="result-main" style="font-size:14px;white-space:pre-wrap">'+esc(cmts[keyOf(r)]||'还没有点评')+'</div></div>';$('detail').classList.add('show');$('actions').classList.add('show');syncActions();bindEdit(r);bindOverview();const more=$('annMore');if(more)more.onclick=()=>{state.annShown=announcementsFor(r).length;openDetail(r)};$('detail').scrollTop=0}
+function bindEdit(r){const t=$('editToggle');if(!t)return;t.onclick=()=>{state.editOpen=!state.editOpen;const p=$('editPanel');if(p)p.classList.toggle('open',state.editOpen);const arrow=t.querySelector('span:last-child');if(arrow)arrow.textContent=state.editOpen?'⌃':'⌄'};const c=$('editConclusion');if(c)c.value=getConclusion(r);const rows=buildRows(r);document.querySelectorAll('select[data-prop]').forEach(s=>{const i=+s.dataset.prop;const x=rows.find(y=>y.i===i);s.value=x?x.property:''});document.querySelectorAll('select[data-judge]').forEach(s=>{const i=+s.dataset.judge;const x=rows.find(y=>y.i===i);s.value=x?x.judge:''});const save=$('saveEdit');if(!save)return;save.onclick=()=>{const k=keyOf(r),ov=overrides[k]||{};ov.conclusion=c.value;ov.properties=ov.properties||{};ov.judges=ov.judges||{};document.querySelectorAll('select[data-prop]').forEach(s=>{ov.properties[s.dataset.prop]=s.value});document.querySelectorAll('select[data-judge]').forEach(s=>{ov.judges[s.dataset.judge]=s.value});overrides[k]=ov;saveOverrides();state.editOpen=false;renderAllPages();openDetail(r);toast('修改已保存')}}
+function applyZoom(){const f=$('ovFrame'),wrap=document.querySelector('.ov-canvas');if(!f||!wrap)return;const z=state.overviewZoom;f.style.width=(100/z)+'%';f.style.height=(100/z)+'%';f.style.transform='scale('+z+')';wrap.style.height=(72)+'vh';wrap.style.minHeight='460px';wrap.style.overflow='auto'}
+window.__sjPinchScale=function(factor,x,y){const n=Number(factor);if(!Number.isFinite(n)||n<=0)return false;const el=document.elementFromPoint(Number(x),Number(y));if(!el||!el.closest||!el.closest('.ov-frame'))return false;state.overviewZoom=Math.min(2.5,Math.max(.45,+(state.overviewZoom*n).toFixed(3)));applyZoom();return true};
+function bindOverview(){const f=$('ovFrame');if(!f)return;applyZoom();$('ovMinus').onclick=()=>{state.overviewZoom=Math.max(.45,+(state.overviewZoom-.08).toFixed(2));applyZoom()};$('ovPlus').onclick=()=>{state.overviewZoom=Math.min(2.5,+(state.overviewZoom+.08).toFixed(2));applyZoom()};$('ovReset').onclick=()=>{state.overviewZoom=.72;applyZoom()};$('ovOpen').onclick=()=>window.open('https://basic.10jqka.com.cn/'+encodeURIComponent(state.cur.code)+'/','_blank')}
+function closeDetail(fromPop){if(!$('detail').classList.contains('show'))return;state.cur=null;$('detail').classList.remove('show');$('actions').classList.remove('show');if(!fromPop&&state.detailPushed){state.detailPushed=false;history.back()}}
+function syncActions(){if(!state.cur)return;const on=favs.has(keyOf(state.cur));$('aFav').textContent=on?'已收藏':'收藏';$('aFav').classList.toggle('on',on)}
+function openSheet(title,html,bind){$('sheet').innerHTML='<div class="sheet-grab"></div><h3>'+title+'</h3>'+html;$('mask').classList.add('show');if(bind)bind()}
+function closeSheet(){$('mask').classList.remove('show')}
+function sourceSheet(){openSheet('数据源','<div class="note">内置数据源已配置。你可以直接修改、增加或删除地址；每行一个。<br>全部留空 = 恢复内置数据源。</div><div style="padding:0 16px 8px"><textarea id="inUrls" placeholder="https://…/stocks.txt">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div class="sheet-actions" style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="sc">取消</button><button class="sbtn primary" id="ss">保存并加载</button></div>',()=>{$('sc').onclick=closeSheet;$('ss').onclick=()=>{const u=$('inUrls').value.trim();u?localStorage.setItem(LS.urls,u):localStorage.removeItem(LS.urls);closeSheet();boot(false,true)}})}
+function keySheet(){openSheet('激活码','<div class="note">必须由你自己输入；App 不内置、不从构建环境注入激活码。64 位十六进制。</div><div style="padding:0 16px 8px"><input id="inKey" type="text" value="'+esc(localStorage.getItem(LS.key)||'')+'" placeholder="请输入激活码" style="width:100%;height:42px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 10px;outline:none"></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="ks" style="width:100%">保存并加载</button></div>',()=>{$('ks').onclick=()=>{const k=$('inKey').value.trim();if(k&&!/^[0-9a-fA-F]{64}$/.test(k)){toast('激活码格式不正确');return}k?localStorage.setItem(LS.key,k):localStorage.removeItem(LS.key);closeSheet();boot(false,true)}})}
+function exportBackup(){const p={kind:'stock-judge-backup',version:2,exported_at:new Date().toISOString(),favorites:[...favs],comments:cmts,overrides};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(p,null,2)],{type:'application/json'}));a.download='stock-judge-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('已导出备份')}
+function restoreBackup(){const el=document.createElement('input');el.type='file';el.accept='.json,application/json';el.onchange=()=>{const f=el.files&&el.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(Array.isArray(p.favorites))p.favorites.forEach(k=>favs.add(k));if(p.comments&&typeof p.comments==='object')Object.assign(cmts,p.comments);if(p.overrides&&typeof p.overrides==='object')Object.assign(overrides,p.overrides);saveFav();saveCmt();saveOverrides();renderAllPages();toast('备份已恢复')}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};el.click()}
+async function checkUpdate(){try{const errs=[];for(const u of UPDATE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const p=await r.json();const remoteCode=Number(p.versionCode||0);if(remoteCode>APP_VERSION_CODE){$('updateDesc').textContent='发现新版本 '+p.version+'，点击确认进入更新下载。';if(confirm('发现新版本 '+p.version+'。现在打开更新下载？'))window.open(p.apk_url||RELEASE_APK,'_blank');return}$('updateDesc').textContent='当前已是版本 '+APP_VERSION+'；更新时间 '+(p.published_at||'未知');return}catch(e){errs.push(e.message)}}throw new Error(errs.join('；'))}catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败',2600)}}
+function updateDataStatus(){const n=allRecords().length;const g=state.data&&state.data.meta&&state.data.meta.generated_at;$('dataStatus').textContent=n?(n+' 条记录 · '+(state.kind==='cache'?'缓存':state.kind==='local'?'本地导入':'实时')+(g?' · '+String(g).slice(0,16).replace('T',' '):'')):'未加载'}
+function hasUserConfig(){
+  const savedKey=(localStorage.getItem(LS.key)||'').trim();
+  /* 数据源有内置默认地址，不要求用户必须手动保存 URL；激活码才是解密必需项。 */
+  const hasKey=/^[0-9a-fA-F]{64}$/.test(savedKey);
+  const hasUrls=getUrls().length>0;
+  return hasKey && hasUrls;
 }
-
-function esc(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-}
-
-/* ★ 原实现直接用 hex.length/2 建数组，密钥非法时（构建漏注入、占位符还在）
-   会抛 `RangeError: Invalid typed array length: 5.5`，完全看不懂。先校验再建。 */
-function hexToBytes(hex) {
-  const s = String(hex == null ? '' : hex).trim();
-  if (!/^[0-9a-fA-F]+$/.test(s) || s.length % 2 !== 0) {
-    throw new Error('密钥不是合法的十六进制串（需要 64 位十六进制）');
-  }
-  const out = new Uint8Array(s.length / 2);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
-  return out;
-}
-
-function b64ToBytes(b64) {
-  const s = String(b64).replace(/[^A-Za-z0-9+/=]/g, '');
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-const keyOf = (r) => r.code + '|' + r.category;
-
-/* ==================================================================
-   IndexedDB 缓存
-   ★ 解密后的 JSON 约 2MB，localStorage 在 WebView 里配额很小，
-     写不进去会抛 QuotaExceededError —— 页面因此显示「加载失败」，
-     明明数据已经下载成功。改用 IndexedDB，localStorage 仅作兜底。
-   ================================================================== */
-const IDB = (() => {
-  const DB = 'stockjudge-gpt', STORE = 'kv', VER = 1;
-  let dbp = null;
-  function open() {
-    if (dbp) return dbp;
-    dbp = new Promise((res, rej) => {
-      let req;
-      try { req = indexedDB.open(DB, VER); } catch (e) { rej(e); return; }
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
-      };
-      req.onsuccess = () => res(req.result);
-      req.onerror = () => rej(req.error || new Error('indexedDB open failed'));
-    });
-    return dbp;
-  }
-  function tx(mode, fn) {
-    return open().then((db) => new Promise((res, rej) => {
-      let t;
-      try { t = db.transaction(STORE, mode); } catch (e) { rej(e); return; }
-      const store = t.objectStore(STORE);
-      let r;
-      try { r = fn(store); } catch (e) { rej(e); return; }
-      t.oncomplete = () => res(r ? r.result : undefined);
-      t.onerror = () => rej(t.error || new Error('idb tx error'));
-      t.onabort = () => rej(t.error || new Error('idb tx aborted'));
-    }));
-  }
-  return {
-    get: (k) => tx('readonly', (s) => s.get(k)),
-    set: (k, v) => tx('readwrite', (s) => s.put(v, k)),
-    del: (k) => tx('readwrite', (s) => s.delete(k)),
-  };
-})();
-
-const Cache = {
-  async get() {
-    try { const v = await IDB.get('data'); if (v) return v; } catch (e) { /* 落到 localStorage */ }
-    try { return JSON.parse(localStorage.getItem(LS.cache) || 'null'); } catch (e) { return null; }
-  },
-  async set(d) {
-    try { await IDB.set('data', d); try { localStorage.removeItem(LS.cache); } catch (e) {} return true; }
-    catch (e) {
-      try { localStorage.setItem(LS.cache, JSON.stringify(d)); return true; } catch (e2) { return false; }
-    }
-  },
-  async clear() {
-    try { await IDB.del('data'); } catch (e) {}
-    try { localStorage.removeItem(LS.cache); } catch (e) {}
-  },
-};
-
-/* ==================================================================
-   设置读写
-   ================================================================== */
-function getUrls() {
-  const custom = (localStorage.getItem(LS.urls) || '').split(/\s*\n\s*/).map((s) => s.trim()).filter(Boolean);
-  if (custom.length) return custom;
-  return String(DEF_URLS).split(/\s*\n\s*/).map((s) => s.trim()).filter((s) => s && s.indexOf('__') !== 0);
-}
-/* 内置密钥也要校验：以前只有「手填的」会被校验，内置值直接返回 ——
-   构建漏注入时会走到 hexToBytes 报看不懂的错。 */
-function getKeyHex() {
-  const custom = (localStorage.getItem(LS.key) || '').trim();
-  if (/^[0-9a-fA-F]{64}$/.test(custom)) return custom;
-  const builtin = String(DEF_KEY).trim();
-  if (!/^[0-9a-fA-F]{64}$/.test(builtin)) {
-    throw new Error('未配置解密密钥（或格式不对）—— 请在「数据源设置」里填入 64 位十六进制密钥');
-  }
-  return builtin;
-}
-
-function loadLocal() {
-  try { favs = new Set(JSON.parse(localStorage.getItem(LS.fav) || '[]')); } catch (e) { favs = new Set(); }
-  try { cmts = JSON.parse(localStorage.getItem(LS.cmt) || '{}'); } catch (e) { cmts = {}; }
-  try { state.ovr = JSON.parse(localStorage.getItem(LS.ovr) || '{}') || {}; } catch (e) { state.ovr = {}; }
-
-  /* 兼容此前 stock-judge-app / GPT 旧版设置：只在新键为空时接管旧值。 */
-  if (!localStorage.getItem(LS.key)) {
-    const legacyKey = (localStorage.getItem('sj.key.v3') || '').trim();
-    if (legacyKey) localStorage.setItem(LS.key, legacyKey);
-  }
-  if (!localStorage.getItem(LS.urls)) {
-    const legacyUrls = (localStorage.getItem('sj.urls.v3') || '').trim();
-    if (legacyUrls) localStorage.setItem(LS.urls, legacyUrls);
-  }
-
-  /* GPT 1.3.x：properties/judges -> 新 UI 的 judge(性质)；
-     conclusion/category 原样保留。 */
-  let changed = false;
-  const migrated = {};
-  Object.keys(state.ovr || {}).forEach((k) => {
-    const o = state.ovr[k] || {};
-    if (o.properties || o.judges) {
-      const n = {};
-      if (o.category) n.category = o.category;
-      if (o.conclusion) n.conclusion = o.conclusion;
-      if (o.properties && typeof o.properties === 'object') n.judge = Object.assign({}, o.properties);
-      migrated[k] = n;
-      changed = true;
-    } else if (o.judge || o.category || o.conclusion) {
-      migrated[k] = o;
-    } else {
-      migrated[k] = o;
-    }
-  });
-  if (changed) state.ovr = migrated;
-}
-const saveOvr = () => { try { localStorage.setItem(LS.ovr, JSON.stringify(state.ovr)); } catch (e) {} };
-const saveFav = () => { try { localStorage.setItem(LS.fav, JSON.stringify([...favs])); } catch (e) {} };
-const saveCmt = () => { try { localStorage.setItem(LS.cmt, JSON.stringify(cmts)); } catch (e) {} };
-
-/* ==================================================================
-   解密：txt(base64) -> bytes -> AES-256-GCM -> JSON
-   ================================================================== */
-async function decryptBytes(u8) {
-  if (u8.length < 33) throw new Error('文件过短');
-  const magic = String.fromCharCode(u8[0], u8[1], u8[2], u8[3]);
-  if (magic !== 'SJ01') throw new Error('格式不匹配（magic=' + magic + '）');
-  if (typeof crypto === 'undefined' || !crypto.subtle) {
-    throw new Error('环境不支持 Web Crypto（file:// 下不可用，请用 http://localhost 打开）');
-  }
-  const iv = u8.slice(5, 17);
-  const data = u8.slice(17);
-  const keyHex = getKeyHex();
-  const key = await crypto.subtle.importKey('raw', hexToBytes(keyHex), { name: 'AES-GCM' }, false, ['decrypt']);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
-  return JSON.parse(new TextDecoder().decode(plain));
-}
-
-async function decryptText(txt) {
-  return decryptBytes(b64ToBytes(txt));
-}
-
-async function loadFromUrl(url) {
-  const res = await fetch(url, { cache: 'no-cache' });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return decryptText(await res.text());
-}
-
-async function loadFromUrls(urls) {
-  const errs = [];
-  for (const u of urls) {
-    try { return await loadFromUrl(u); }
-    catch (e) { errs.push(u.replace(/^https?:\/\//, '').slice(0, 42) + ' → ' + e.message); }
-  }
-  throw new Error(errs.join('；'));
-}
-
-/* ==================================================================
-   启动
-   force = true 时忽略「本地导入」的保护，强制走线上（用户点了「重新加载数据」）
-   ================================================================== */
-function hasUserConfig() {
-  const savedKey = (localStorage.getItem(LS.key) || '').trim();
-  const builtKey = String(DEF_KEY).trim();
-  const hasKey = /^[0-9a-fA-F]{64}$/.test(savedKey) || /^[0-9a-fA-F]{64}$/.test(builtKey);
-  return hasKey && getUrls().length > 0;
-}
-
-async function boot(silent, force) {
+async function boot(silent,force){
   loadLocal();
 
-  if (!hasUserConfig()) {
-    switchTab('set');
-    renderSetPage();
-    if (!silent) toast('首次使用请先检查激活码和数据源设置', 2600);
+  /* 启动规则：有可用激活码 + 有可用数据地址 → 首页；否则设置。 */
+  if(!hasUserConfig()){
+    pageSwitch('settings');
+    const hasKey=/^[0-9a-fA-F]{64}$/.test((localStorage.getItem(LS.key)||'').trim());
+    $('dataStatus').textContent=hasKey ? '数据地址可用，但数据尚未成功加载' : '请先配置激活码';
+    if(!silent)toast(hasKey ? '正在准备数据，请检查数据源' : '请先配置激活码',2600);
     return;
   }
 
-  if (state.kind === 'local' && !force) {
-    if (!silent) toast('当前显示的是本地导入的数据；点「重新加载数据」可切回线上');
+  if(state.kind==='local'&&!force){
+    if(!silent)toast('当前是本地导入数据');
     return;
   }
 
-  let cached = null;
-  try { cached = await Cache.get(); } catch (e) { cached = null; }
-  if (cached && state.kind !== 'local') apply(cached, 'cache');
+  pageSwitch('home');
+  const cached=await Cache.get();
+  if(cached)apply(cached,'cache');
 
-  const urls = getUrls();
-  if (!urls.length) {
-    if (!cached) {
-      $('listWrap').innerHTML = '<div class="empty">未配置数据地址<br><br>点右上角 ⋯ → 数据源设置，或从本地文件导入 txt</div>';
-      $('bigSub').textContent = '未配置数据源';
-    }
+  const urls=getUrls();
+  if(!urls.length){
+    pageSwitch('settings');
+    $('dataStatus').textContent='数据源为空，请配置数据源';
     return;
   }
 
-  if (!silent && !cached) $('listWrap').innerHTML = '<div class="empty"><div class="spin"></div>正在加载…</div>';
-
-  let d = null;
-  try {
-    d = await loadFromUrls(urls);
-  } catch (e) {
-    if (!cached) {
-      $('listWrap').innerHTML = '<div class="empty">加载失败<br><br>' + esc(e.message) + '<br><br>点右上角 ⋯ 检查数据源或从本地导入</div>';
-      $('bigSub').textContent = '加载失败';
-    } else {
-      toast('更新失败，显示缓存数据');
-    }
-    return;
-  }
-
-  /* ★ 关键：下载解密已成功 —— 缓存写失败绝不能把页面变成「加载失败」。
-     两件事拆成两个 try，缓存问题只降级成一条提示。 */
-  try {
-    const ok = await Cache.set(d);
-    if (!ok) toast('数据已加载（缓存写入失败，下次启动需重新下载）', 2800);
-  } catch (e) {
-    toast('数据已加载（缓存写入失败）', 2400);
-  }
-
-  apply(d, 'remote');
-  if (silent) toast('已更新到最新数据');
-}
-
-function apply(d, kind) {
-  state.data = d;
-  state.kind = kind || 'remote';
-  state.shown = PAGE;
-  renderCurrent();
-
-  const cnt = (d.records || []).length;
-  const label = state.kind === 'cache' ? '缓存数据' : state.kind === 'local' ? '本地导入' : '实时数据';
-  const when = d.meta && d.meta.generated_at ? ' · ' + String(d.meta.generated_at).slice(0, 16).replace('T', ' ') : '';
-  $('bigSub').textContent = cnt + ' 条记录 · ' + label + when;
-}
-
-/* ==================================================================
-   语义颜色
-   ★ 品牌红留给品牌区 / 选中态 / 主按钮；「否决」用深紫，
-     否则和品牌红糊在一起，读不出区别。
-   ================================================================== */
-const CONCL_PREF = ['有利', '不利', '待定', '否决'];
-const STATUS_OVERRIDE = { '否决': 'var(--c-veto)' };
-function statusColor(c, map) {
-  if (STATUS_OVERRIDE[c]) return STATUS_OVERRIDE[c];
-  if (map && map[c]) return map[c];
-  const m = { '有利': 'var(--c-good)', '不利': 'var(--c-bad)', '待定': 'var(--c-wait)' };
-  return m[c] || 'var(--gray)';
-}
-
-/* ==================================================================
-   分段控件
-   ★ 原实现每次 innerHTML 重建、把高亮无条件设回「全部」，但 state.cat /
-     state.concl 不重置 —— 刷新数据后出现「按钮高亮在全部、列表却是筛过的」。
-     现在重建时按当前状态回填，并清掉在新数据里已不存在的选项。
-   ================================================================== */
-function buildSegs() {
-  const d = state.data || {};
-  const cats = Object.keys(d.judge_tables || {});
-  if (state.cat && cats.indexOf(state.cat) < 0) state.cat = '';
-  $('catSegs').innerHTML =
-    '<button class="seg' + (state.cat ? '' : ' on') + '" data-cat="">全部</button>' +
-    cats.map((c) => '<button class="seg' + (state.cat === c ? ' on' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('');
-
-  /* ★ 结论选项从数据里动态取（原来写死 4 种，多一种就筛不到） */
-  const sts = [];
-  (d.records || []).forEach((r) => { if (r.conclusion && sts.indexOf(r.conclusion) < 0) sts.push(r.conclusion); });
-  sts.sort((a, b) => {
-    const ia = CONCL_PREF.indexOf(a), ib = CONCL_PREF.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-  });
-  if (state.concl && sts.indexOf(state.concl) < 0) state.concl = '';
-  $('stSegs').innerHTML =
-    '<button class="seg' + (state.concl ? '' : ' on') + '" data-st="">全部结论</button>' +
-    sts.map((s) => '<button class="seg' + (state.concl === s ? ' on' : '') + '" data-st="' + esc(s) + '">' + esc(s) + '</button>').join('');
-}
-
-/* ==================================================================
-   列表（分批渲染 + 触底自动续载）
-   ★ 原实现 CAP = 500 硬截断，501 条之后永远看不到。
-   ================================================================== */
-let io = null;
-
-/* ★ 首页只按搜索过滤：类型 / 结论 / 收藏筛选已移到底部菜单 */
-function matchQ(r) {
-  const q = state.query.trim().toLowerCase();
-  if (!q) return true;
-  return String(r.name || '').toLowerCase().indexOf(q) >= 0 || String(r.code || '').indexOf(q) >= 0;
-}
-function allRecs() { return (state.data && state.data.records || []).map(eff).filter(matchQ); }
-function filtered() { return allRecs(); }
-function byCat(c) { return allRecs().filter((r) => effCat(r) === c); }
-function byConcl(c) { return allRecs().filter((r) => effConcl(r) === c); }
-function byFav() { return allRecs().filter((r) => favs.has(keyOf(r))); }
-function byCmt() { return allRecs().filter((r) => cmts[keyOf(r)]); }
-
-function rowHtml(r) {
-  const colors = (state.data.display && state.data.display.status_color) || {};
-  const k = keyOf(r);
-  const c = cmts[k];
-  return '<div class="row" data-code="' + esc(r.code) + '" data-cat="' + esc(r.category) + '">' +
-    '<div class="main">' +
-      '<div class="t1">' + esc(r.name) + (favs.has(k) ? '<span class="star">★</span>' : '') + (isManual(r) ? '<span class="manual">手</span>' : '') + '</div>' +
-      '<div class="t2"><span class="tag">' + esc(r.code) + '</span><span class="tag cat">' + esc(effCat(r)) + '</span></div>' +
-      (c ? '<div class="t3">✎ ' + esc(c) + '</div>' : '') +
-    '</div>' +
-    '<span class="pill" style="background:' + statusColor(effConcl(r), colors) + '">' + esc(effConcl(r)) + '</span>' +
-    '<span class="chev">›</span>' +
-  '</div>';
-}
-
-function renderList() {
-  if (!state.data) return;
-  const rows = filtered();
-
-  if (!rows.length) {
-    $('listWrap').innerHTML = '<div class="empty">没有匹配的记录</div>';
-    if (io) { io.disconnect(); io = null; }
-    return;
-  }
-
-  const shown = rows.slice(0, state.shown);
-  const rest = rows.length - state.shown;
-  const more = rest > 0
-    ? '<button class="more" id="loadMore">加载更多（还有 ' + rest + ' 条）</button>'
-    : '';
-
-  $('listWrap').innerHTML =
-    '<div class="group-hd"><span>共 ' + rows.length + ' 条</span><span>' + (state.onlyFav ? '只看收藏' : '') + '</span></div>' +
-    '<div class="group">' + shown.map(rowHtml).join('') + '</div>' +
-    more;
-
-  const btn = $('loadMore');
-  if (btn) btn.onclick = () => { state.shown += PAGE; renderList(); };
-  observeSentinel();
-}
-
-function observeSentinel() {
-  const el = $('loadMore');
-  if (io) { io.disconnect(); io = null; }
-  if (!el || typeof IntersectionObserver === 'undefined') return;
-  io = new IntersectionObserver((ents) => {
-    if (!ents.some((x) => x.isIntersecting)) return;
-    if (io) { io.disconnect(); io = null; }
-    if (!state.data) return;
-    if (state.shown >= filtered().length) return;
-    state.shown += PAGE;
-    renderList();
-  }, { rootMargin: '400px 0px' });
-  io.observe(el);
-}
-
-/* ★ 只更新一行，不重建整个列表 —— 以前收藏/点评都调 renderList()，
-   重建最多 500 行 DOM，既卡顿又把滚动位置清掉（从详情返回就回到顶部）。 */
-function findRowEl(k) {
-  const rows = document.querySelectorAll('#listWrap .row');
-  for (let i = 0; i < rows.length; i++) {
-    if (rows[i].dataset.code + '|' + rows[i].dataset.cat === k) return rows[i];
-  }
-  return null;
-}
-
-function updateRowStar(k) {
-  const row = findRowEl(k);
-  if (!row) return;
-  const t1 = row.querySelector('.t1');
-  if (!t1) return;
-  const star = t1.querySelector('.star');
-  if (favs.has(k) && !star) t1.insertAdjacentHTML('beforeend', '<span class="star">★</span>');
-  else if (!favs.has(k) && star) star.remove();
-}
-
-function updateRowCmt(k) {
-  const row = findRowEl(k);
-  if (!row) return;
-  const main = row.querySelector('.main');
-  if (!main) return;
-  let t3 = main.querySelector('.t3');
-  const v = cmts[k];
-  if (v) {
-    if (!t3) { t3 = document.createElement('div'); t3.className = 't3'; main.appendChild(t3); }
-    t3.textContent = '✎ ' + v;
-  } else if (t3) {
-    t3.remove();
-  }
-}
-
-/* ==================================================================
-   页面层级 / 返回键
-   ★ 安卓系统返回键原本直接退出 App —— 因为 SPA 从不产生历史记录，
-     WebView 的 canGoBack() 永远是 false。
-     现在每开一层（详情 / 弹层）就 pushState 一条，返回键自然逐层回退。
-   ================================================================== */
-const layer = { depth: 0 };
-
-function pushLayer() {
-  layer.depth++;
-  try { history.pushState({ sjLayer: layer.depth }, ''); } catch (e) {}
-}
-
-function topLayerClose() {
-  if ($('prof').classList.contains('show')) { closeProf(); return true; }
-  if ($('mask').classList.contains('show')) { closeSheet(); return true; }
-  if ($('detail').classList.contains('show')) { closeDetail(); return true; }
-  return false;
-}
-
-/* 程序内关闭一律走 popLayer()：让 popstate 成为唯一的关闭路径，
-   避免「手动关一次 + 历史回退一次」的双重关闭。 */
-function popLayer() {
-  if (layer.depth > 0) { try { history.back(); return; } catch (e) {} }
-  topLayerClose();
-}
-
-window.addEventListener('popstate', () => {
-  if (layer.depth > 0) layer.depth--;
-  topLayerClose();
-});
-
-window.__sjHandleBack = function () {
-  if (layer.depth > 0) {
-    try { history.back(); return true; } catch (e) {}
-  }
-  return topLayerClose();
-};
-
-/* ==================================================================
-   详情
-   ================================================================== */
-function findRecord(code, cat) {
-  return (state.data.records || []).find((r) => r.code === code && r.category === cat);
-}
-
-/* 判断机结果：纵向卡片。原先是横向 table，
-   ★ 表头发 4 个 <th>、数据行只发 3 个 <td> → 列错位；
-   ★ table{min-width:430px} → 手机上必然横向滚动。整表删除。 */
-function judgeHtml(r) {
-  const d = state.data;
-  const t = d.judge_tables && d.judge_tables[r.category];
-  if (!t) return '';
-  const hitColor = (d.display && d.display.hit_color) || {};
-
-  /* ★ 性质改成分组 + 每行可切换：手动改过的行用 effNature 覆盖 */
-  const NAT_PREF = ['有利', '不利', '中性', '待定'];
-  const groups = [];
-  (t.rows || []).forEach((row, i) => {
-    const g = effNature(r, i);
-    if (g && groups.indexOf(g) < 0) groups.push(g);
-  });
-  groups.sort((a, b) => {
-    const ia = NAT_PREF.indexOf(a), ib = NAT_PREF.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-  });
-
-  let body = '';
-  groups.forEach((g) => {
-    const idx = [];
-    (t.rows || []).forEach((row, i) => { if (effNature(r, i) === g) idx.push(i); });
-    if (!idx.length) return;
-    body += '<div class="jgrp">' + esc(g) + '条件 · ' + idx.length + ' 条</div>';
-    idx.forEach((i) => {
-      const hit = (r.judge && r.judge[i]) || '不确定';
-      body += '<div class="jrow">' +
-        '<div class="jq">' + esc(t.rows[i][0]) + '</div>' +
-        '<div class="jm">' +
-          '<span class="jhit" style="color:' + (hitColor[hit] || 'var(--text-2)') + '">' + esc(hit) + '</span>' +
-          '<button class="jnat" data-ni="' + i + '">' + esc(effNature(r, i) || '—') + ' ✎</button>' +
-          '<span class="jrole">' + esc(t.rows[i][2] || '') + '</span>' +
-        '</div>' +
-      '</div>';
-    });
-  });
-
-  return '<div class="card"><div class="card-hd"><span>判断机结果</span><span class="sub">' +
-    esc(t.class || '') + ' ' + esc(t.title || '') + '</span></div>' + body + '</div>';
-}
-
-function annTypes(a) {
-  let raw = a.column != null ? a.column : (a.type != null ? a.type : '');
-  if (Array.isArray(raw)) raw = raw.join(',');
-  return String(raw || '').split(/[,，、;；\/|]/).map((x) => String(x).trim()).filter(Boolean);
-}
-function annSortKey(a) {
-  const s = String(a.date || a.time || '').replace(/[^0-9]/g, '');
-  return s ? Number(s) : 0;
-}
-function annHtml(r) {
-  const d = state.data;
-  const anns = ((d.announcements && d.announcements[r.code]) || []).slice();
-  if (!anns.length) {
-    return '<div class="card"><div class="card-hd"><span>公告列表</span></div><div class="empty-row">暂无公告</div></div>';
-  }
-  /* ★ 按时间倒序：最新的公告在最上面 */
-  anns.sort((x, y) => annSortKey(y) - annSortKey(x));
-  const show = anns.slice(0, state.annShown);
-  return '<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">共 ' + anns.length + ' 条 · 最新在上</span></div>' +
-    show.map((a) =>
-      '<a class="ann" href="' + esc(a.url || '#') + '" target="_blank" rel="noopener">' +
-        '<div class="at"><span class="tx">' + esc(a.title) + '</span><span class="ext">↗</span></div>' +
-        '<div class="am">' + (a.date ? '<span>' + esc(a.date) + '</span>' : '') +
-          annTypes(a).map((t) => '<span class="anty">' + esc(t) + '</span>').join('') + '</div>' +
-      '</a>').join('') +
-    (anns.length > state.annShown ? '<button class="more" id="annMore">展开全部（共 ' + anns.length + ' 条）</button>' : '') +
-    '</div>';
-}
-
-function openDetail(r) {
-  /* ★ 原 bug：「展开全部」点了没反应 —— openDetail 一进来就把 annShown 重置成
-     ANN_STEP，而按钮是「先设成 anns.length、再调 openDetail」，设完立刻被改回去。
-     现在同一条记录重入时保留 annShown。 */
-  const same = !!(state.cur && state.cur.code === r.code && state.cur.category === r.category);
-  const first = !state.cur;
-  state.cur = r;
-  if (!same) state.annShown = ANN_STEP;
-
-  const d = state.data;
-  const colors = (d.display && d.display.status_color) || {};
-  const stColor = statusColor(effConcl(r), colors);
-
-  $('dTitle').textContent = r.name;
-
-  $('dHero').innerHTML =
-    '<div class="hero">' +
-      '<div class="result-card">' +
-        '<div class="result-label">判定结果</div>' +
-        '<div class="result-value" style="color:' + stColor + '">' + esc(effConcl(r)) + '</div>' +
-      '</div>' +
-      '<h1>' + esc(r.name) + (isManual(r) ? '<span class="manual">手动</span>' : '') + '</h1>' +
-      '<div class="meta">' +
-        '<span class="tag">' + esc(r.code) + '</span>' +
-        '<span class="tag cat">' + esc(effCat(r)) + '</span>' +
-        '<button class="tag" id="eProf" style="background:var(--brand-soft);color:var(--brand);font-weight:600">公司概况 ›</button>' +
-      '</div>' +
-      '<div class="meta" style="margin-top:8px">' +
-        '<button class="edit-toggle" id="editSummary" style="width:100%">修改判定结果 / 性质 <span>⌄</span></button>' +
-      '</div>' +
-    '</div>';
-  $('editSummary').onclick = () => {
-    openSheet(
-      '<h3>修改判定结果 / 性质</h3>' +
-      '<div class="grp">' +
-      '<button class="sheet-item" id="editConclItem"><span class="ic">◉</span><span class="tx">修改判定结果</span><span class="chev">›</span></button>' +
-      '<button class="sheet-item" id="editCatItem"><span class="ic">▤</span><span class="tx">修改类型</span><span class="chev">›</span></button>' +
-      '<button class="sheet-item" id="editNatItem"><span class="ic">✎</span><span class="tx">修改性质</span><span class="chev">›</span></button>' +
-      '</div><div class="sheet-btns"><button id="editSummaryClose">关闭</button></div>'
-    );
-    $('editSummaryClose').onclick = popLayer;
-    $('editConclItem').onclick = () => {
-      popLayer();
-      pickValue('修改判定结果', conclOptions(), effConcl(r), (v) => {
-        setOvr(r,'conclusion',v); openDetail(r); renderCurrent();
-      });
-    };
-    $('editCatItem').onclick = () => {
-      popLayer();
-      pickValue('修改类型', catOptions(), effCat(r), (v) => {
-        setOvr(r,'category',v); openDetail(r); renderCurrent();
-      });
-    };
-    $('editNatItem').onclick = () => {
-      popLayer();
-      const t2 = state.data.judge_tables && state.data.judge_tables[r.category];
-      pickValue('修改性质', natureOptions(t2), effNature(r,0), (v) => {
-        /* 性质逐条修改仍由判断机结果里的 ✎ 完成；这里给出入口提示，避免误改第一条。 */
-        toast('请在“判断机结果”里点对应条件右侧的性质进行修改', 2600);
-      });
-    };
-  };
-  $('eProf').onclick = () => openProf(r);
-  const nats = document.querySelectorAll('#dBody .jnat');
-  for (let i = 0; i < nats.length; i++) {
-    nats[i].onclick = () => {
-      const idx = Number(nats[i].dataset.ni);
-      const t2 = state.data.judge_tables && state.data.judge_tables[r.category];
-      pickValue('修改性质', natureOptions(t2), effNature(r, idx), (v) => {
-        const k = keyOf(r);
-        const o = state.ovr[k] || (state.ovr[k] = {});
-        if (!o.judge) o.judge = {};
-        if (v) o.judge[idx] = v; else delete o.judge[idx];
-        if (!Object.keys(o.judge).length) delete o.judge;
-        if (!Object.keys(o).length) delete state.ovr[k];
-        saveOvr(); openDetail(r); renderCurrent();
-        toast(v ? '性质已改为 ' + v : '已恢复自动判定');
-      });
-    };
-  }
-
-  const c = cmts[keyOf(r)];
-  /* ★ 公告列表移到最下面 */
-  $('dBody').innerHTML =
-    judgeHtml(r) +
-    '<div class="card"><div class="card-hd"><span>AI 总结</span></div><div class="card-pad">' + esc(r.summary || '—') + '</div></div>' +
-    '<div class="card"><div class="card-hd"><span>我的点评</span><span class="sub">底部 ✎ 可写</span></div><div class="card-pad">' +
-      (c ? esc(c) : '<span style="color:var(--text-3)">还没写点评</span>') + '</div></div>' +
-    annHtml(r);
-
-  const more = $('annMore');
-  if (more) more.onclick = () => { state.annShown = (d.announcements && d.announcements[r.code] || []).length; openDetail(r); };
-
-  $('detail').classList.add('show');
-  $('acts').classList.add('show');
-  syncActs();
-
-  if (first) { pushLayer(); $('detail').scrollTop = 0; }
-}
-
-function closeDetail() {
-  $('detail').classList.remove('show');
-  $('acts').classList.remove('show');
-  $('tabbar').classList.remove('hide');
-  state.cur = null;
-}
-
-function syncActs() {
-  if (!state.cur) return;
-  const on = favs.has(keyOf(state.cur));
-  const b = $('aFav');
-  b.textContent = on ? '已收藏' : '收藏';
-  b.classList.toggle('fav-on', on);
-}
-
-/* ==================================================================
-   弹层
-   ★ 同一时刻只有一个 sheet：换 sheet 只替换内容，不再压历史层，
-     避免「关一个又开一个」时 popstate 把新开的那个一起关掉。
-   ================================================================== */
-function openSheet(html) {
-  const shown = $('mask').classList.contains('show');
-  $('sheet').innerHTML = '<div class="sheet-grab"></div>' + html;
-  $('mask').classList.add('show');
-  if (!shown) pushLayer();
-}
-function closeSheet() { $('mask').classList.remove('show'); }
-
-function menuSheet() {
-  openSheet(
-    '<h3>更多</h3><div class="grp">' +
-      '<button class="sheet-item" id="mImport"><span class="ic">↧</span><span class="tx">从本地文件导入 txt</span><span class="chev">›</span></button>' +
-      '<button class="sheet-item" id="mSource"><span class="ic">⚙</span><span class="tx">数据源设置</span><span class="chev">›</span></button>' +
-      '<button class="sheet-item" id="mExport"><span class="ic">↥</span><span class="tx">导出收藏与点评</span><span class="chev">›</span></button>' +
-      '<button class="sheet-item" id="mRestore"><span class="ic">↧</span><span class="tx">从备份恢复收藏与点评</span><span class="chev">›</span></button>' +
-      '<button class="sheet-item" id="mRefresh"><span class="ic">↻</span><span class="tx">重新加载数据（回到线上）</span><span class="chev">›</span></button>' +
-    '</div>' +
-    '<div class="sheet-btns"><button id="mCancel">取消</button></div>'
-  );
-  $('mCancel').onclick = popLayer;
-  $('mImport').onclick = () => { popLayer(); pickFile(); };
-  $('mSource').onclick = urlsSheet;                  /* 原地替换，不压层 */
-  $('mExport').onclick = () => { popLayer(); exportData(); };
-  $('mRestore').onclick = () => { popLayer(); restoreBackup(); };
-  $('mRefresh').onclick = () => { popLayer(); toast('正在重新加载…'); boot(false, true); };
-}
-
-/* ★ 数据源 与 激活码 拆成两个独立入口（2026-09-20） */
-function urlsSheet() {
-  const urls = (localStorage.getItem(LS.urls) || '');
-  openSheet(
-    '<h3>数据源设置</h3>' +
-    '<div class="grp">' +
-      '<label>数据地址（每行一个，按顺序尝试）</label>' +
-      '<textarea id="inUrls" placeholder="https://…/stocks.txt">' + esc(urls) + '</textarea>' +
-      '<div class="hint">留空则使用内置地址。可填多个，第一个不通自动试下一个。</div>' +
-    '</div>' +
-    '<div class="sheet-btns">' +
-      '<button id="sCancel">取消</button>' +
-      '<button id="sSave" class="primary">保存并重新加载</button>' +
-    '</div>'
-  );
-  $('sCancel').onclick = popLayer;
-  $('sSave').onclick = () => {
-    const u = $('inUrls').value.trim();
-    u ? localStorage.setItem(LS.urls, u) : localStorage.removeItem(LS.urls);
-    popLayer();
-    Cache.clear();
-    toast('已保存，正在重新加载');
-    boot(false, true);
-  };
-}
-
-function keySheet() {
-  const key = (localStorage.getItem(LS.key) || '');
-  openSheet(
-    '<h3>激活码</h3>' +
-    '<div class="grp">' +
-      '<label>激活码（64 位十六进制）</label>' +
-      '<input type="text" id="inKey" placeholder="留空则使用内置激活码" value="' + esc(key) + '">' +
-      '<div class="hint">换激活码后才需要填；填错会解不开数据。</div>' +
-    '</div>' +
-    '<div class="sheet-btns">' +
-      '<button id="kClear">恢复内置</button>' +
-      '<button id="kSave" class="primary">保存并重新加载</button>' +
-    '</div>'
-  );
-  $('kClear').onclick = () => {
-    localStorage.removeItem(LS.key);
-    popLayer(); Cache.clear(); toast('已恢复内置激活码'); boot(false, true);
-  };
-  $('kSave').onclick = () => {
-    const k = $('inKey').value.trim();
-    if (k && !/^[0-9a-fA-F]{64}$/.test(k)) { toast('激活码需为 64 位十六进制'); return; }
-    k ? localStorage.setItem(LS.key, k) : localStorage.removeItem(LS.key);
-    popLayer(); Cache.clear(); toast('已保存，正在重新加载'); boot(false, true);
-  };
-}
-
-function cmtSheet() {
-  if (!state.cur) return;
-  openSheet(
-    '<h3>点评 · ' + esc(state.cur.name) + '</h3>' +
-    '<div class="grp"><textarea id="inCmt" placeholder="写下你的判断…">' + esc(cmts[keyOf(state.cur)] || '') + '</textarea></div>' +
-    '<div class="sheet-btns"><button id="cCancel">取消</button><button id="cSave" class="primary">保存</button></div>'
-  );
-  $('cCancel').onclick = popLayer;
-  $('cSave').onclick = () => {
-    const k = keyOf(state.cur);
-    const v = $('inCmt').value.trim();
-    if (v) cmts[k] = v; else delete cmts[k];
-    saveCmt();
-    popLayer();
-    if (state.onlyFav) renderList(); else updateRowCmt(k);
-    openDetail(state.cur);
-    toast('已保存');
-  };
-}
-
-/* ==================================================================
-   导入 / 导出 / 恢复
-   ================================================================== */
-function pickFile() {
-  const el = document.createElement('input');
-  el.type = 'file';
-  el.accept = '.txt,text/plain';
-  el.onchange = () => {
-    const f = el.files && el.files[0];
-    if (!f) return;
-    const fr = new FileReader();
-    fr.onload = async () => {
-      try {
-        const d = await decryptText(fr.result);
-        try { await Cache.set(d); } catch (e) {}
-        apply(d, 'local');           /* ★ 标成 local：后台刷新不再覆盖它 */
-        toast('导入成功（本地数据）');
-      } catch (e) { toast('导入失败：' + e.message, 2800); }
-    };
-    fr.onerror = () => toast('读取文件失败', 2400);
-    fr.readAsText(f);
-  };
-  el.click();
-}
-
-function exportData() {
-  if (!state.data) { toast('还没有数据'); return; }
-  const payload = {
-    kind: 'stock-judge-backup',
-    version: 1,
-    exported_at: new Date().toISOString(),
-    schema: state.data.meta && state.data.meta.schema,
-    data_generated_at: state.data.meta && state.data.meta.generated_at,
-    favorites: [...favs],
-    comments: cmts,
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'stock-judge-backup-' + new Date().toISOString().slice(0, 10) + '.json';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
-  toast('已导出');
-}
-
-/* ★ 新增：从备份恢复。合并式 —— 只补不覆盖，
-   已有内容原样保留，冲突条数如实报出。 */
-function restoreBackup() {
-  const el = document.createElement('input');
-  el.type = 'file';
-  el.accept = '.json,application/json';
-  el.onchange = () => {
-    const f = el.files && el.files[0];
-    if (!f) return;
-    const fr = new FileReader();
-    fr.onload = () => {
-      try {
-        const p = JSON.parse(fr.result);
-        const favArr = Array.isArray(p.favorites) ? p.favorites : [];
-        const cmtObj = (p.comments && typeof p.comments === 'object') ? p.comments : {};
-        let nf = 0, nc = 0, skip = 0;
-        favArr.forEach((k) => { if (typeof k === 'string' && k && !favs.has(k)) { favs.add(k); nf++; } });
-        Object.keys(cmtObj).forEach((k) => {
-          const v = cmtObj[k];
-          if (typeof v !== 'string' || !v) return;
-          if (cmts[k] === undefined) { cmts[k] = v; nc++; }
-          else if (cmts[k] !== v) skip++;
-        });
-        saveFav(); saveCmt();
-        renderList();
-        if (state.cur) openDetail(state.cur);
-        toast('已恢复：收藏 +' + nf + '、点评 +' + nc + (skip ? '（' + skip + ' 条已存在，未覆盖）' : ''), 3000);
-      } catch (e) { toast('恢复失败：' + e.message, 2800); }
-    };
-    fr.onerror = () => toast('读取文件失败', 2400);
-    fr.readAsText(f);
-  };
-  el.click();
-}
-
-
-/* ==================================================================
-   2026-09-20 新增：手动覆盖 / 底部菜单 / 公司概况 / 检查更新
-   ================================================================== */
-function ovrOf(r) { return (state.ovr && state.ovr[keyOf(r)]) || {}; }
-function effConcl(r) { const o = ovrOf(r); return o.conclusion || r.conclusion; }
-function effCat(r) { const o = ovrOf(r); return o.category || r.category; }
-function eff(r) {
-  const o = ovrOf(r);
-  if (!o.conclusion && !o.category) return r;
-  return Object.assign({}, r, {
-    conclusion: o.conclusion || r.conclusion,
-    category: o.category || r.category,
-  });
-}
-function effNature(r, i) {
-  const o = ovrOf(r);
-  if (o.judge && o.judge[i]) return o.judge[i];
-  const t = state.data && state.data.judge_tables && state.data.judge_tables[r.category];
-  return (t && t.rows && t.rows[i] && t.rows[i][1]) || '';
-}
-function isManual(r) {
-  const o = ovrOf(r);
-  return !!(o.conclusion || o.category || (o.judge && Object.keys(o.judge).length));
-}
-function manualCount() { return Object.keys(state.ovr || {}).length; }
-
-function setOvr(r, field, v) {
-  const k = keyOf(r);
-  const o = state.ovr[k] || (state.ovr[k] = {});
-  if (v) o[field] = v; else delete o[field];
-  if (!Object.keys(o).length) delete state.ovr[k];
-  saveOvr();
-}
-
-/* 选择器：切换式（不是手写输入） */
-function pickValue(title, opts, cur, done) {
-  const list = (opts || []).slice();
-  if (!list.length) { toast('没有可切换的选项'); return; }
-  openSheet(
-    '<h3>' + esc(title) + '</h3><div class="grp">' +
-    list.map((v) =>
-      '<button class="sheet-item" data-v="' + esc(v) + '">' +
-      '<span class="ic">' + (v === cur ? '●' : '○') + '</span>' +
-      '<span class="tx">' + esc(v) + '</span>' +
-      (v === cur ? '<span class="chev">当前</span>' : '') + '</button>').join('') +
-    '<button class="sheet-item" data-v=""><span class="ic">↺</span><span class="tx">恢复自动判定</span></button>' +
-    '</div><div class="sheet-btns"><button id="pvCancel">取消</button></div>'
-  );
-  $('pvCancel').onclick = popLayer;
-  const items = $('sheet').querySelectorAll('.sheet-item[data-v]');
-  for (let i = 0; i < items.length; i++) {
-    items[i].onclick = () => { const v = items[i].dataset.v; popLayer(); done(v); };
-  }
-}
-
-/* 候选项：以数据里实际出现过的值为准，新增类型 / 结论自动出现 */
-function conclOptions() {
-  const set = [];
-  const add = (v) => { if (v && set.indexOf(v) < 0) set.push(v); };
-  (state.data && state.data.records || []).forEach((r) => { add(effConcl(r)); });
-  Object.keys(state.ovr || {}).forEach((k) => { add(state.ovr[k] && state.ovr[k].conclusion); });
-  const PREF = ['有利', '不利', '待定', '否决', '中性'];
-  set.sort((a, b) => { const ia = PREF.indexOf(a), ib = PREF.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-  return set;
-}
-function catOptions() {
-  const set = [];
-  const add = (v) => { if (v && set.indexOf(v) < 0) set.push(v); };
-  (state.data && state.data.records || []).forEach((r) => { add(effCat(r)); });
-  Object.keys((state.data && state.data.judge_tables) || {}).forEach(add);
-  Object.keys(state.ovr || {}).forEach((k) => { add(state.ovr[k] && state.ovr[k].category); });
-  return set;
-}
-function natureOptions(t) {
-  const set = [];
-  const add = (v) => { if (v && set.indexOf(v) < 0) set.push(v); };
-  ((t && t.rows) || []).forEach((row) => add(row[1]));
-  ['有利', '不利', '中性', '待定'].forEach(add);
-  return set;
-}
-
-/* ------------------------------------------------------------------
-   底部菜单：整页切换（类型 / 结论 / 点评 / 收藏 / 设置）
-   ------------------------------------------------------------------ */
-const TAB_NAME = { list: '首页', type: '类型', concl: '结论', cmt: '点评', fav: '收藏', set: '设置' };
-
-function renderCurrent() {
-  if (state.tab === 'type') renderTypePage();
-  else if (state.tab === 'concl') renderConclPage();
-  else if (state.tab === 'cmt') renderCmtPage();
-  else if (state.tab === 'fav') renderFavPage();
-  else if (state.tab === 'set') renderSetPage();
-  else renderList();
-}
-
-function resetLayersForTabSwitch() {
-  if ($('mask').classList.contains('show')) $('mask').classList.remove('show');
-  if ($('prof').classList.contains('show')) { $('prof').classList.remove('show'); $('profStage').innerHTML = ''; }
-  if ($('detail').classList.contains('show')) { $('detail').classList.remove('show'); $('acts').classList.remove('show'); state.cur = null; }
-  $('tabbar').classList.remove('hide');
-  layer.depth = 0;
-  try { history.replaceState({root:true}, '', location.pathname); } catch (e) {}
-}
-
-function switchTab(tab) {
-  /* 详情页保持底部菜单可用：点任何菜单都能立刻切走。 */
-  if ($('detail').classList.contains('show') || $('prof').classList.contains('show') || $('mask').classList.contains('show')) resetLayersForTabSwitch();
-  /* 再点一次当前项 = 回首页 */
-  if (state.tab === tab && tab !== 'list') tab = 'list';
-  state.tab = tab;
-  state.shown = PAGE;
-  ['type', 'concl', 'cmt', 'fav', 'set'].forEach((t) => {
-    const el = $('view' + t.charAt(0).toUpperCase() + t.slice(1));
-    if (el) el.classList.toggle('show', t === tab);
-  });
-  const vl = $('viewList');
-  if (vl) vl.style.display = tab === 'list' ? '' : 'none';
-  const sb = $('searchBox');
-  if (sb) sb.style.display = tab === 'list' ? '' : 'none';
-  $('navTitle').textContent = TAB_NAME[tab] || '股票';
-  const btns = document.querySelectorAll('#tabbar button');
-  for (let i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].dataset.tab === tab);
-  renderCurrent();
-}
-
-function renderRowsInto(el, rows, emptyText) {
-  if (!el) return;
-  if (!rows.length) {
-    el.innerHTML = '<div class="empty">' + esc(emptyText) + '</div>';
-    if (io) { io.disconnect(); io = null; }
-    return;
-  }
-  const shown = rows.slice(0, state.shown);
-  const rest = rows.length - state.shown;
-  el.innerHTML =
-    '<div class="group-hd"><span>共 ' + rows.length + ' 条</span><span></span></div>' +
-    '<div class="group">' + shown.map(rowHtml).join('') + '</div>' +
-    (rest > 0 ? '<button class="more" id="loadMore">加载更多（还有 ' + rest + ' 条）</button>' : '');
-  const btn = $('loadMore');
-  if (btn) btn.onclick = () => { state.shown += PAGE; renderCurrent(); };
-  observeSentinel();
-}
-
-function foldHtml(id, label, count, open) {
-  return '<div class="fold">' +
-    '<button class="fold-hd" data-fold="' + esc(id) + '">' +
-      '<span class="fn">' + esc(label) + '</span>' +
-      '<span class="fc">' + count + ' 条</span>' +
-      '<span class="fx">' + (open ? '▾' : '▸') + '</span>' +
-    '</button>' +
-    (open ? '<div class="fold-bd"><div id="fb_' + esc(id) + '"></div></div>' : '') +
-  '</div>';
-}
-
-function bindFolds(el, re, keyName, render) {
-  const hs = el.querySelectorAll('[data-fold]');
-  for (let i = 0; i < hs.length; i++) {
-    hs[i].onclick = () => {
-      const id = hs[i].dataset.fold.replace(re, '');
-      state[keyName] = state[keyName] === id ? '' : id;
-      render();
-    };
-  }
-}
-
-function renderTypePage() {
-  const el = $('viewType');
-  if (!state.data) { el.innerHTML = '<div class="empty">还没有数据</div>'; return; }
-  const cats = catOptions();
-  el.innerHTML = '<div class="set-sec">按类型查看（点箭头展开该类型的股票）</div>' +
-    cats.map((c) => foldHtml('c_' + c, c, byCat(c).length, state.openCat === c)).join('');
-  bindFolds(el, /^c_/, 'openCat', renderTypePage);
-  if (state.openCat) renderRowsInto($('fb_c_' + state.openCat), byCat(state.openCat), '该类型下没有记录');
-}
-
-function renderConclPage() {
-  const el = $('viewConcl');
-  if (!state.data) { el.innerHTML = '<div class="empty">还没有数据</div>'; return; }
-  const cs = conclOptions();
-  el.innerHTML = '<div class="set-sec">按结论查看</div>' +
-    cs.map((c) => foldHtml('s_' + c, c, byConcl(c).length, state.openConcl === c)).join('');
-  bindFolds(el, /^s_/, 'openConcl', renderConclPage);
-  if (state.openConcl) renderRowsInto($('fb_s_' + state.openConcl), byConcl(state.openConcl), '没有该结论的记录');
-}
-
-function renderCmtPage() {
-  const el = $('viewCmt');
-  if (!state.data) { el.innerHTML = '<div class="empty">还没有数据</div>'; return; }
-  const rows = byCmt();
-  el.innerHTML = '<div class="set-sec">我写过点评的（' + rows.length + '）</div><div id="cmtList"></div>';
-  renderRowsInto($('cmtList'), rows, '还没有点评');
-}
-
-function renderFavPage() {
-  const el = $('viewFav');
-  if (!state.data) { el.innerHTML = '<div class="empty">还没有数据</div>'; return; }
-  const rows = byFav();
-  el.innerHTML = '<div class="set-sec">我收藏的（' + rows.length + '）</div><div id="favList"></div>';
-  renderRowsInto($('favList'), rows, '还没有收藏');
-}
-
-function setItem(id, ic, tx, val) {
-  return '<button class="set-item" id="' + id + '"><span class="ic">' + ic + '</span>' +
-    '<span class="tx">' + esc(tx) + '</span>' +
-    (val ? '<span class="vv">' + esc(val) + '</span>' : '') +
-    '<span class="chev">›</span></button>';
-}
-
-function renderSetPage() {
-  const el = $('viewSet');
-  const hasKey = !!((localStorage.getItem(LS.key) || '').trim());
-  const hasUrl = !!((localStorage.getItem(LS.urls) || '').trim());
-  el.innerHTML =
-    '<div class="set-sec">数据</div><div class="fold">' +
-      setItem('sUrl', '≡', '数据源设置', hasUrl ? '已自定义' : '内置') +
-      setItem('sKey', '⚿', '激活码', hasKey ? '已设置' : '内置') +
-      setItem('sImport', '↧', '从本地文件导入 txt', '') +
-      setItem('sRefresh', '↻', '重新加载数据（回到线上）', '') +
-    '</div>' +
-    '<div class="set-sec">备份</div><div class="fold">' +
-      setItem('sExport', '↥', '导出收藏与点评', '') +
-      setItem('sRestore', '↧', '从备份恢复收藏与点评', '') +
-    '</div>' +
-    '<div class="set-sec">手动修改</div><div class="fold">' +
-      setItem('sOvr', '✎', '我改过的记录', manualCount() + ' 条') +
-      setItem('sOvrClear', '↺', '全部恢复自动判定', '') +
-    '</div>' +
-    '<div class="set-sec">应用</div><div class="fold">' +
-      setItem('sUpdate', '⇩', '检查更新', 'v' + APP_VERSION) +
-      setItem('sBack', '‹', '回到股票列表', '') +
-    '</div>';
-  $('sUrl').onclick = urlsSheet;
-  $('sKey').onclick = keySheet;
-  $('sImport').onclick = pickFile;
-  $('sRefresh').onclick = () => { toast('正在重新加载…'); boot(false, true); };
-  $('sExport').onclick = exportData;
-  $('sRestore').onclick = restoreBackup;
-  $('sOvr').onclick = ovrSheet;
-  $('sOvrClear').onclick = () => {
-    const n = manualCount();
-    if (!n) { toast('没有手动修改'); return; }
-    state.ovr = {}; saveOvr(); renderCurrent(); toast('已恢复 ' + n + ' 条为自动判定');
-  };
-  $('sUpdate').onclick = checkUpdate;
-  $('sBack').onclick = () => switchTab('list');
-}
-
-function ovrSheet() {
-  const ks = Object.keys(state.ovr || {});
-  if (!ks.length) { toast('还没有手动改过任何记录'); return; }
-  openSheet('<h3>我改过的记录（' + ks.length + '）</h3><div class="grp">' +
-    ks.map((k) => {
-      const o = state.ovr[k] || {};
-      const bits = [];
-      if (o.category) bits.push('类型→' + o.category);
-      if (o.conclusion) bits.push('结论→' + o.conclusion);
-      if (o.judge && Object.keys(o.judge).length) bits.push('性质×' + Object.keys(o.judge).length);
-      return '<button class="sheet-item" data-k="' + esc(k) + '"><span class="ic">✎</span>' +
-        '<span class="tx">' + esc(k) + '<br><span style="font-size:12px;color:var(--text-2)">' +
-        esc(bits.join(' · ')) + '</span></span><span class="chev">↺</span></button>';
-    }).join('') +
-    '</div><div class="sheet-btns"><button id="ovCancel">关闭</button></div>');
-  $('ovCancel').onclick = popLayer;
-  const items = $('sheet').querySelectorAll('[data-k]');
-  for (let i = 0; i < items.length; i++) {
-    items[i].onclick = () => {
-      delete state.ovr[items[i].dataset.k];
-      saveOvr(); popLayer(); toast('该条已恢复自动判定'); renderCurrent();
-    };
-  }
-}
-
-/* ------------------------------------------------------------------
-   公司概况（同花顺 F10，App 内 iframe）
-   ★ 实测 2026-09-20：手机 UA 返回 200（194KB 静态 HTML）、
-     响应头无 X-Frame-Options / frame-ancestors、正文无 frame-buster
-     → 可以内嵌。页面无 viewport（PC 宽版），按 1024 宽舞台等比缩放。
-   ------------------------------------------------------------------ */
-const STAGE_W = 1024;
-
-function openProf(r) {
-  const code = String((r && r.code) || '').replace(/[^0-9]/g, '');
-  if (!code) { toast('这只股票没有代码'); return; }
-  state.profCode = code;
-  state.profScale = 1;
-  $('profTitle').textContent = ((r && r.name) || '') + ' · 公司概况';
-  $('profStage').innerHTML =
-    '<iframe id="profFrame" src="https://basic.10jqka.com.cn/' + code + '/" referrerpolicy="no-referrer"></iframe>';
-  $('prof').classList.add('show');
-  $('tabbar').classList.add('hide');
-  if (state.tab === 'list') { const vl = $('viewList'); if (vl) vl.style.display = 'none'; }
-  pushLayer();
-  setTimeout(fitProf, 60);
-}
-
-function closeProf() {
-  $('prof').classList.remove('show');
-  $('tabbar').classList.remove('hide');
-  $('profStage').innerHTML = '';   /* 清空 iframe，避免后台继续加载 */
-  $('tabbar').classList.remove('hide');
-  if (state.tab === 'list') { const vl = $('viewList'); if (vl) vl.style.display = ''; }
-}
-
-function fitProf() {
-  const view = $('profView'), st = $('profStage'), fr = $('profFrame');
-  if (!view || !st || !fr) return;
-  const w = view.clientWidth || window.innerWidth || 390;
-  const h0 = view.clientHeight || window.innerHeight || 700;
-  const fit = w / STAGE_W;
-  const extra = Math.min(2.5, Math.max(.5, Number(state.profScale || 1)));
-  const sc = fit * extra;
-  const h = Math.max(600, Math.round(h0 / sc));
-  st.style.width = STAGE_W + 'px';
-  st.style.height = h + 'px';
-  st.style.transform = 'scale(' + sc + ')';
-}
-window.addEventListener('resize', fitProf);
-
-/* ------------------------------------------------------------------
-   检查更新（读 GitHub Releases）
-   ★ 真·静默安装需要 native（下载 + FileProvider + 安装权限）；
-     这里做到「App 内检测 + 一键下载」，安装由系统完成。
-   ------------------------------------------------------------------ */
-async function checkUpdate() {
-  toast('正在检查更新…', 1200);
-  const errs = [];
-  for (const u of UPDATE_URLS) {
-    try {
-      const res = await fetch(u + '?t=' + Date.now(), { cache:'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const j = await res.json();
-      const remoteCode = Number(j.versionCode || 0);
-      const remoteVer = String(j.version || '');
-      const apk = String(j.apk_url || '').trim();
-      if (remoteCode <= 1400 || !apk) {
-        toast('已是最新版本 v' + APP_VERSION, 2200);
-        return;
-      }
-      openSheet(
-        '<h3>发现新版本 v' + esc(remoteVer) + '</h3>' +
-        '<div class="grp"><div class="card-pad" style="font-size:14px">' +
-        '当前：v' + esc(APP_VERSION) + '<br>新版：v' + esc(remoteVer) +
-        (j.notes ? '<br><br>' + esc(String(j.notes).slice(0,360)) : '') +
-        '</div></div>' +
-        '<div class="sheet-btns"><button id="uCancel">以后</button><button id="uGo" class="primary">下载更新</button></div>'
-      );
-      $('uCancel').onclick = popLayer;
-      $('uGo').onclick = () => {
-        popLayer();
-        const a = document.createElement('a');
-        a.href = apk; a.target = '_blank'; a.rel = 'noopener';
-        document.body.appendChild(a); a.click();
-        setTimeout(() => a.remove(), 500);
-        toast('已开始下载，下载完成后安装', 2800);
-      };
-      return;
-    } catch (e) {
-      errs.push(e.message);
+  try{
+    const d=await loadFromUrls(urls);
+    await Cache.set(d);
+    apply(d,'remote');
+    pageSwitch('home');
+    if(silent)toast('已更新到最新数据');
+  }catch(e){
+    if(!cached){
+      pageSwitch('settings');
+      $('dataStatus').textContent='数据加载失败：'+e.message;
+      toast('数据加载失败，请检查数据源和激活码',2800);
+    }else{
+      pageSwitch('home');
+      toast('联网更新失败，继续显示缓存');
     }
   }
-  toast('检查更新失败：' + errs.join('；'), 2800);
 }
-
-/* ==================================================================
-   事件绑定
-   ================================================================== */
-
-$('q').addEventListener('input', (e) => { state.query = e.target.value; state.shown = PAGE; renderList(); });
-
-/* ★ 底部菜单：整页切换；再点一次当前项 = 回股票列表 */
-$('tabbar').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b || !b.dataset.tab) return;
-  switchTab(b.dataset.tab);
-});
-$('btnProfBack').addEventListener('click', popLayer);
-$('btnProfFit').addEventListener('click', () => { state.profScale=1; fitProf(); toast('已恢复适应屏宽'); });
-window.__sjProfScale = function(factor){ const n=Number(factor); if(!Number.isFinite(n)||n<=0||!$('prof').classList.contains('show'))return false; state.profScale=Math.min(2.5,Math.max(.5,+(Number(state.profScale||1)*n).toFixed(3))); fitProf(); return true; };
-
-$('listWrap').addEventListener('click', (e) => {
-  const row = e.target.closest('.row'); if (!row) return;
-  const r = findRecord(row.dataset.code, row.dataset.cat);
-  if (r) openDetail(r);
-});
-
-$('btnBack').addEventListener('click', popLayer);
-
-$('aFav').addEventListener('click', () => {
-  if (!state.cur) return;
-  const k = keyOf(state.cur);
-  if (favs.has(k)) { favs.delete(k); toast('已取消收藏'); } else { favs.add(k); toast('已收藏'); }
-  saveFav();
-  syncActs();
-  /* 只在「只看收藏」模式下需要重建（那一行要消失），否则局部更新即可 */
-  if (state.onlyFav) renderList(); else updateRowStar(k);
-});
-
-$('aCmt').addEventListener('click', cmtSheet);
-
-$('aCopy').addEventListener('click', () => {
-  if (!state.cur) return;
-  const t = state.cur.code;
-  const done = () => toast('已复制 ' + t);
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(t).then(done, () => fallbackCopy(t, done));
-  } else fallbackCopy(t, done);
-});
-
-function fallbackCopy(t, done) {
-  const ta = document.createElement('textarea');
-  ta.value = t;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  try { document.execCommand('copy'); done(); } catch (e) { toast('复制失败'); }
-  ta.remove();
-}
-
-$('mask').addEventListener('click', (e) => { if (e.target === $('mask')) popLayer(); });
-
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') popLayer(); });
-
-/* 支持从系统「用其他应用打开」传入（Capacitor intent / 自定义 scheme）
-   ★ 原写法 try/catch 包不住 async —— decryptText 返回 Promise，.then 里的
-   rejection 不会被外层 catch 捕获，用户看不到任何错误。现在补 .catch。 */
-window.addEventListener('sjOpenFile', (e) => {
-  try {
-    decryptText(e.detail.text)
-      .then(async (d) => {
-        try { await Cache.set(d); } catch (err) {}
-        apply(d, 'local');
-        toast('已打开导入的文件');
-      })
-      .catch((err) => toast('打开失败：' + err.message, 2800));
-  } catch (err) {
-    toast('打开失败：' + err.message, 2800);
-  }
-});
-
-/* ==================================================================
-   外部打开：轮询 MainActivity 注入的文件路径（files/incoming.txt）
-   仅 Android 原生场景会命中；浏览器里该变量永远是 undefined，无副作用。
-
-   ★ 必须在启动时就挂上。原先这段被误粘进 sourceSheet 的「保存并重新加载」
-     回调里，导致 App 冷启动后用系统「用其他应用打开 txt」不生效。
-   ★ 轮询上限 60 → POLL_MAX（120 秒），避免冷启动慢时静默漏接。
-   ================================================================== */
-(function () {
-  let tries = 0;
-  const timer = setInterval(async () => {
-    const p = window.__SJ_INCOMING_PATH__;
-    if (p) {
-      window.__SJ_INCOMING_PATH__ = null;
-      clearInterval(timer);
-      try {
-        let url = p;
-        if (window.Capacitor && typeof window.Capacitor.convertFileSrc === 'function') {
-          url = window.Capacitor.convertFileSrc(p);
-        }
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const d = await decryptText(await res.text());
-        try { await Cache.set(d); } catch (e) {}
-        apply(d, 'local');
-        toast('已打开外部文件');
-      } catch (e) {
-        toast('打开失败：' + e.message, 2800);
-      }
-      return;
-    }
-    if (++tries > POLL_MAX) clearInterval(timer);
-  }, 500);
-})();
-
-switchTab('list');
+function apply(d,kind){state.data=d;state.kind=kind;renderAllPages()}
+document.querySelectorAll('.bottom button').forEach(b=>b.onclick=()=>pageSwitch(b.dataset.page));
+document.addEventListener('click',e=>{const row=e.target.closest('.row');if(row){const r=allRecords().find(x=>String(x.code)===String(row.dataset.code)&&String(x.category||'')===String(row.dataset.cat||''));if(r)openDetail(r)}const gh=e.target.closest('.group-head');if(gh){gh.parentElement.classList.toggle('open')}});
+$('q').addEventListener('input',e=>{state.query=e.target.value;renderHome()});
+$('btnBack').onclick=closeDetail;
+$('aFav').onclick=()=>{if(!state.cur)return;const k=keyOf(state.cur);favs.has(k)?(favs.delete(k),toast('已取消收藏')):(favs.add(k),toast('已收藏'));saveFav();syncActions();renderAllPages()};
+$('aCmt').onclick=()=>{if(!state.cur)return;const k=keyOf(state.cur);openSheet('点评 · '+esc(state.cur.name||state.cur.code),'<div style="padding:0 16px 10px"><textarea id="inCmt" placeholder="写下你的判断…">'+esc(cmts[k]||'')+'</textarea></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="cs" style="width:100%">保存</button></div>',()=>{$('cs').onclick=()=>{const v=$('inCmt').value.trim();if(v)cmts[k]=v;else delete cmts[k];saveCmt();closeSheet();renderAllPages();openDetail(state.cur);toast('点评已保存')}})};
+$('aCopy').onclick=()=>{if(!state.cur)return;const t=state.cur.code||'';if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast('已复制 '+t),()=>toast('复制失败'));else{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('已复制 '+t)}catch(e){toast('复制失败')}ta.remove()}};
+$('mask').onclick=e=>{if(e.target===$('mask'))closeSheet()};
+$('btnSource').onclick=sourceSheet;$('btnKey').onclick=keySheet;$('btnReload').onclick=()=>boot(false,true);$('btnExport').onclick=exportBackup;$('btnRestore').onclick=restoreBackup;$('btnUpdate').onclick=checkUpdate;
+window.onpopstate=()=>{if($('mask').classList.contains('show')){closeSheet();return}if($('detail').classList.contains('show')){state.detailPushed=false;closeDetail(true)}};
+history.replaceState({root:true},'','');
 boot(false);
 </script>
 </body>

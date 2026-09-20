@@ -1,8 +1,8 @@
 {
-  "version": "1.4.0",
-  "versionCode": 1400,
+  "version": "1.5.0",
+  "versionCode": 1500,
   "published_at": "2026-09-20",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.4.0/app-debug.apk",
-  "notes": "融合参考 APK 的卡片式界面；详情页保留底部菜单并修复返回；判定结果置顶并提供折叠修改入口；公司概况支持双指缩放；兼容原有激活码、数据源、收藏、点评和手动修改。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.5.0/app-debug.apk",
+  "notes": "恢复原 GPT 详情页与底部菜单逻辑；仅保留公司概况内嵌网页双指缩放；数据源内置且可修改/增加；激活码不再内置，必须由用户自行输入。"
 }
