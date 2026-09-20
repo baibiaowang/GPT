@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK\n\nenv:\n  APP_VERSION_CODE: '1200'\n  APP_VERSION_NAME: '1.2.0'
 
 on:
   workflow_dispatch:
@@ -57,7 +57,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/java/com/baibiaowang/stockjudge
           cp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java
-          node native/patch-manifest.mjs
+          node native/patch-manifest.mjs\n          APP_VERSION_CODE=$APP_VERSION_CODE APP_VERSION_NAME=$APP_VERSION_NAME node native/patch-version.mjs
       - name: Sync web assets
         run: npx cap sync android
       - uses: actions/cache@v4
