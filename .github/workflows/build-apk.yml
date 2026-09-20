@@ -35,8 +35,8 @@ jobs:
       - name: Set release version
         run: |
           set -euo pipefail
-          CODE=1608
-          NAME="1.6.8"
+          CODE=1609
+          NAME="1.6.9"
           echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "version -> code=$CODE name=$NAME"
@@ -168,7 +168,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stock-judge-gpt-v1.6.8-apk
+          name: stock-judge-gpt-v1.6.9-apk
           path: dist/app.apk
           if-no-files-found: error
           retention-days: 30
