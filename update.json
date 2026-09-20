@@ -1,7 +1,8 @@
 {
-  "version":"1.1.0",
+  "version":"1.2.0",
+  "versionCode":1200,
   "published_at":"2026-09-20",
   "repo":"baibiaowang/GPT",
   "apk_url":"https://github.com/baibiaowang/GPT/releases/download/latest/stock-judge-gpt-debug.apk",
-  "notes":"新版底栏与详情编辑、公司概况缩放、设置整理、收藏与应用更新"
+  "notes":"修复手动激活码后无法加载数据；内置数据源不再要求手动保存；更新 Android 版本号至 1.2.0。"
 }
