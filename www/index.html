@@ -479,7 +479,8 @@ function getConclusion(r){
 function propertyOptions(){const s=new Set();allRecords().forEach(r=>{const t=state.data.judge_tables&&state.data.judge_tables[r.category];(t&&t.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))})});Object.values(savedArchives||{}).forEach(a=>(a&&a.judge_table&&a.judge_table.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))}));['有利','不利','中性','待定'].forEach(x=>s.add(x));return [...s]}
 function judgmentOptions(){const s=new Set(['不确定','命中','未命中']);allRecords().forEach(r=>(r.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));Object.values(savedArchives||{}).forEach(a=>(a&&a.record&&a.record.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));return [...s]}
 function buildRows(r){const t=(r.localOnly&&r._archive&&r._archive.judge_table)||(state.data&&state.data.judge_tables&&state.data.judge_tables[r.category]);if(!t)return[];const ov=getOverride(r);return(t.rows||[]).map((row,i)=>({i,q:row[0]||'',property:(ov.properties&&ov.properties[i]!=null?ov.properties[i]:row[1]||'待定'),judge:(ov.judges&&ov.judges[i]!=null?ov.judges[i]:((r.judge||[])[i]||'不确定')),role:row[2]||''}))}
-function formatMonthDay(v){const s=String(v||'');const m=s.match(/(?:^|\D)(\d{1,2})[-\/.](\d{1,2})(?:\D|$)/);return m?String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0'):s.slice(5,10)||s}\nfunction stockTableHtml(records){
+function formatMonthDay(v){const s=String(v||'');const m=s.match(/(?:^|\D)(\d{1,2})[-\/.](\d{1,2})(?:\D|$)/);return m?String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0'):s.slice(5,10)||s}
+function stockTableHtml(records){
   if(!records.length)return '<div class="empty">暂无内容</div>';
   const head='<thead><tr><th>股票名称</th><th>判断分类</th><th>公告时间</th></tr></thead>';
   const body=records.map(r=>{
