@@ -364,7 +364,7 @@ function normalizeData(payload){
   if(payload&&typeof payload.data==='string')return parseStandardRows(payload.data);
   throw new Error('解密成功，但无法识别当前标准数据格式');
 }
-async function loadFromUrl(url){(url){
+async function loadFromUrl(url){
   if(window.AndroidNative&&AndroidNative.fetchDataSource&&AndroidNative.readDataSourceChunk){
     await new Promise((resolve,reject)=>{
       const done=(ok,message)=>{window.__sjNativeDataWaiter=null;ok?resolve():reject(new Error(message||'原生网络请求失败'))};
