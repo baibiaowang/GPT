@@ -1,8 +1,8 @@
 {
-  "version": "1.7.9",
-  "versionCode": 1709,
+  "version": "1.7.10",
+  "versionCode": 1710,
   "published_at": "2026-09-23",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.7.9/app.apk",
-  "notes": "修复列表渲染函数重复覆盖问题。所有股票列表统一只显示三列：股票名称、判断分类、公告时间；表头固定在列表顶部，完整股票记录继续保留。详情页8个单元格标准不变。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.7.10/app.apk",
+  "notes": "表头紧凑、公告时间仅显示月日、移除类型/结论/点评/收藏/设置顶部说明；股票列表保持显示，固定表头；详情页8个标准单元格与收藏点评本地归档继续保留。"
 }
