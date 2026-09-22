@@ -40,6 +40,24 @@ a{color:inherit;text-decoration:none}
 .card-hd .sub{font-size:12px;font-weight:400}
 .row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:.5px solid var(--line)}
 .row:last-child{border-bottom:0}.row:active{background:var(--brand-soft)}
+.stock-table-wrap{width:100%;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}
+.stock-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;background:var(--card)}
+.stock-table thead th{position:sticky;top:var(--stock-sticky-top,86px);z-index:18;background:var(--card);color:var(--muted);font-size:12px;font-weight:800;text-align:left;white-space:nowrap;padding:10px 12px;border-bottom:.5px solid var(--line);box-shadow:0 1px 0 var(--line)}
+.stock-table tbody td{padding:11px 12px;border-bottom:.5px solid var(--line);font-size:13px;vertical-align:middle;white-space:nowrap}
+.stock-table tbody tr:last-child td{border-bottom:0}
+.stock-table tbody tr:active td{background:var(--brand-soft)}
+.stock-table .stock-name{font-size:14px;font-weight:800}
+.stock-table .stock-code{font-variant-numeric:tabular-nums;letter-spacing:.2px}
+.stock-table .stock-price{font-variant-numeric:tabular-nums}
+.stock-table .stock-category{color:var(--brand);font-weight:700}
+.stock-table .stock-date{color:var(--muted);font-variant-numeric:tabular-nums}
+.stock-table .stock-note{font-size:11px;color:var(--muted);margin-left:4px}
+.stock-table th:nth-child(1),.stock-table td:nth-child(1){min-width:112px}
+.stock-table th:nth-child(2),.stock-table td:nth-child(2){min-width:86px}
+.stock-table th:nth-child(3),.stock-table td:nth-child(3){min-width:86px}
+.stock-table th:nth-child(4),.stock-table td:nth-child(4){min-width:180px}
+.stock-table th:nth-child(5),.stock-table td:nth-child(5){min-width:112px}
+
 .main{flex:1;min-width:0}.t1{font-size:16px;font-weight:700;overflow-wrap:anywhere}.t2{margin-top:3px;font-size:12px;color:var(--muted);
   display:flex;gap:5px;flex-wrap:wrap}.t3{margin-top:4px;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:7px;background:rgba(120,120,128,.12);font-size:11px;color:var(--muted)}
@@ -466,14 +484,50 @@ function getConclusion(r){
 function propertyOptions(){const s=new Set();allRecords().forEach(r=>{const t=state.data.judge_tables&&state.data.judge_tables[r.category];(t&&t.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))})});Object.values(savedArchives||{}).forEach(a=>(a&&a.judge_table&&a.judge_table.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))}));['有利','不利','中性','待定'].forEach(x=>s.add(x));return [...s]}
 function judgmentOptions(){const s=new Set(['不确定','命中','未命中']);allRecords().forEach(r=>(r.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));Object.values(savedArchives||{}).forEach(a=>(a&&a.record&&a.record.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));return [...s]}
 function buildRows(r){const t=(r.localOnly&&r._archive&&r._archive.judge_table)||(state.data&&state.data.judge_tables&&state.data.judge_tables[r.category]);if(!t)return[];const ov=getOverride(r);return(t.rows||[]).map((row,i)=>({i,q:row[0]||'',property:(ov.properties&&ov.properties[i]!=null?ov.properties[i]:row[1]||'待定'),judge:(ov.judges&&ov.judges[i]!=null?ov.judges[i]:((r.judge||[])[i]||'不确定')),role:row[2]||''}))}
-function renderList(container,records){container.innerHTML=records.length?records.map(rowHtml).join(''):'<div class="empty">暂无内容</div>'}
-function rowHtml(r){
-  const c=cmts[keyOf(r)],k=keyOf(r),local=!!r.localOnly;
-  const meta=[r.code,r.price?('现价 '+r.price):'',r.date||''].filter(Boolean).map(x=>'<span class="tag">'+esc(x)+'</span>').join('');
-  const result=resultCountsText(r)||getConclusion(r);
-  return '<div class="row'+(local?' local-only':'')+'" data-code="'+esc(r.code)+'" data-cat="'+esc(r.category)+'" data-local-only="'+(local?'1':'0')+'"><div class="main"><div class="t1">'+esc(r.name||r.code)+(favs.has(k)?'<span class="star">★</span>':'')+'</div><div class="t2">'+meta+'<span class="tag cat">'+esc(r.category||'')+'</span></div>'+(r.title?'<div class="t3">'+esc(r.title)+'</div>':'')+(c?'<div class="t3">✎ '+esc(c)+'</div>':'')+(local?'<div class="t3">本地完整保存 · 当前数据源没有这只股票</div>':'')+'</div><span class="pill" style="background:var(--gray)">'+esc(result)+'</span><span class="chev">›</span></div>';
+function stockTableHtml(records){
+  if(!records.length)return '<div class="empty">暂无内容</div>';
+  const head='<thead><tr><th>股票名称</th><th>股票代码</th><th>当前价格</th><th>判断分类</th><th>公告时间</th></tr></thead>';
+  const body=records.map(r=>{
+    const k=keyOf(r),local=!!r.localOnly;
+    return '<tr class="stock-row" data-code="'+esc(r.code)+'" data-cat="'+esc(r.category)+'" data-local-only="'+(local?'1':'0')+'">'+
+      '<td class="stock-name">'+esc(r.name||r.code)+(favs.has(k)?'<span class="star">★</span>':'')+(cmts[k]?'<span class="stock-note">✎</span>':'')+'</td>'+
+      '<td class="stock-code">'+esc(r.code||'')+'</td>'+
+      '<td class="stock-price">'+esc(r.price??'')+'</td>'+
+      '<td class="stock-category">'+esc(r.category||'')+'</td>'+
+      '<td class="stock-date">'+esc(r.date||'')+'</td>'+
+      '</tr>';
+  }).join('');
+  return '<div class="stock-table-wrap"><table class="stock-table">'+head+'<tbody>'+body+'</tbody></table></div>';
+}
+function renderList(container,records){container.innerHTML=stockTableHtml(records)}
+function renderHome(){const rs=filtered();$('countTitle').textContent='共 '+rs.length+' 条';$('dataNote').textContent=state.data?(state.kind==='cache'?'缓存数据':state.kind==='local'?'本地导入':'实时数据'):'未加载';renderList($('homeList'),rs)}
+function dynamicGroups(){const map=new Map(),order=[];allRecords().forEach(r=>{const k=String(r.category||'未分类').trim()||'未分类';if(!map.has(k)){map.set(k,[]);order.push(k)}map.get(k).push(r)});return order.map(k=>[k,map.get(k)])}
+function renderTypes(){
+  const groups=dynamicGroups();
+  if(!groups.length){$('typeTabs').innerHTML='';$('typesList').innerHTML='<div class="empty">暂无类型数据</div>';return}
+  const names=groups.map(x=>x[0]);
+  if(!names.includes(state.typeTab))state.typeTab=names[0];
+  $('typeTabs').innerHTML=groups.map(([name,rs])=>'<button class="tab '+(name===state.typeTab?'on':'')+'" data-type-tab="'+esc(name)+'">'+esc(name)+'<b>'+rs.length+'</b></button>').join('');
+  const rs=groups.find(x=>x[0]===state.typeTab)?.[1]||[];
+  $('typesList').innerHTML=stockTableHtml(rs);
+  document.querySelectorAll('[data-type-tab]').forEach(b=>b.onclick=()=>{state.typeTab=b.dataset.typeTab;renderTypes()});
+}
+function renderConclusions(){
+  const map=new Map();
+  allRecords().forEach(r=>{const k=getConclusion(r);if(!map.has(k))map.set(k,[]);map.get(k).push(r)});
+  const order=['利好','不利','否决','待定'];
+  const groups=order.filter(x=>map.has(x)).map(x=>[x,map.get(x)]);
+  if(!groups.length){$('conclusionTabs').innerHTML='';$('conclusionList').innerHTML='<div class="empty">暂无结果数据</div>';return}
+  const names=groups.map(x=>x[0]);
+  if(!names.includes(state.conclusionTab))state.conclusionTab=names[0];
+  $('conclusionTabs').innerHTML=groups.map(([name,rs])=>'<button class="tab '+(name===state.conclusionTab?'on':'')+'" data-conclusion-tab="'+esc(name)+'">'+esc(name)+'<b>'+rs.length+'</b></button>').join('');
+  const rs=groups.find(x=>x[0]===state.conclusionTab)?.[1]||[];
+  $('conclusionList').innerHTML=stockTableHtml(rs);
+  document.querySelectorAll('[data-conclusion-tab]').forEach(b=>b.onclick=()=>{state.conclusionTab=b.dataset.conclusionTab;renderConclusions()});
 }
 
+function renderComments(){const rs=savedRecordList(k=>!!cmts[k]);$('commentList').innerHTML=stockTableHtml(rs)}
+function renderFavorites(){const rs=savedRecordList(k=>favs.has(k));$('favList').innerHTML=stockTableHtml(rs)}
 function filtered(){const q=state.query.trim().toLowerCase();return allRecords().filter(r=>!q||String(r.name||'').toLowerCase().includes(q)||String(r.code||'').includes(q))}
 function renderHome(){const rs=filtered();$('countTitle').textContent='共 '+rs.length+' 条';$('dataNote').textContent=state.data?(state.kind==='cache'?'缓存数据':state.kind==='local'?'本地导入':'实时数据'):'未加载';renderList($('homeList'),rs)}
 function dynamicGroups(){const map=new Map(),order=[];allRecords().forEach(r=>{const k=String(r.category||'未分类').trim()||'未分类';if(!map.has(k)){map.set(k,[]);order.push(k)}map.get(k).push(r)});return order.map(k=>[k,map.get(k)])}
@@ -503,7 +557,8 @@ function renderConclusions(){
 
 function renderComments(){const rs=savedRecordList(k=>!!cmts[k]);$('commentList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">暂无点评</div>'}
 function renderFavorites(){const rs=savedRecordList(k=>favs.has(k));$('favList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">还没有收藏</div>'}
-function renderAllPages(){renderHome();renderTypes();renderConclusions();renderComments();renderFavorites();updateDataStatus()}
+function updateStockTableSticky(){const top=document.querySelector('.top');if(top)document.documentElement.style.setProperty('--stock-sticky-top',Math.ceil(top.getBoundingClientRect().height)+'px')}
+function renderAllPages(){renderHome();renderTypes();renderConclusions();renderComments();renderFavorites();updateDataStatus();updateStockTableSticky()}
 function pageSwitch(page){if($('detail').classList.contains('show'))closeDetail(false);state.page=page;document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+page));document.querySelectorAll('.bottom button').forEach(x=>x.classList.toggle('on',x.dataset.page===page));window.scrollTo(0,0)}
 
 function announcementTypes(a){const raw=a&&(a.types||a.type||a.categories||a.category||'');if(Array.isArray(raw))return raw.filter(Boolean).map(String);return String(raw||'').split(/[、,，/|]+/).map(s=>s.trim()).filter(Boolean)}
@@ -651,7 +706,7 @@ async function boot(silent,force){
 }
 function apply(d,kind){state.data=d;state.kind=kind;hydrateSavedArchives();renderAllPages()}
 document.querySelectorAll('.bottom button').forEach(b=>b.onclick=()=>pageSwitch(b.dataset.page));
-document.addEventListener('click',e=>{const row=e.target.closest('.row');if(row){const k=String(row.dataset.code||'')+'|'+String(row.dataset.cat||'');const r=row.dataset.localOnly==='1'?localRecordForKey(k):allRecords().find(x=>String(x.code)===String(row.dataset.code)&&String(x.category||'')===String(row.dataset.cat||''));if(r)openDetail(r)}});
+document.addEventListener('click',e=>{const row=e.target.closest('.stock-row,.row');if(row){const k=String(row.dataset.code||'')+'|'+String(row.dataset.cat||'');const r=row.dataset.localOnly==='1'?localRecordForKey(k):allRecords().find(x=>String(x.code)===String(row.dataset.code)&&String(x.category||'')===String(row.dataset.cat||''));if(r)openDetail(r)}});
 $('q').addEventListener('input',e=>{state.query=e.target.value;renderHome()});
 $('btnBack').onclick=closeDetail;
 $('aFav').onclick=()=>{if(!state.cur)return;const k=keyOf(state.cur);if(!favs.has(k))archiveRecord(state.cur);else rememberStock(state.cur);favs.has(k)?(favs.delete(k),toast('已取消收藏')):(favs.add(k),toast('已收藏'));saveFav();syncActions();renderAllPages()};
@@ -661,7 +716,7 @@ $('mask').onclick=e=>{if(e.target===$('mask'))closeSheet()};
 $('btnSource').onclick=sourceSheet;$('btnKey').onclick=keySheet;$('btnClearData').onclick=clearAllData;$('btnReload').onclick=()=>boot(false,true);$('btnExport').onclick=exportBackup;$('btnRestore').onclick=restoreBackup;$('btnUpdate').onclick=checkUpdate;
 window.onpopstate=()=>{if($('mask').classList.contains('show')){closeSheet();return}if($('detail').classList.contains('show')){state.detailPushed=false;closeDetail(true)}};
 history.replaceState({root:true},'','');
-loadArchives().then(()=>{loadLocal();boot(false)});
+window.addEventListener('resize',updateStockTableSticky);loadArchives().then(()=>{loadLocal();boot(false)});
 </script>
 </body>
 </html>
