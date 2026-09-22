@@ -156,7 +156,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
       </div>
       <div class="setting-item">
         <div class="setting-title">应用更新</div>
-        <div class="setting-desc" id="updateDesc">当前版本 1.7.2。收藏/点评过的股票会完整保存在本地；检查更新改用 Android 原生网络，失败会显示具体原因。</div>
+        <div class="setting-desc" id="updateDesc">当前版本 1.7.4。收藏/点评过的股票会完整保存在本地；检查更新改用 Android 原生网络，失败会显示具体原因。</div>
         <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
         <div class="update-progress" id="updateProgress">
           <div class="update-progress-top"><span id="updateProgressText">准备下载…</span><span id="updateProgressPct">0%</span></div>
@@ -198,13 +198,13 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script>
 const DEF_KEY='';
 const DEF_URLS='https://stocks-txt-file.app.workbuddy.host/stocks.txt';
-const APP_VERSION='1.7.2';
-const APP_VERSION_CODE=1702;
+const APP_VERSION='1.7.4';
+const APP_VERSION_CODE=1704;
 const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
-const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.7.2/app.apk';
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.7.4/app.apk';
 const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2',saved:'sj.savedStocks.v1',archive:'sj.archivedRecords.v1'};
 const IDB_ARCHIVE_KEY='savedArchives.v1';
 const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false,typeTab:'',conclusionTab:''};
