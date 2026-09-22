@@ -11,10 +11,6 @@ on:
       - 'package.json'
       - '.github/workflows/build-apk.yml'
 
-concurrency:
-  group: stock-judge-gpt-release
-  cancel-in-progress: true
-
 permissions:
   contents: write
 
