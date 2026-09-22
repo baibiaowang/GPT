@@ -101,10 +101,10 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 .sheet h3{margin:18px 20px 12px;font-size:18px}.sheet-grab{width:38px;height:5px;background:rgba(120,120,128,.25);border-radius:3px;margin:8px auto}
 .toast{position:fixed;left:50%;bottom:118px;transform:translate(-50%,8px);z-index:200;background:rgba(0,0,0,.84);color:#fff;
   padding:9px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;max-width:86vw;text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
-.note{padding:0 16px 12px;color:var(--muted);font-size:12px}.danger{color:var(--bad)}
+.standard-cell{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;padding:12px 16px;border-top:.5px solid var(--line)}.standard-cell:first-of-type{border-top:0}.standard-label{font-size:12px;color:var(--muted);font-weight:700}.standard-value{min-width:0;font-size:14px;line-height:1.55;overflow-wrap:anywhere}.standard-value.summary{white-space:pre-wrap}.note{padding:0 16px 12px;color:var(--muted);font-size:12px}.danger{color:var(--bad)}
 @media(max-width:520px){.rule-meta{grid-template-columns:1fr}.bottom button{font-size:10px}.bottom button .ic{font-size:17px}}
 </style>
-<!-- GPT dedicated build 1.7.6 · 支持真实 schema=3 JSON 数据包 + Markdown 动态表格；保留 SJ01/AES-GCM 解密 -->
+<!-- GPT dedicated build 1.7.7 · 最新8单元格标准；固定字段顺序与判定性质格式 -->
 </head>
 <body>
 <header class="top">
@@ -156,7 +156,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
       </div>
       <div class="setting-item">
         <div class="setting-title">应用更新</div>
-        <div class="setting-desc" id="updateDesc">当前版本 1.7.6。收藏/点评过的股票会完整保存在本地；检查更新改用 Android 原生网络，失败会显示具体原因。</div>
+        <div class="setting-desc" id="updateDesc">当前版本 1.7.7。收藏/点评过的股票会完整保存在本地；检查更新改用 Android 原生网络，失败会显示具体原因。</div>
         <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
         <div class="update-progress" id="updateProgress">
           <div class="update-progress-top"><span id="updateProgressText">准备下载…</span><span id="updateProgressPct">0%</span></div>
@@ -198,15 +198,27 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script>
 const DEF_KEY='';
 const DEF_URLS='https://stocks-txt-file.app.workbuddy.host/stocks.txt';
-const APP_VERSION='1.7.6';
-const APP_VERSION_CODE=1706;
+const APP_VERSION='1.7.7';
+const APP_VERSION_CODE=1707;
 const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
-const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.7.6/app.apk';
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.7.7/app.apk';
 const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2',saved:'sj.savedStocks.v1',archive:'sj.archivedRecords.v1'};
 const IDB_ARCHIVE_KEY='savedArchives.v1';
+const STANDARD_COLUMNS=Object.freeze([
+  {key:'name',label:'股票名称'},
+  {key:'code',label:'股票代码'},
+  {key:'price',label:'当前价格'},
+  {key:'category',label:'判断分类'},
+  {key:'date',label:'公告时间'},
+  {key:'title',label:'公告标题'},
+  {key:'property',label:'判定性质'},
+  {key:'summary',label:'判定总结'}
+]);
+const STANDARD_LABELS=STANDARD_COLUMNS.map(x=>x.label);
+const STANDARD_CATEGORIES=['重组与出售资产','董事长离职与人事变化','严重亏损与财报利空','闲置资金','解除质押与再次质押','股份发行、回购与增持'];
 const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false,typeTab:'',conclusionTab:''};
 let favs=new Set(),cmts={},overrides={},savedStocks={},savedArchives={};
 const $=id=>document.getElementById(id);
@@ -242,28 +254,72 @@ function isSeparatorRow(cells){return cells.length>0&&cells.every(x=>/^:?-{2,}:?
 function findColumn(headers,aliases){const a=aliases.map(cleanHeader);for(let i=0;i<headers.length;i++){const h=cleanHeader(headers[i]);if(a.includes(h))return i}for(let i=0;i<headers.length;i++){const h=cleanHeader(headers[i]);if(a.some(x=>h.includes(x)||x.includes(h)))return i}return -1}
 function parseResultCounts(raw){
   const s=String(raw||'').trim();
-  const find=(names)=>{for(const name of names){
+  const result={good:0,bad:0,veto:0,hasAny:false};
+  if(!s)return result;
+  const find=(name)=>{
     const m=s.match(new RegExp(name+'\\s*[（(]\\s*(-?\\d+)\\s*[）)]','u'));
-    if(m)return Number(m[1])||0;
-  }return 0};
-  const explicit={good:find(['利好']),bad:find(['不利','利空']),veto:find(['否决'])};
-  if(explicit.good||explicit.bad||explicit.veto)return explicit;
-  if(/^有利$/u.test(s))return{good:1,bad:0,veto:0};
-  if(/^不利$/u.test(s))return{good:0,bad:1,veto:0};
-  if(/^否决$/u.test(s))return{good:0,bad:0,veto:1};
-  return{good:0,bad:0,veto:0};
+    return m?Math.max(0,Number(m[1])||0):null;
+  };
+  const good=find('利好'),bad=find('不利'),veto=find('否决');
+  if(good!==null){result.good=good;result.hasAny=true}
+  if(bad!==null){result.bad=bad;result.hasAny=true}
+  if(veto!==null){result.veto=veto;result.hasAny=true}
+  return result;
 }
+function formatResultCounts(c){
+  const x=c&&typeof c==='object'?c:{};
+  return '利好（'+(Number(x.good)||0)+'）不利（'+(Number(x.bad)||0)+'）否决（'+(Number(x.veto)||0)+'）';
+}
+
 function resultCountsText(r){
-  const c=r&&r.result_counts?r.result_counts:parseResultCounts(r&&((r.raw_property)||(r.conclusion)));
-  return'利好 '+(Number(c.good)||0)+' · 不利 '+(Number(c.bad)||0)+' · 否决 '+(Number(c.veto)||0);
+  if(!r)return '';
+  const raw=String(r.raw_property??r['判定性质']??'').trim();
+  const c=r.result_counts&&typeof r.result_counts==='object'
+    ?{good:Number(r.result_counts.good)||0,bad:Number(r.result_counts.bad)||0,veto:Number(r.result_counts.veto)||0}
+    :parseResultCounts(raw);
+  if(c.veto>0)return '';
+  if(!raw && !(r.result_counts&&typeof r.result_counts==='object'))return '';
+  return formatResultCounts(c);
 }
+
 function normalizeConclusion(raw){
-  const c=parseResultCounts(raw);
-  if(c.veto>0)return'否决';
-  if(c.good>0&&c.bad===0)return'利好';
-  if(c.bad>0&&c.good===0)return'不利';
-  return'待定';
+  const s=String(raw||'').trim();
+  const m=s.match(/^(利好|不利|否决|待定)(?:[。．.]|$)/u);
+  if(m)return m[1];
+  if(s==='有利')return '利好';
+  if(s==='利空')return '不利';
+  return '待定';
 }
+function conclusionFromSummary(summary,fallback){
+  const s=String(summary||'').trim();
+  const m=s.match(/^(利好|不利|否决|待定)(?:[。．.]|$)/u);
+  if(m)return m[1];
+  return normalizeConclusion(fallback);
+}
+function fieldValue(r,key){
+  const aliases={
+    name:['股票名称','name','名称','证券名称','公司名称'],
+    code:['股票代码','code','代码','证券代码'],
+    price:['当前价格','price','现价','股票价格','价格'],
+    category:['判断分类','category','分类','判断类型','类型'],
+    date:['公告时间','date','公告日期','公告日','日期','时间'],
+    title:['公告标题','title','标题'],
+    property:['判定性质','raw_property'],
+    summary:['判定总结','summary','股票总结','最终股票总结','最终总结','结论总结','总结','股票详情','详情']
+  };
+  for(const k of (aliases[key]||[])){
+    if(r&&Object.prototype.hasOwnProperty.call(r,k)&&r[k]!=null&&String(r[k]).trim()!=='')return String(r[k]).trim();
+    if(r&&r.columns&&Object.prototype.hasOwnProperty.call(r.columns,k)&&r.columns[k]!=null&&String(r.columns[k]).trim()!=='')return String(r.columns[k]).trim();
+  }
+  return '';
+}
+function canonicalProperty(raw,counts){
+  const c=counts||parseResultCounts(raw);
+  if(c.veto>0)return '';
+  if(!c.hasAny && !raw)return '';
+  return formatResultCounts(c);
+}
+
 function buildDynamicHeaders(payload){
   const cols=(payload&&payload.layout&&(
     Array.isArray(payload.layout.detail_columns)?payload.layout.detail_columns:
@@ -279,50 +335,40 @@ function buildDynamicHeaders(payload){
 function normalizeSchema3Data(payload){
   if(!payload||typeof payload!=='object'||!Array.isArray(payload.records))return null;
   if(!(payload.meta&&Number(payload.meta.schema)===3))return null;
-  const hd=buildDynamicHeaders(payload),labels=hd.labels,keys=hd.keys;
-  const labelByKey={};
-  keys.forEach((k,i)=>{if(k)labelByKey[k]=labels[i]||k});
   const records=payload.records.map((src)=>{
     const r=(src&&typeof src==='object')?src:{};
-    const rawProperty=String(r.raw_property??r['判定性质']??r.conclusion??'').trim();
-    const counts=r.result_counts&&typeof r.result_counts==='object'?{
-      good:Number(r.result_counts.good)||0,bad:Number(r.result_counts.bad)||0,veto:Number(r.result_counts.veto)||0
-    }:parseResultCounts(rawProperty);
-    const columns={};
-    keys.forEach(k=>{if(k)columns[labelByKey[k]]=String(r[k]??'').trim()});
-    Object.keys(r).forEach(k=>{
-      if(!(k in labelByKey) && !['raw_property','result_counts','headers','columns','source_format'].includes(k)){
-        columns[k]=String(r[k]??'').trim();
-      }
-    });
-    const headers=[...new Set([...labels,...Object.keys(columns).filter(x=>!labels.includes(x))])];
+    const name=fieldValue(r,'name');
+    const code=fieldValue(r,'code');
+    const price=fieldValue(r,'price');
+    const category=fieldValue(r,'category');
+    const date=fieldValue(r,'date');
+    const title=fieldValue(r,'title');
+    const rawProperty=fieldValue(r,'property');
+    const summary=fieldValue(r,'summary');
+    const suppliedCounts=(r.result_counts&&typeof r.result_counts==='object')
+      ?{good:Number(r.result_counts.good)||0,bad:Number(r.result_counts.bad)||0,veto:Number(r.result_counts.veto)||0,hasAny:true}
+      :parseResultCounts(rawProperty);
+    const property=canonicalProperty(rawProperty,suppliedCounts);
+    const conclusion=conclusionFromSummary(summary,r.conclusion??r['结论']);
+    const columns={
+      '股票名称':name,'股票代码':code,'当前价格':price,'判断分类':category,
+      '公告时间':date,'公告标题':title,'判定性质':property,'判定总结':summary
+    };
     return{
-      ...r,
-      name:String(r.name??r['股票名称']??'').trim(),
-      code:String(r.code??r['股票代码']??'').trim(),
-      price:String(r.price??r['当前价格']??'').trim(),
-      category:String(r.category??r['判断分类']??'未分类').trim()||'未分类',
-      date:String(r.date??r['公告时间']??'').trim(),
-      title:String(r.title??r['公告标题']??'').trim(),
-      raw_property:rawProperty,
-      result_counts:counts,
-      conclusion:String(r.conclusion??r['判定性质']??normalizeConclusion(rawProperty)).trim()||normalizeConclusion(rawProperty),
-      summary:String(r.summary??r['判定总结']??'').trim(),
-      columns,
-      headers,
-      source_format:'JSON动态数据包'
+      ...r,name,code,price,category:category||'未分类',date,title,
+      raw_property:property,result_counts:{good:suppliedCounts.good,bad:suppliedCounts.bad,veto:suppliedCounts.veto},
+      conclusion,summary,columns,headers:STANDARD_LABELS.slice(),source_format:'JSON动态数据包'
     };
   }).filter(r=>r.name&&r.code);
   if(!records.length)throw new Error('JSON数据包中没有有效股票记录');
   return{
-    meta:{...(payload.meta||{}),source_format:'JSON动态数据包',headers:labels},
-    layout:payload.layout||{},
-    display:payload.display||{},
-    records,
-    judge_tables:payload.judge_tables||{},
-    announcements:payload.announcements||{}
+    meta:{...(payload.meta||{}),source_format:'JSON动态数据包',headers:STANDARD_LABELS.slice()},
+    layout:{list_columns:STANDARD_COLUMNS.slice(),detail_columns:STANDARD_COLUMNS.slice()},
+    display:payload.display||{},records,
+    judge_tables:payload.judge_tables||{},announcements:payload.announcements||{}
   };
 }
+
 function parseStandardRows(text){
   const src=String(text||'').replace(/^\uFEFF/,'').replace(/\r/g,'');
   const lines=src.split('\n').filter(x=>x.trim());
@@ -330,25 +376,38 @@ function parseStandardRows(text){
   let headerIndex=-1,headers=[];
   for(let i=0;i<lines.length;i++){
     const cells=lines[i].indexOf('|')>=0?splitStandardRow(lines[i]):lines[i].split('\t').map(x=>x.trim());
-    if(cells.length>=2&&!isSeparatorRow(cells)&&/(股票|代码|公告|判定|总结|分类|名称|日期|时间)/u.test(cells.join(' '))){headerIndex=i;headers=cells;break}
+    if(cells.length===8&&!isSeparatorRow(cells)){
+      const ok=cells.every((x,j)=>cleanHeader(x)===cleanHeader(STANDARD_LABELS[j]));
+      if(ok){headerIndex=i;headers=cells;break}
+    }
   }
-  if(headerIndex<0)throw new Error('未找到表头；请至少提供股票名称、股票代码或等价字段');
-  const idx={name:findColumn(headers,['股票名称','名称','证券名称','公司名称']),code:findColumn(headers,['股票代码','代码','证券代码']),price:findColumn(headers,['当前价格','现价','股票价格','价格']),category:findColumn(headers,['判断分类','分类','判断类型','类型']),date:findColumn(headers,['公告时间','公告日期','公告日','日期','时间']),title:findColumn(headers,['公告标题','标题']),property:findColumn(headers,['判定性质','性质','判断性质','结果性质']),summary:findColumn(headers,['判定总结','最终股票总结','股票总结','最终总结','结论总结','总结','股票详情','详情'])};
-  if(idx.name<0||idx.code<0)throw new Error('表头缺少股票名称或股票代码字段');
+  if(headerIndex<0)throw new Error('未找到符合最新标准的8列表头；表头顺序必须固定为：'+STANDARD_LABELS.join(' | '));
   const records=[];
   for(let i=headerIndex+1;i<lines.length;i++){
     const cells=lines[i].indexOf('|')>=0?splitStandardRow(lines[i]):lines[i].split('\t').map(x=>x.trim());
-    if(cells.length<2||isSeparatorRow(cells))continue;
-    const name=String(cells[idx.name]||'').trim(),code=String(cells[idx.code]||'').trim();
+    if(cells.length<8||isSeparatorRow(cells))continue;
+    const name=String(cells[0]??'').trim(),code=String(cells[1]??'').trim();
     if(!name||!code)continue;
-    const columns={};headers.forEach((h,j)=>{columns[String(h||('字段'+(j+1)))]=String(cells[j]??'').trim()});
-    const prop=idx.property>=0?String(cells[idx.property]||'').trim():'';
-    const summary=idx.summary>=0?String(cells[idx.summary]||'').trim():'';
-    records.push({name,code,price:idx.price>=0?String(cells[idx.price]||'').trim():'',category:idx.category>=0?(String(cells[idx.category]||'').trim()||'未分类'):'未分类',date:idx.date>=0?String(cells[idx.date]||'').trim():'',title:idx.title>=0?String(cells[idx.title]||'').trim():'',raw_property:prop,result_counts:parseResultCounts(prop),conclusion:normalizeConclusion(prop),summary,columns,headers:headers.slice(),judge:[],source_format:'明文动态表格'});
+    const price=String(cells[2]??'').trim(),category=String(cells[3]??'').trim()||'未分类';
+    const date=String(cells[4]??'').trim(),title=String(cells[5]??'').trim();
+    const rawProperty=String(cells[6]??'').trim(),summary=String(cells[7]??'').trim();
+    const counts=parseResultCounts(rawProperty),property=canonicalProperty(rawProperty,counts);
+    records.push({
+      name,code,price,category,date,title,raw_property:property,
+      result_counts:{good:counts.good,bad:counts.bad,veto:counts.veto},
+      conclusion:conclusionFromSummary(summary,'待定'),summary,
+      columns:{'股票名称':name,'股票代码':code,'当前价格':price,'判断分类':category,'公告时间':date,'公告标题':title,'判定性质':property,'判定总结':summary},
+      headers:STANDARD_LABELS.slice(),judge:[],source_format:'明文动态表格'
+    });
   }
   if(!records.length)throw new Error('表头已识别，但没有有效股票记录');
-  return{meta:{generated_at:new Date().toISOString(),source_format:'明文动态表格',headers},records,judge_tables:{},announcements:{}}
+  return{
+    meta:{generated_at:new Date().toISOString(),source_format:'明文动态表格',headers:STANDARD_LABELS.slice()},
+    layout:{list_columns:STANDARD_COLUMNS.slice(),detail_columns:STANDARD_COLUMNS.slice()},
+    records,judge_tables:{},announcements:{}
+  };
 }
+
 function isNewStandardData(d){
   return !!(d&&typeof d==='object'&&Array.isArray(d.records)&&(
     (d.meta&&d.meta.source_format==='明文动态表格') ||
@@ -394,12 +453,22 @@ async function loadFromUrls(urls){const errs=[];for(const u of urls){try{return 
 function statusColor(c){const m={'有利':'var(--good)','不利':'var(--bad)','待定':'var(--wait)','否决':'#5B0E1E'};return m[c]||'var(--gray)'}
 function allRecords(){return state.data&&Array.isArray(state.data.records)?state.data.records:[]}
 function getOverride(r){return overrides[keyOf(r)]||{}}
-function getConclusion(r){return getOverride(r).conclusion!=null?getOverride(r).conclusion:(r.conclusion||'未设置')}
+function getConclusion(r){
+  const v=getOverride(r).conclusion!=null?getOverride(r).conclusion:r&&r.conclusion;
+  return normalizeConclusion(v);
+}
+
 function propertyOptions(){const s=new Set();allRecords().forEach(r=>{const t=state.data.judge_tables&&state.data.judge_tables[r.category];(t&&t.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))})});Object.values(savedArchives||{}).forEach(a=>(a&&a.judge_table&&a.judge_table.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))}));['有利','不利','中性','待定'].forEach(x=>s.add(x));return [...s]}
 function judgmentOptions(){const s=new Set(['不确定','命中','未命中']);allRecords().forEach(r=>(r.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));Object.values(savedArchives||{}).forEach(a=>(a&&a.record&&a.record.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));return [...s]}
 function buildRows(r){const t=(r.localOnly&&r._archive&&r._archive.judge_table)||(state.data&&state.data.judge_tables&&state.data.judge_tables[r.category]);if(!t)return[];const ov=getOverride(r);return(t.rows||[]).map((row,i)=>({i,q:row[0]||'',property:(ov.properties&&ov.properties[i]!=null?ov.properties[i]:row[1]||'待定'),judge:(ov.judges&&ov.judges[i]!=null?ov.judges[i]:((r.judge||[])[i]||'不确定')),role:row[2]||''}))}
 function renderList(container,records){container.innerHTML=records.length?records.map(rowHtml).join(''):'<div class="empty">暂无内容</div>'}
-function rowHtml(r){const c=cmts[keyOf(r)],k=keyOf(r),local=!!r.localOnly;const meta=[r.code,r.price?('现价 '+r.price):'',r.date||''].filter(Boolean).map(x=>'<span class="tag">'+esc(x)+'</span>').join('');return '<div class="row'+(local?' local-only':'')+'" data-code="'+esc(r.code)+'" data-cat="'+esc(r.category)+'" data-local-only="'+(local?'1':'0')+'"><div class="main"><div class="t1">'+esc(r.name||r.code)+(favs.has(k)?'<span class="star">★</span>':'')+'</div><div class="t2">'+meta+'<span class="tag cat">'+esc(r.category||'')+'</span></div>'+(r.title?'<div class="t3">'+esc(r.title)+'</div>':'')+(c?'<div class="t3">✎ '+esc(c)+'</div>':'')+(local?'<div class="t3">本地完整保存 · 当前数据源没有这只股票</div>':'')+'</div><span class="pill" style="background:var(--gray)">'+esc(resultCountsText(r))+'</span><span class="chev">›</span></div>'}
+function rowHtml(r){
+  const c=cmts[keyOf(r)],k=keyOf(r),local=!!r.localOnly;
+  const meta=[r.code,r.price?('现价 '+r.price):'',r.date||''].filter(Boolean).map(x=>'<span class="tag">'+esc(x)+'</span>').join('');
+  const result=resultCountsText(r)||getConclusion(r);
+  return '<div class="row'+(local?' local-only':'')+'" data-code="'+esc(r.code)+'" data-cat="'+esc(r.category)+'" data-local-only="'+(local?'1':'0')+'"><div class="main"><div class="t1">'+esc(r.name||r.code)+(favs.has(k)?'<span class="star">★</span>':'')+'</div><div class="t2">'+meta+'<span class="tag cat">'+esc(r.category||'')+'</span></div>'+(r.title?'<div class="t3">'+esc(r.title)+'</div>':'')+(c?'<div class="t3">✎ '+esc(c)+'</div>':'')+(local?'<div class="t3">本地完整保存 · 当前数据源没有这只股票</div>':'')+'</div><span class="pill" style="background:var(--gray)">'+esc(result)+'</span><span class="chev">›</span></div>';
+}
+
 function filtered(){const q=state.query.trim().toLowerCase();return allRecords().filter(r=>!q||String(r.name||'').toLowerCase().includes(q)||String(r.code||'').includes(q))}
 function renderHome(){const rs=filtered();$('countTitle').textContent='共 '+rs.length+' 条';$('dataNote').textContent=state.data?(state.kind==='cache'?'缓存数据':state.kind==='local'?'本地导入':'实时数据'):'未加载';renderList($('homeList'),rs)}
 function dynamicGroups(){const map=new Map(),order=[];allRecords().forEach(r=>{const k=String(r.category||'未分类').trim()||'未分类';if(!map.has(k)){map.set(k,[]);order.push(k)}map.get(k).push(r)});return order.map(k=>[k,map.get(k)])}
@@ -413,7 +482,19 @@ function renderTypes(){
   $('typesList').innerHTML='<div class="card tab-list">'+rs.map(rowHtml).join('')+'</div>';
   document.querySelectorAll('[data-type-tab]').forEach(b=>b.onclick=()=>{state.typeTab=b.dataset.typeTab;renderTypes()});
 }
-function renderConclusions(){const map=new Map();allRecords().forEach(r=>{const k=resultCountsText(r);if(!map.has(k))map.set(k,[]);map.get(k).push(r)});const groups=[...map.entries()];if(!groups.length){$('conclusionTabs').innerHTML='';$('conclusionList').innerHTML='<div class="empty">暂无结果数据</div>';return}const names=groups.map(x=>x[0]);if(!names.includes(state.conclusionTab))state.conclusionTab=names[0];$('conclusionTabs').innerHTML=groups.map(([name,rs])=>'<button class="tab '+(name===state.conclusionTab?'on':'')+'" data-conclusion-tab="'+esc(name)+'">'+esc(name)+'<b>'+rs.length+'</b></button>').join('');const rs=groups.find(x=>x[0]===state.conclusionTab)?.[1]||[];$('conclusionList').innerHTML='<div class="card tab-list">'+rs.map(rowHtml).join('')+'</div>';document.querySelectorAll('[data-conclusion-tab]').forEach(b=>b.onclick=()=>{state.conclusionTab=b.dataset.conclusionTab;renderConclusions()})}
+function renderConclusions(){
+  const map=new Map();
+  allRecords().forEach(r=>{const k=getConclusion(r);if(!map.has(k))map.set(k,[]);map.get(k).push(r)});
+  const order=['利好','不利','否决','待定'];
+  const groups=order.filter(x=>map.has(x)).map(x=>[x,map.get(x)]);
+  if(!groups.length){$('conclusionTabs').innerHTML='';$('conclusionList').innerHTML='<div class="empty">暂无结果数据</div>';return}
+  const names=groups.map(x=>x[0]);
+  if(!names.includes(state.conclusionTab))state.conclusionTab=names[0];
+  $('conclusionTabs').innerHTML=groups.map(([name,rs])=>'<button class="tab '+(name===state.conclusionTab?'on':'')+'" data-conclusion-tab="'+esc(name)+'">'+esc(name)+'<b>'+rs.length+'</b></button>').join('');
+  const rs=groups.find(x=>x[0]===state.conclusionTab)?.[1]||[];
+  $('conclusionList').innerHTML='<div class="card tab-list">'+rs.map(rowHtml).join('')+'</div>';
+  document.querySelectorAll('[data-conclusion-tab]').forEach(b=>b.onclick=()=>{state.conclusionTab=b.dataset.conclusionTab;renderConclusions()});
+}
 
 function renderComments(){const rs=savedRecordList(k=>!!cmts[k]);$('commentList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">暂无点评</div>'}
 function renderFavorites(){const rs=savedRecordList(k=>favs.has(k));$('favList').innerHTML=rs.length?rs.map(rowHtml).join(''):'<div class="empty">还没有收藏</div>'}
@@ -427,7 +508,28 @@ function editHtml(r){const rows=buildRows(r),props=propertyOptions(),judges=judg
 function overviewHtml(r){const url='https://basic.10jqka.com.cn/'+encodeURIComponent(r.code)+'/';return '<div class="card overview"><div class="card-hd"><span>公司概况</span><span class="sub">'+esc(r.code)+'</span></div><div class="external-company"><div class="external-icon">10JQKA</div><div class="external-main"><div class="external-title">同花顺公司详情</div><div class="external-desc">在系统默认浏览器中打开完整公司资料，页面支持浏览器原生缩放、返回和分享。</div></div><button class="external-btn" id="ovOpen">打开 ↗</button></div></div>'}
 function detailJudgeHtml(r){const rows=buildRows(r);if(!rows.length)return '';let h='<div class="card"><div class="card-hd"><span>判定与性质</span><span class="sub">'+rows.length+' 条条件</span></div>';let last='';rows.forEach(x=>{if(x.property!==last){h+='<div style="padding:6px 16px;background:var(--brand-soft);color:var(--brand);font-size:12px;font-weight:700">'+esc(x.property)+'</div>';last=x.property}h+='<div class="jrow"><div class="jq">'+esc(x.q)+'</div><div class="jm"><span class="hit" style="color:'+(x.judge==='命中'?'var(--good)':x.judge==='未命中'?'var(--bad)':'var(--muted)')+'">'+esc(x.judge)+'</span><span class="tag">'+esc(x.property)+'</span></div></div>'});return h+'</div>'}
 function finalSummaryText(r){return String(r&&r.summary||'').trim()||'—'}
-function openDetail(r){if(!state.detailPushed){history.pushState({detail:true,stock:keyOf(r)},'','?stock='+encodeURIComponent(keyOf(r)));state.detailPushed=true}state.cur=r;state.editOpen=false;state.annShown=30;const resultText=resultCountsText(r);$('dTitle').textContent=r.name||r.code;$('dHero').innerHTML='<div class="hero"><h1>'+esc(r.name||r.code)+'</h1><div class="meta"><span class="tag">'+esc(r.code)+'</span>'+(r.price?'<span class="tag">现价 '+esc(r.price)+'</span>':'')+'<span class="tag cat">'+esc(r.category||'')+'</span>'+(r.date?'<span class="tag">'+esc(r.date)+'</span>':'')+'</div>'+(r.title?'<div class="card" style="margin-top:12px"><div class="card-hd"><span>公告标题</span></div><div class="result-main" style="font-size:15px;font-weight:700;line-height:1.55">'+esc(r.title)+'</div></div>':'')+'</div><div class="card"><div class="card-hd"><span>股票详情</span><span class="sub">最终股票总结</span></div><div class="result-main" style="font-size:15px;line-height:1.75;white-space:pre-wrap;word-break:break-word">'+esc(finalSummaryText(r))+'</div></div><div class="card"><div class="card-hd"><span>判定结果</span></div><div class="result-main" style="font-size:20px;font-weight:900">'+esc(resultText)+'</div></div>';$('dBody').innerHTML=overviewHtml(r)+annHtml(r)+'<div class="card"><div class="card-hd"><span>我的点评</span></div><div class="result-main" style="font-size:14px;line-height:1.65;white-space:pre-wrap">'+esc(cmts[keyOf(r)]||'还没有点评')+'</div></div>';$('detail').classList.add('show');$('actions').classList.add('show');syncActions();bindOverview();const more=$('annMore');if(more)more.onclick=()=>{state.annShown=announcementsFor(r).length;openDetail(r)};$('detail').scrollTop=0}
+function standardTableHtml(r){
+  const rows=[
+    ['股票名称',r.name||''],['股票代码',r.code||''],['当前价格',r.price||''],
+    ['判断分类',r.category||''],['公告时间',r.date||''],['公告标题',r.title||''],
+    ['判定性质',resultCountsText(r)],['判定总结',r.summary||'']
+  ];
+  return '<div class="card standard-table"><div class="card-hd"><span>判定表</span><span class="sub">8 个单元格 · 固定顺序</span></div>'+
+    rows.map(([label,value])=>'<div class="standard-cell"><div class="standard-label">'+esc(label)+'</div><div class="standard-value '+(label==='判定总结'?'summary':'')+'">'+(value?esc(value):'&nbsp;')+'</div></div>').join('')+
+    '</div>';
+}
+
+function openDetail(r){
+  if(!state.detailPushed){history.pushState({detail:true,stock:keyOf(r)},'','?stock='+encodeURIComponent(keyOf(r)));state.detailPushed=true}
+  state.cur=r;state.editOpen=false;state.annShown=30;
+  $('dTitle').textContent=r.name||r.code;
+  $('dHero').innerHTML='<div class="hero"><h1>'+esc(r.name||r.code)+'</h1><div class="meta"><span class="tag">'+esc(r.code)+'</span>'+(r.price?'<span class="tag">当前价格 '+esc(r.price)+'</span>':'')+'<span class="tag cat">'+esc(r.category||'')+'</span>'+(r.date?'<span class="tag">'+esc(r.date)+'</span>':'')+'</div></div>'+standardTableHtml(r);
+  $('dBody').innerHTML=overviewHtml(r)+annHtml(r)+'<div class="card"><div class="card-hd"><span>我的点评</span></div><div class="result-main" style="font-size:14px;line-height:1.65;white-space:pre-wrap">'+esc(cmts[keyOf(r)]||'还没有点评')+'</div></div>';
+  $('detail').classList.add('show');$('actions').classList.add('show');syncActions();bindOverview();
+  const more=$('annMore');if(more)more.onclick=()=>{state.annShown=announcementsFor(r).length;openDetail(r)};
+  $('detail').scrollTop=0;
+}
+
 function bindEdit(r){const t=$('editToggle');if(!t)return;t.onclick=()=>{state.editOpen=!state.editOpen;const p=$('editPanel');if(p)p.classList.toggle('open',state.editOpen);const arrow=t.querySelector('span:last-child');if(arrow)arrow.textContent=state.editOpen?'⌃':'⌄'};const c=$('editConclusion');if(c)c.value=getConclusion(r);const rows=buildRows(r);document.querySelectorAll('select[data-prop]').forEach(s=>{const i=+s.dataset.prop;const x=rows.find(y=>y.i===i);s.value=x?x.property:''});document.querySelectorAll('select[data-judge]').forEach(s=>{const i=+s.dataset.judge;const x=rows.find(y=>y.i===i);s.value=x?x.judge:''});const save=$('saveEdit');if(!save)return;save.onclick=()=>{const k=keyOf(r),ov=overrides[k]||{};ov.conclusion=c.value;ov.properties=ov.properties||{};ov.judges=ov.judges||{};document.querySelectorAll('select[data-prop]').forEach(s=>{ov.properties[s.dataset.prop]=s.value});document.querySelectorAll('select[data-judge]').forEach(s=>{ov.judges[s.dataset.judge]=s.value});overrides[k]=ov;saveOverrides();state.editOpen=false;renderAllPages();openDetail(r);toast('修改已保存')}}
 function applyZoom(){const f=$('ovFrame'),wrap=document.querySelector('.ov-canvas');if(!f||!wrap)return;const z=state.overviewZoom;f.style.width=(100/z)+'%';f.style.height=(100/z)+'%';f.style.transform='scale('+z+')';wrap.style.height=(72)+'vh';wrap.style.minHeight='460px';wrap.style.overflow='auto'}
 window.__sjPinchScale=function(factor,x,y){const n=Number(factor);if(!Number.isFinite(n)||n<=0)return false;const el=document.elementFromPoint(Number(x),Number(y));if(!el||!el.closest||!el.closest('.ov-frame'))return false;state.overviewZoom=Math.min(2.5,Math.max(.45,+(state.overviewZoom*n).toFixed(3)));applyZoom();return true};
