@@ -313,6 +313,12 @@ function fieldValue(r,key){
   }
   return '';
 }
+function normalizePrice(v){
+  const s=String(v??'').trim();
+  if(!s)return '';
+  const n=Number(s.replace(/,/g,''));
+  return Number.isFinite(n)?n:s;
+}
 function canonicalProperty(raw,counts){
   const c=counts||parseResultCounts(raw);
   if(c.veto>0)return '';
@@ -339,7 +345,7 @@ function normalizeSchema3Data(payload){
     const r=(src&&typeof src==='object')?src:{};
     const name=fieldValue(r,'name');
     const code=fieldValue(r,'code');
-    const price=fieldValue(r,'price');
+    const price=normalizePrice(fieldValue(r,'price'));
     const category=fieldValue(r,'category');
     const date=fieldValue(r,'date');
     const title=fieldValue(r,'title');
@@ -355,7 +361,7 @@ function normalizeSchema3Data(payload){
       '公告时间':date,'公告标题':title,'判定性质':property,'判定总结':summary
     };
     return{
-      ...r,name,code,price,category:category||'未分类',date,title,
+      ...r,name,code,price,category,date,title,
       raw_property:property,result_counts:{good:suppliedCounts.good,bad:suppliedCounts.bad,veto:suppliedCounts.veto},
       conclusion,summary,columns,headers:STANDARD_LABELS.slice(),source_format:'JSON动态数据包'
     };
@@ -388,7 +394,7 @@ function parseStandardRows(text){
     if(cells.length<8||isSeparatorRow(cells))continue;
     const name=String(cells[0]??'').trim(),code=String(cells[1]??'').trim();
     if(!name||!code)continue;
-    const price=String(cells[2]??'').trim(),category=String(cells[3]??'').trim()||'未分类';
+    const price=normalizePrice(cells[2]),category=String(cells[3]??'').trim();
     const date=String(cells[4]??'').trim(),title=String(cells[5]??'').trim();
     const rawProperty=String(cells[6]??'').trim(),summary=String(cells[7]??'').trim();
     const counts=parseResultCounts(rawProperty),property=canonicalProperty(rawProperty,counts);
