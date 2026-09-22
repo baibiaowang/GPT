@@ -1,8 +1,8 @@
 {
-  "version": "1.7.5",
-  "versionCode": 1705,
+  "version": "1.7.6",
+  "versionCode": 1706,
   "published_at": "2026-09-22",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.7.5/app.apk",
-  "notes": "支持原有 SJ01/AES-GCM 加密解密，同时支持解密后 8 列明文标准数据：股票名称、股票代码、当前价格、判断分类、公告时间、公告标题、判定性质、判定总结；继续保留旧版 JSON 数据兼容、收藏、点评和本地归档。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.7.6/app.apk",
+  "notes": "支持原有 SJ01/AES-GCM 加密解密，同时支持支持 SJ01/AES-GCM 解密后的 schema=3 JSON 动态数据包，以及 Markdown 动态表格；字段按数据包 layout 自动适配，保留收藏、点评和本地归档。"
 }
