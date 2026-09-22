@@ -119,7 +119,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 .standard-cell{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;padding:12px 16px;border-top:.5px solid var(--line)}.standard-cell:first-of-type{border-top:0}.standard-label{font-size:12px;color:var(--muted);font-weight:700}.standard-value{min-width:0;font-size:14px;line-height:1.55;overflow-wrap:anywhere}.standard-value.summary{white-space:pre-wrap}.note{padding:0 16px 12px;color:var(--muted);font-size:12px}.danger{color:var(--bad)}
 @media(max-width:520px){.rule-meta{grid-template-columns:1fr}.bottom button{font-size:10px}.bottom button .ic{font-size:17px}}
 </style>
-<!-- GPT dedicated build 1.7.7 · 最新8单元格标准；固定字段顺序与判定性质格式 -->
+<!-- GPT dedicated build 1.7.11 · 最新8单元格标准；列表固定前5列；固定表头与紧凑日期 -->
 </head>
 <body>
 <header class="top">
@@ -171,7 +171,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
       </div>
       <div class="setting-item">
         <div class="setting-title">应用更新</div>
-        <div class="setting-desc" id="updateDesc">当前版本 1.7.10。列表只显示股票名称、判断分类、公告时间三个表头，表头固定；收藏/点评过的股票会完整保存在本地。</div>
+        <div class="setting-desc" id="updateDesc">当前版本 1.7.11。列表横向显示前5个字段，表头固定；收藏/点评过的股票会完整保存在本地。</div>
         <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
         <div class="update-progress" id="updateProgress">
           <div class="update-progress-top"><span id="updateProgressText">准备下载…</span><span id="updateProgressPct">0%</span></div>
@@ -237,6 +237,13 @@ const STANDARD_CATEGORIES=['重组与出售资产','董事长离职与人事变�
 const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false,typeTab:'',conclusionTab:''};
 let favs=new Set(),cmts={},overrides={},savedStocks={},savedArchives={};
 const $=id=>document.getElementById(id);
+function syncStockStickyTop(){
+  const top=document.querySelector('.top');
+  const h=top?Math.ceil(top.getBoundingClientRect().height):90;
+  document.documentElement.style.setProperty('--stock-sticky-top',h+'px');
+}
+window.addEventListener('resize',syncStockStickyTop,{passive:true});
+requestAnimationFrame(syncStockStickyTop);
 function toast(msg,ms){const e=$('toast');e.textContent=msg;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),ms||1800)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function hexToBytes(hex){const s=String(hex||'').trim();if(!/^[0-9a-fA-F]{64}$/.test(s))throw new Error('激活码需为64位十六进制');const a=new Uint8Array(32);for(let i=0;i<32;i++)a[i]=parseInt(s.substr(i*2,2),16);return a}
