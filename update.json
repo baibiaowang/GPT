@@ -1,8 +1,8 @@
 {
-  "version": "1.7.7",
-  "versionCode": 1707,
+  "version": "1.7.8",
+  "versionCode": 1708,
   "published_at": "2026-09-23",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.7.7/app.apk",
-  "notes": "按最新8单元格标准消费数据：股票名称、股票代码、当前价格、判断分类、公告时间、公告标题、判定性质、判定总结；判定性质为利好（n）不利（n）否决（n）的整表汇总，前置闸门否决时留空；结论词从判定总结读取；保留收藏、点评和本地归档。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v1.7.8/app.apk",
+  "notes": "最新版本：股票列表横向五列展示（股票名称、股票代码、当前价格、判断分类、公告时间），顶部表头固定；详情页继续严格使用8单元格最新标准，并保留收藏、点评和本地归档。"
 }
