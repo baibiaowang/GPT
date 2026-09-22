@@ -454,8 +454,7 @@ function statusColor(c){const m={'有利':'var(--good)','不利':'var(--bad)','�
 function allRecords(){return state.data&&Array.isArray(state.data.records)?state.data.records:[]}
 function getOverride(r){return overrides[keyOf(r)]||{}}
 function getConclusion(r){
-  const v=getOverride(r).conclusion!=null?getOverride(r).conclusion:r&&r.conclusion;
-  return normalizeConclusion(v);
+  return conclusionFromSummary(r&&r.summary,r&&r.conclusion);
 }
 
 function propertyOptions(){const s=new Set();allRecords().forEach(r=>{const t=state.data.judge_tables&&state.data.judge_tables[r.category];(t&&t.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))})});Object.values(savedArchives||{}).forEach(a=>(a&&a.judge_table&&a.judge_table.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))}));['有利','不利','中性','待定'].forEach(x=>s.add(x));return [...s]}
