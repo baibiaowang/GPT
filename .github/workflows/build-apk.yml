@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: gpt-build-apk
+  group: gpt-build-apk-v215
   cancel-in-progress: true
 
 
