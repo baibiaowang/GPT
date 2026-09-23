@@ -1,16 +1,3 @@
-export class TableModel {
-  constructor({ tableId, tableName, columns = [], rows = [] }) {
-    this.tableId = tableId;
-    this.tableName = tableName;
-    this.columns = columns;
-    this.rows = rows;
-  }
-
-  getVisibleColumns() {
-    return this.columns.filter(c => c.visible !== false);
-  }
-
-  getRow(rowId) {
-    return this.rows.find(r => r.rowId === rowId) || null;
-  }
-}
+(function(g){
+class TableModel{constructor({tableId='default-table',tableName='表格',columns=[],rows=[],meta={}}={}){this.tableId=tableId;this.tableName=tableName;this.columns=columns;this.rows=rows;this.meta=meta}getColumn(id){return this.columns.find(c=>c.columnId===id)||null}getRow(id){return this.rows.find(r=>r.rowId===id)||null}getVisibleColumns(ids){return(ids&&ids.length?ids:this.columns.filter(c=>c.visible!==false).map(c=>c.columnId)).map(id=>this.getColumn(id)).filter(Boolean)}toJSON(){return{tableId:this.tableId,tableName:this.tableName,columns:this.columns,rows:this.rows,meta:this.meta}}}g.TableModel=TableModel;
+})(window);
