@@ -357,7 +357,7 @@ function rowTableHtml(rows,columns=getVisibleColumns(),table=state.table,mode='n
 function renderHome(){
   const q=clean(state.query).toLowerCase();
   const rows=state.table?state.table.rows.filter(row=>!q||(row.cells||[]).some(cell=>String(cell.value??'').toLowerCase().includes(q))):[];
-  if($('countTitle'))$('countTitle').textContent='共 '+rows.length+' 行';
+  if($('topTitle'))$('topTitle').textContent='共 '+rows.length+' 行';
   if($('dataNote'))$('dataNote').textContent=state.table?(state.kind==='cache'?'缓存数据':'实时数据'):'未加载';
   if($('homeList'))$('homeList').innerHTML=state.table?rowTableHtml(rows):'<div class="empty">请先加载数据</div>';
 }
