@@ -438,7 +438,7 @@ function buildTable(payload,url){
   const defs=schemaColumns(payload);
   const explicitTableId=clean(payload.meta?.table_id||payload.meta?.dataset_id||payload.meta?.table_key);
   const stableName=clean(payload.meta?.table_name||payload.meta?.title)||'table';
-  const columnSignature=defs.map(def=>normalizeIdentityToken(def.key)+'='+normalizeIdentityToken(def.label)).join('|');
+  const columnSignature=defs.map(def=>normalizeIdentityToken(def.key)+'='+normalizeIdentityToken(def.label)).sort().join('|');
   const tableId='table-'+hash((explicitTableId||stableName)+'|'+columnSignature);
   const columns=assignColumnIds(tableId,defs);
   const rows=[];
@@ -1017,7 +1017,7 @@ async function fetchDataSource(url){
       catch(error){g.__tableNativeDataWaiter=null;reject(error)}
     });
     let text='',offset=0;
-    const chunk=196196;
+    const chunk=196608;
     for(;;){
       const part=AndroidNative.readDataSourceChunk(offset,chunk);
       if(!part)break;
