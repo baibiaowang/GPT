@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 
 const P = 'android/app/src/main/AndroidManifest.xml';
-const MARK = 'sj-open-txt';
 const INSTALL_PERMISSION = 'android.permission.REQUEST_INSTALL_PACKAGES';
 const PROVIDER_MARK = 'sj-file-provider';
 
