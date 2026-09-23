@@ -109,6 +109,87 @@ jobs:
           PY
           rm -f live-stocks.txt
 
+      # 有 AES_KEY Secret 时，进一步做真实在线密文的完整解密验收。
+      # 未配置时不阻断构建，只保留上一步的 SJ01 外层格式检查。
+      - name: Full decrypt live SJ01 when AES key is configured
+        shell: bash
+        env:
+          SJ01_AES_KEY: ${{ secrets.AES_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SJ01_AES_KEY:-}" ]; then
+            echo "AES_KEY secret 未配置，跳过完整解密；已完成 SJ01 外层 envelope 检查。"
+            exit 0
+          fi
+          [[ "${SJ01_AES_KEY}" =~ ^[0-9a-fA-F]{64}$ ]] || {
+            echo "::error::AES_KEY 必须是64位十六进制"
+            exit 1
+          }
+          URL='https://stocks-txt-file.app.workbuddy.host/stocks.txt'
+          curl -fsSL --retry 2 --connect-timeout 15 --max-time 60             -H 'Accept-Encoding: identity' "${URL}" -o live-stocks.txt
+          node <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+
+          const keyHex = process.env.SJ01_AES_KEY;
+          const input = fs.readFileSync('live-stocks.txt', 'utf8')
+            .replace(/^\uFEFF/, '')
+            .trim()
+            .replace(/^data:[^,]*,/i, '')
+            .replace(/^['"]|['"]$/g, '')
+            .replace(/\s+/g, '')
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+
+          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input) || input.length % 4 === 1) {
+            throw new Error('live stocks.txt Base64 格式无效');
+          }
+          const normalized = input.padEnd(input.length + ((4 - input.length % 4) % 4), '=');
+          const bytes = Buffer.from(normalized, 'base64');
+
+          if (bytes.length < 33) throw new Error('SJ01 密文过短');
+          if (bytes.subarray(0,4).toString('ascii') !== 'SJ01') throw new Error('SJ01 magic 不匹配');
+          if (bytes[4] !== 3) throw new Error('SJ01 version 不是 0x03');
+
+          const iv = bytes.subarray(5,17);
+          const body = bytes.subarray(17);
+          if (body.length < 17) throw new Error('AES-GCM ciphertext/tag 过短');
+
+          const ciphertext = body.subarray(0, -16);
+          const tag = body.subarray(-16);
+          const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(keyHex, 'hex'), iv);
+          decipher.setAuthTag(tag);
+          const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+
+          let payload;
+          try {
+            payload = JSON.parse(plain.toString('utf8'));
+          } catch (e) {
+            throw new Error('AES 解密成功，但明文不是有效 JSON');
+          }
+
+          if (!payload || typeof payload !== 'object') throw new Error('明文 JSON 不是对象');
+          if (Number(payload.meta?.schema) !== 3) throw new Error('明文 JSON schema 必须为 3');
+          if (!payload.layout || !Array.isArray(payload.layout.list_columns) ||
+              !Array.isArray(payload.layout.detail_columns)) {
+            throw new Error('schema v3 缺少 layout.list_columns / detail_columns');
+          }
+          if (!Array.isArray(payload.records)) throw new Error('schema v3 缺少 records');
+          if (payload.display != null && typeof payload.display !== 'object') throw new Error('display 格式无效');
+          if (payload.judge_tables != null && typeof payload.judge_tables !== 'object') throw new Error('judge_tables 格式无效');
+          if (payload.announcements != null && typeof payload.announcements !== 'object') throw new Error('announcements 格式无效');
+
+          console.log(
+            'live SJ01 full decrypt OK:',
+            'bytes=' + bytes.length,
+            'schema=' + payload.meta.schema,
+            'records=' + payload.records.length,
+            'list_columns=' + payload.layout.list_columns.length,
+            'detail_columns=' + payload.layout.detail_columns.length
+          );
+          NODE
+          rm -f live-stocks.txt
+
       - name: Prepare web assets
         run: node native/inject.mjs
 
