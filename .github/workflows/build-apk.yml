@@ -200,12 +200,12 @@ jobs:
           set -euo pipefail
           BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/ 2>/dev/null | sort -V | tail -1)
           APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
-          CURRENT_DIGEST=$("${BT}apksigner" verify --print-certs "$APK_SRC" | awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}')
+          CURRENT_DIGEST=$("${BT}apksigner" verify --print-certs "$APK_SRC" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
           test -n "$CURRENT_DIGEST"
           curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
             "https://github.com/${GITHUB_REPOSITORY}/releases/download/v2.1.4/app.apk" \
             -o /tmp/previous-app.apk
-          PREVIOUS_DIGEST=$("${BT}apksigner" verify --print-certs /tmp/previous-app.apk | awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}')
+          PREVIOUS_DIGEST=$("${BT}apksigner" verify --print-certs /tmp/previous-app.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
           test -n "$PREVIOUS_DIGEST"
           echo "Current APK cert:  $CURRENT_DIGEST"
           echo "v2.1.4 APK cert:   $PREVIOUS_DIGEST"
@@ -295,7 +295,7 @@ jobs:
           assert check["version"] == version
           assert int(check["versionCode"]) == code
           assert check["apk_url"] == f"https://raw.githubusercontent.com/{repo}/apk/releases/{version}/app.apk"
-          assert f"/releases/{version}/app.apk" in check["apk_urls"]
+          assert any(f"/releases/{version}/app.apk" in u for u in check["apk_urls"])
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
