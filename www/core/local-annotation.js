@@ -49,6 +49,7 @@ class LocalAnnotation{
       rowId:String(row.rowId),
       tableName:String(table.tableName||'表格'),
       snapshot:this.snapshot(table,row),
+      columns:this.snapshot(table,row).columns,
       savedAt:new Date().toISOString()
     };
     this.save(this.favKey,data);
@@ -79,6 +80,7 @@ class LocalAnnotation{
         tableName:String(table.tableName||'表格'),
         comment,
         snapshot:this.snapshot(table,row),
+        columns:this.snapshot(table,row).columns,
         updatedAt:new Date().toISOString()
       };
     }else{
