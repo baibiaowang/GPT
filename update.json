@@ -1,17 +1,17 @@
 {
-  "version": "2.1.10",
-  "versionCode": 2110,
-  "published_at": "2026-09-23T05:12:29Z",
+  "version": "2.1.11",
+  "versionCode": 2111,
+  "published_at": "2026-09-23T05:38:31Z",
   "repo": "baibiaowang/GPT",
-  "apk_size": 3197376,
-  "sha256": "3f67a593414552c66b5a2adc69d684c9d34712891dd53f90418316a8df011c33",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.10/app.apk",
+  "apk_size": 3198660,
+  "sha256": "64c7f858711051e5c9b0f6d7847f580e1b453e7cb5655bc78a168ad35ec65b8d",
+  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.11/app.apk",
   "apk_urls": [
-    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.10/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v2.1.10/app.apk",
-    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.10/app.apk",
-    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.10/app.apk",
-    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.10/app.apk"
+    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.11/app.apk",
+    "https://github.com/baibiaowang/GPT/releases/download/v2.1.11/app.apk",
+    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.11/app.apk",
+    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.11/app.apk",
+    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.11/app.apk"
   ],
-  "notes": "2.1.10：接入实际“表头 + 数据”二维表明文，并统一转换为内部表格模型。"
+  "notes": "2.1.11：接入实际“表头 + 数据”二维表明文，并统一转换为内部表格模型。"
 }
