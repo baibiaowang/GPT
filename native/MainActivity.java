@@ -112,6 +112,18 @@ public class MainActivity extends BridgeActivity {
             @JavascriptInterface public String readUpdateChunk(final int offset, final int maxLength) {
                 return readFileChunk(UPDATE_FILE, offset, maxLength, "更新清单");
             }
+            @JavascriptInterface public void clearLocalFiles() {
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        deletePrivateFile(DATA_SOURCE_FILE);
+                        deletePrivateFile(DATA_SOURCE_PART);
+                        deletePrivateFile(UPDATE_FILE);
+                        deletePrivateFile(UPDATE_PART);
+                        deletePrivateFile("stock-judge-update.apk");
+                        deletePrivateFile("stock-judge-update.apk.part");
+                    }
+                }, "stock-judge-clear-local-files").start();
+            }
             @JavascriptInterface public void downloadApk(final String url, final String filename, final String expectedSha256) {
                 runOnUiThread(new Runnable() {
                     @Override public void run() { startApkDownload(url, filename, expectedSha256); }
@@ -154,6 +166,18 @@ public class MainActivity extends BridgeActivity {
                 });
             }
         }, "AndroidNative");
+    }
+
+    private void deletePrivateFile(final String filename) {
+        try {
+            if (filename == null || filename.trim().isEmpty()) return;
+            File file = new File(getFilesDir(), filename);
+            if (file.exists()) file.delete();
+            if ("stock-judge-update.apk".equals(filename) || "stock-judge-update.apk.part".equals(filename)) {
+                File cacheFile = new File(getCacheDir(), filename);
+                if (cacheFile.exists()) cacheFile.delete();
+            }
+        } catch (Exception ignored) { }
     }
 
     private String readFileChunk(final String filename, final int offset, final int maxLength, final String label) {
