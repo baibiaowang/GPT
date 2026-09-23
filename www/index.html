@@ -92,9 +92,10 @@ button{cursor:pointer}
 .table-scroll{
   width:100%;
   overflow-x:auto;
-  overflow-y:clip;
+  overflow-y:visible;
   position:relative;
   -webkit-overflow-scrolling:touch;
+  isolation:isolate;
 }
 .data-table{
   width:max-content;
@@ -104,10 +105,16 @@ button{cursor:pointer}
   background:var(--card);
   table-layout:auto;
 }
-.data-table thead th{
+.data-table thead{
   position:sticky;
   top:var(--top-height);
   z-index:70;
+}
+.data-table thead tr{
+  background:var(--card);
+}
+.data-table thead th{
+  position:static;
   background:var(--card);
   color:var(--muted);
   text-align:left;
@@ -127,11 +134,7 @@ button{cursor:pointer}
   opacity:.62;
   margin-bottom:2px;
 }
-.data-table tbody{position:relative;z-index:1}
-.data-table tbody tr{position:relative;z-index:1}
 .data-table tbody td{
-  position:relative;
-  z-index:1;
   background:var(--card);
   min-width:104px;
   max-width:340px;
@@ -193,6 +196,28 @@ button{cursor:pointer}
 .column-meta{display:block;margin-top:2px;font-size:10px;color:var(--muted)}
 .filter-settings{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
 .filter-settings label{font-size:11px;color:var(--muted)}
+.filter-display-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:9px;
+}
+.filter-display-grid label{
+  display:block;
+  font-size:11px;
+  color:var(--muted);
+}
+.filter-display-grid select{
+  width:100%;
+  min-height:37px;
+  margin-top:3px;
+  padding:5px 8px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--bg);
+  outline:none;
+  font-size:12px;
+}
 .filter-settings select{
   width:100%;
   min-height:37px;
@@ -459,10 +484,10 @@ button{cursor:pointer}
     <div id="typesList"></div>
   </section>
 
-  <section id="page-conclusions" class="page">
-    <div class="section-title">结论</div>
-    <div class="status-stats" id="conclusionStats"></div>
-    <div id="conclusionList"></div>
+  <section id="page-filters" class="page">
+    <div class="section-title">筛选</div>
+    <div class="tabbar" id="filterTabs"></div>
+    <div id="filterList"></div>
   </section>
 
   <section id="page-comments" class="page">
@@ -495,7 +520,7 @@ button{cursor:pointer}
 <nav class="bottom" id="bottomNav">
   <button data-page="home" class="on"><span class="ic">⌂</span>首页</button>
   <button data-page="types"><span class="ic">☷</span>类型</button>
-  <button data-page="conclusions"><span class="ic">◉</span>结论</button>
+  <button data-page="filters"><span class="ic">◉</span>筛选</button>
   <button data-page="comments"><span class="ic">✎</span>点评</button>
   <button data-page="favorites"><span class="ic">★</span>收藏</button>
   <button data-page="settings"><span class="ic">⚙</span>设置</button>
