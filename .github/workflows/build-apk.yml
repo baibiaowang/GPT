@@ -211,8 +211,8 @@ jobs:
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" /tmp/gpt-apk-mirror
           cd /tmp/gpt-apk-mirror
           if git ls-remote --exit-code origin refs/heads/apk >/dev/null 2>&1; then
-            git fetch origin apk
-            git checkout -B apk origin/apk
+            git fetch origin refs/heads/apk:refs/remotes/origin/apk
+            git checkout -B apk refs/remotes/origin/apk
           else
             git checkout --orphan apk
             git rm -rf . >/dev/null 2>&1 || true
