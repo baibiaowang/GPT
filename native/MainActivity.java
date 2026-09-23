@@ -245,10 +245,10 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        String safeName = (filename == null || filename.trim().isEmpty())
+        String safeNameValue = (filename == null || filename.trim().isEmpty())
             ? "stock-judge-update.apk" : filename.trim();
-        if (!safeName.toLowerCase().endsWith(".apk")) safeName += ".apk";
-        safeName = safeName.replaceAll("[\\\\/:*?\"<>|]+", "_");
+        if (!safeNameValue.toLowerCase().endsWith(".apk")) safeNameValue += ".apk";
+        final String safeName = safeNameValue.replaceAll("[\\\\/:*?\"<>|]+", "_");
 
         final File partFile = new File(getCacheDir(), "stock-judge-update.apk.part");
         final File apkFile = new File(getCacheDir(), "stock-judge-update.apk");
