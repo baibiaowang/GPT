@@ -188,7 +188,11 @@ class LocalAnnotation{
           row=rowsById.get(String(entry.rowId))||null;
         }
         if(!row){
-          try{row=rowsByIdentity.get(String(identityFn(this.snapshotTable(entry),entry.snapshot||entry.row)))||null}catch(e){}
+          try{
+            const savedRow=entry.snapshot||entry.row;
+            const identityRow=Object.assign({},savedRow,{rowId:'',id:''});
+            row=rowsByIdentity.get(String(identityFn(this.snapshotTable(entry),identityRow)))||null;
+          }catch(e){}
         }
 
         if(row){
