@@ -211,13 +211,13 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script>
 const DEF_KEY='';
 const DEF_URLS='https://stocks-txt-file.app.workbuddy.host/stocks.txt';
-const APP_VERSION='1.7.12';
-const APP_VERSION_CODE=1712;
+const APP_VERSION='2.0.0';
+const APP_VERSION_CODE=2000;
 const UPDATE_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
-const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v1.7.12/app.apk';
+const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v2.0.0/app.apk';
 const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2',saved:'sj.savedStocks.v1',archive:'sj.archivedRecords.v1'};
 const IDB_ARCHIVE_KEY='savedArchives.v1';
 const STANDARD_COLUMNS=Object.freeze([
@@ -745,8 +745,110 @@ $('aCopy').onclick=()=>{if(!state.cur)return;const t=state.cur.code||'';if(navig
 $('mask').onclick=e=>{if(e.target===$('mask'))closeSheet()};
 $('btnSource').onclick=sourceSheet;$('btnKey').onclick=keySheet;$('btnClearData').onclick=clearAllData;$('btnReload').onclick=()=>boot(false,true);$('btnExport').onclick=exportBackup;$('btnRestore').onclick=restoreBackup;$('btnUpdate').onclick=checkUpdate;
 window.onpopstate=()=>{if($('mask').classList.contains('show')){closeSheet();return}if($('detail').classList.contains('show')){state.detailPushed=false;closeDetail(true)}};
+
+/* ===== 2.0 generic table converter overrides ===== */
+function v2Make(headers,data,meta,sourceKey){
+  const hs=headers.map((h,i)=>clean(h)||('列'+String(i+1).padStart(3,'0')));
+  const cols=hs.map((label,i)=>({columnId:String(i+1).padStart(3,'0'),label:label,type:'text',visible:i<Math.min(3,hs.length),valueCatalog:[]}));
+  const seen={};
+  const rows=data.map(function(a){
+    const vals=hs.map(function(_,j){return a[j]==null?'':String(a[j])});
+    const base='R-'+hash(vals.join('\u241f')); seen[base]=(seen[base]||0)+1;
+    return{rowId:seen[base]===1?base:base+'-'+seen[base],cells:cols.map(function(c,j){return new CellModel({columnId:c.columnId,value:vals[j]})})};
+  });
+  const table=new TableModel({tableId:(meta&&((meta.table_id)||(meta.tableId)))||('table-'+hash(String(sourceKey||'')+'|'+hs.join('|'))),tableName:(meta&&((meta.table_name)||(meta.tableName)))||'表格',columns:cols,rows:rows,meta:Object.assign({},meta||{}, {sourceKey:sourceKey||''})});
+  new ColumnManager(table).refreshCatalog(); return table;
+}
+function v2ParseText(txt){
+  const lines=String(txt||'').replace(/^\uFEFF/,'').replace(/\r/g,'').split('\n').filter(function(x){return x.trim()});
+  if(!lines.length)throw new Error('表格为空');
+  function split(x){let s=String(x).trim();if(s.charAt(0)==='|')s=s.slice(1);if(s.charAt(s.length-1)==='|')s=s.slice(0,-1);return s.split('|').map(clean)}
+  for(let i=0;i<Math.min(lines.length-1,30);i++){const h=split(lines[i]),sep=split(lines[i+1]);if(h.length>=2&&sep.length===h.length&&sep.every(function(x){return /^:?-{2,}:?$/.test(x)}))return v2Make(h,lines.slice(i+2).map(split),{source_format:'markdown'},state.source)}
+  const tab=lines.map(function(x){return x.split('\t').map(clean)});if(tab[0].length>1)return v2Make(tab[0],tab.slice(1),{source_format:'tsv'},state.source);
+  const csv=lines.map(function(x){return x.split(',').map(function(y){return clean(y.replace(/^"|"$/g,''))})});if(csv[0].length>1)return v2Make(csv[0],csv.slice(1),{source_format:'csv'},state.source);
+  throw new Error('无法识别表格，请提供 Markdown 表格、TSV、CSV 或 JSON');
+}
+function v2Json(obj){
+  if(obj&&Array.isArray(obj.tables)&&obj.tables.length)return v2Json(obj.tables[0]);
+  if(obj&&Array.isArray(obj.columns)&&Array.isArray(obj.rows)){
+    const hs=obj.columns.map(function(c,i){return typeof c==='string'?c:String(c.label||c.title||c.key||('列'+(i+1)))});
+    const rows=obj.rows.map(function(r){return Array.isArray(r)?r:obj.columns.map(function(c){return r[c.key||c.label||c.title]})});
+    return v2Make(hs,rows,obj.meta,state.source);
+  }
+  if(obj&&Array.isArray(obj.records)){
+    let defs=null,layout=obj.layout||{};
+    const raw=Array.isArray(layout.detail_columns)?layout.detail_columns:(Array.isArray(layout.list_columns)?layout.list_columns:null);
+    if(raw)defs=raw.map(function(x){return{key:String(x.key||x.label||x.title||''),label:String(x.label||x.title||x.key||'')}}).filter(function(x){return x.key});
+    if(!defs){const keys=[];obj.records.forEach(function(r){Object.keys(r||{}).forEach(function(k){if(['rowId','id','columns','cells'].includes(k)||keys.includes(k)||!obj.records.some(function(z){return v2Scalar(z&&z[k])}))return;keys.push(k)})});defs=keys.map(function(k){return{key:k,label:k}})}
+    if(!defs.length)throw new Error('JSON 没有可识别表头');
+    return v2Make(defs.map(function(x){return x.label}),obj.records.map(function(r){return defs.map(function(d){return v2Scalar(r[d.key])?r[d.key]:''})}),obj.meta,state.source);
+  }
+  throw new Error('JSON 中没有通用表格数据');
+}
+function v2Payload(raw){
+  if(typeof raw==='string'){try{return v2Json(JSON.parse(raw))}catch(e){return v2ParseText(raw)}}return v2Json(raw);
+}
+function v2Cell(r,id){return r&&r.cells.find(function(x){return x.columnId===id})||{value:''}}
+function v2Col(id){return state.table&&state.table.getColumn(id)}
+function v2Visible(){
+  if(!state.table)return[];let map={};try{map=JSON.parse(localStorage.getItem('table.layout.v2')||'{}')}catch(e){}
+  let ids=Array.isArray(map[state.table.tableId])?map[state.table.tableId]:[];
+  if(!ids.length)ids=state.table.columns.slice(0,Math.min(3,state.table.columns.length)).map(function(c){return c.columnId});
+  return ids.map(v2Col).filter(Boolean);
+}
+function v2Table(rows,cols){
+  if(!rows.length)return'<div class="empty">没有匹配数据</div>';
+  return'<div class="card table-wrap"><table class="stock-table data-table"><thead><tr>'+cols.map(function(c){return'<th><span class="cid">'+esc(c.columnId)+'</span>'+esc(c.label)+'</th>'}).join('')+'</tr></thead><tbody>'+
+    rows.map(function(r){return'<tr class="v2-row" data-row-id="'+esc(r.rowId)+'">'+cols.map(function(c){const v=String(v2Cell(r,c.columnId).value||'');return'<td title="'+esc(v)+'">'+esc(v||'—')+(ann.isFavorite(state.table.tableId,r.rowId)?'<span class="fav">★</span>':'')+(ann.comment(state.table.tableId,r.rowId)?'<span class="commented">✎</span>':'')+'</td>'}).join('')+'</tr>'}).join('')+
+    '</tbody></table></div>';
+}
+function v2Defaults(){const cs=state.table?state.table.columns:[];if(!cs.length)return;const tc=cs.find(function(c){return/(类型|分类|类别|地区|部门|组别)/.test(c.label)})||cs[1]||cs[0];const cc=cs.find(function(c){return/(结论|结果|状态|等级)/.test(c.label)})||cs[cs.length-1]||cs[0];if(!v2Col(state.typeColumn))state.typeColumn=tc?.columnId||'';if(!v2Col(state.conclusionColumn))state.conclusionColumn=cc?.columnId||''}
+function v2Filter(kind){
+  if(!state.table)return;v2Defaults();const cid=kind==='type'?state.typeColumn:state.conclusionColumn;const tabEl=$(kind==='type'?'typeTabs':'conclusionTabs'),listEl=$(kind==='type'?'typesList':'conclusionList');
+  const old=$(kind==='type'?'v2TypeSelect':'v2ConclusionSelect');if(!old){const box=document.createElement('div');box.className='card';box.innerHTML='<div class="card-hd"><span>选择表头</span><span class="sub">'+(kind==='type'?'类型':'结论')+'</span></div><div style="padding:10px 12px"><select id="'+(kind==='type'?'v2TypeSelect':'v2ConclusionSelect')+'" style="width:100%;min-height:40px;border:0;border-radius:10px;background:rgba(118,118,128,.12);padding:0 10px"></select></div>';tabEl.parentNode.insertBefore(box,tabEl)}
+  const sel=$(kind==='type'?'v2TypeSelect':'v2ConclusionSelect');sel.innerHTML=v2Columns().map(function(c){return'<option value="'+esc(c.columnId)+'" '+(c.columnId===cid?'selected':'')+'>'+esc(c.columnId)+' '+esc(c.label)+'</option>'}).join('');
+  sel.onchange=function(){if(kind==='type'){state.typeColumn=this.value;state.typeValue=''}else{state.conclusionColumn=this.value;state.conclusionValue=''};v2Filter(kind)};
+  const vals=(v2Col(cid)?.valueCatalog||[]);let cur=kind==='type'?state.typeValue:state.conclusionValue;if(!vals.some(function(v){return v.valueId===cur}))cur=vals[0]?.valueId||'';if(kind==='type')state.typeValue=cur;else state.conclusionValue=cur;
+  tabEl.innerHTML=vals.map(function(v){return'<button class="tab '+(v.valueId===cur?'on':'')+'" data-v2-filter="'+kind+'" data-value="'+esc(v.valueId)+'">'+esc(v.valueId)+' '+esc(v.label)+'<b>'+v.count+'</b></button>'}).join('');
+  const chosen=vals.find(function(v){return v.valueId===cur});listEl.innerHTML=chosen?v2Table(FilterEngine.byValue(state.table,cid,chosen.label),v2Visible()):'<div class="empty">该表头暂无非空取值</div>';
+}
+function renderTypes(){v2Filter('type')}
+function renderConclusions(){v2Filter('conclusion')}
+function renderHome(){const q=String(state.query||'').toLowerCase();const rs=state.table?state.table.rows.filter(function(r){return!q||r.cells.some(function(c){return String(c.value).toLowerCase().includes(q)})}):[];if($('countTitle'))$('countTitle').textContent='共 '+rs.length+' 行';if($('topTitle'))$('topTitle').textContent=state.table?state.table.tableName:'表格整理器';if($('dataNote'))$('dataNote').textContent=state.table?(state.kind==='local'?'本地表格':'实时表格'):'未加载';if($('homeList'))$('homeList').innerHTML=state.table?v2Table(rs,v2Visible()):'<div class="empty">请先加载表格数据</div>'}
+function renderComments(){const xs=ann.comments(state.table?state.table.tableId:'');$('commentList').innerHTML=xs.length?v2Table(xs.map(function(x){return x.snapshot}).filter(Boolean),v2Visible()):'<div class="empty">暂无点评</div>'}
+function renderFavorites(){const xs=ann.favorites(state.table?state.table.tableId:'');$('favList').innerHTML=xs.length?v2Table(xs.map(function(x){return x.snapshot}).filter(Boolean),v2Visible()):'<div class="empty">暂无收藏</div>'}
+function renderV2Settings(){
+  const sec=$('page-settings');if(!sec)return;
+  sec.innerHTML='<div class="section-title" style="margin-top:18px">设置</div><div class="card"><div class="setting-item">'+
+  '<div class="setting-title">首页展示列</div><div class="setting-desc">表头编号固定为 columnId；这里决定首页展示哪些编号。</div><div class="columns" id="v2Cols"></div><div class="setting-actions"><button class="sbtn primary" id="v2SaveCols">保存</button></div></div>'+
+  '<div class="setting-item"><div class="setting-title">筛选表头</div><div class="setting-desc">类型和结论都只是“某一个表头的取值筛选”，不固定业务字段。</div><div class="setting-actions"><label style="flex:1;font-size:12px;color:var(--muted)">类型<select id="v2TS" style="width:100%;margin-top:4px"></select></label><label style="flex:1;font-size:12px;color:var(--muted)">结论<select id="v2CS" style="width:100%;margin-top:4px"></select></label></div></div>'+
+  '<div class="setting-item"><div class="setting-title">数据与本地信息</div><div class="setting-actions"><button class="sbtn primary" id="v2Reload">重新加载</button><button class="sbtn" id="v2Source">数据源</button><button class="sbtn" id="v2Key">激活码</button><button class="sbtn" id="v2Export">导出备份</button><button class="sbtn" id="v2Restore">恢复备份</button><button class="sbtn" id="v2Clear">清空本地</button></div></div>'+
+  '<div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="v2UpdateDesc">当前版本 2.0.0 · 通用表格整理转换器</div><div class="setting-actions"><button class="sbtn primary" id="v2Update">检查更新</button></div></div></div>';
+  if(!state.table){$('v2Cols').innerHTML='<div class="empty">未加载表格</div>';return}
+  const visible=new Set(v2Visible().map(function(c){return c.columnId}));
+  $('v2Cols').innerHTML=state.table.columns.map(function(c){return'<label class="column-item"><input type="checkbox" data-v2-col="'+esc(c.columnId)+'" '+(visible.has(c.columnId)?'checked':'')+'><span class="column-main"><span class="column-name">'+esc(c.label)+'</span><br><span class="column-id">columnId '+esc(c.columnId)+' · '+c.valueCatalog.length+' 种取值</span></span></label>'}).join('');
+  v2Defaults();$('v2TS').innerHTML=v2Columns().map(function(c){return'<option value="'+esc(c.columnId)+'" '+(c.columnId===state.typeColumn?'selected':'')+'>'+esc(c.columnId)+' '+esc(c.label)+'</option>'}).join('');$('v2CS').innerHTML=v2Columns().map(function(c){return'<option value="'+esc(c.columnId)+'" '+(c.columnId===state.conclusionColumn?'selected':'')+'>'+esc(c.columnId)+' '+esc(c.label)+'</option>'}).join('');
+  $('v2SaveCols').onclick=function(){const ids=[...document.querySelectorAll('[data-v2-col]:checked')].map(function(x){return x.dataset.v2Col});if(!ids.length)return toast('至少选择一个表头');v2SaveVisible(ids);renderHome();toast('首页展示列已保存')};
+  $('v2TS').onchange=function(){state.typeColumn=this.value;state.typeValue='';v2Filter('type')};$('v2CS').onchange=function(){state.conclusionColumn=this.value;state.conclusionValue='';v2Filter('conclusion')};
+  $('v2Reload').onclick=function(){loadData(false)};$('v2Source').onclick=sourceSheet;$('v2Key').onclick=keySheet;$('v2Export').onclick=exportV2Backup;$('v2Restore').onclick=restoreV2Backup;$('v2Clear').onclick=clearV2;$('v2Update').onclick=checkUpdateV2;
+}
+function renderAllPages(){renderHome();renderTypes();renderConclusions();renderComments();renderFavorites();renderV2Settings();updateStockTableSticky()}
+function renderDetail(r){
+  if(!r||!state.table)return;state.cur=r;$('dTitle').textContent=state.table.tableName;
+  $('dHero').innerHTML='<div class="hero"><h1>'+esc(v2Cell(r,state.table.columns[0]?.columnId).value||'当前行')+'</h1><div class="meta"><span class="tag">rowId '+esc(r.rowId)+'</span><span class="tag">'+esc(state.table.tableName)+'</span></div><div class="actionbar" style="display:flex;gap:8px;padding:9px 0"><button id="v2Fav" class="'+(ann.isFavorite(state.table.tableId,r.rowId)?'on':'')+'">'+(ann.isFavorite(state.table.tableId,r.rowId)?'已收藏':'收藏')+'</button><button id="v2CmtGo">点评</button><button id="v2Copy" class="primary">复制整行</button></div></div>';
+  $('dBody').innerHTML='<div class="card"><div class="card-hd"><span>完整行数据</span><span class="sub">'+state.table.columns.length+' 个表头</span></div><div class="standard-table">'+state.table.columns.map(function(c){return'<div class="standard-cell"><div class="standard-label"><span class="cid">'+esc(c.columnId)+'</span>'+esc(c.label)+'</div><div class="standard-value">'+formatValue(v2Cell(r,c.columnId).value)+'</div></div>'}).join('')+'</div></div><div class="card"><div style="padding:14px 16px;font-weight:800">我的点评</div><div style="padding:0 16px 16px"><textarea id="v2Cmt" style="width:100%;min-height:100px;border:0;border-radius:12px;background:rgba(118,118,128,.1);padding:10px;outline:none">'+esc((ann.comment(state.table.tableId,r.rowId)||{}).comment||'')+'</textarea><button id="v2SaveCmt" class="sbtn primary" style="width:100%;margin-top:8px">保存点评</button></div></div>';
+  $('detail').classList.add('show');$('actions').classList.add('show');if(!state.detailPushed){history.pushState({detail:r.rowId},'','?row='+encodeURIComponent(r.rowId));state.detailPushed=true}
+  $('v2Fav').onclick=function(){ann.favorite(state.table,r);renderDetail(r);renderAllPages();toast(ann.isFavorite(state.table.tableId,r.rowId)?'已收藏':'已取消收藏')};$('v2CmtGo').onclick=function(){$('v2Cmt').focus();$('v2Cmt').scrollIntoView({behavior:'smooth',block:'center'})};$('v2Copy').onclick=function(){const t=state.table.columns.map(function(c){return c.columnId+' '+c.label+': '+v2Cell(r,c.columnId).value}).join('\n');navigator.clipboard?.writeText(t).then(function(){toast('整行已复制')}).catch(function(){toast('复制失败')})};$('v2SaveCmt').onclick=function(){ann.setComment(state.table,r,$('v2Cmt').value);renderAllPages();renderDetail(r);toast('点评已保存')};
+}
+function exportV2Backup(){const t=JSON.stringify({kind:'generic-table-converter',version:2,exported_at:new Date().toISOString(),table:state.table?.toJSON()||null,favorites:ann.favorites(state.table?.tableId||''),comments:ann.comments(state.table?.tableId||''),layout:(function(){try{return JSON.parse(localStorage.getItem('table.layout.v2')||'{}')}catch(e){return{}}})()},null,2),name='table-converter-backup-'+new Date().toISOString().slice(0,10)+'.json';if(window.AndroidNative?.saveTextFile){AndroidNative.saveTextFile(name,t);toast('已导出备份');return}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'application/json'}));a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href)},500);toast('已导出备份')}
+function applyV2Backup(p){if(!p?.table)throw new Error('备份中没有表格');state.table=new TableModel(p.table);new ColumnManager(state.table).refreshCatalog();state.kind='local';localStorage.setItem('table.layout.v2',JSON.stringify(p.layout||{}));localStorage.setItem(ann.favKey,JSON.stringify(Object.fromEntries((p.favorites||[]).map(function(x){return[x.tableId+'::'+x.rowId,x]}))));localStorage.setItem(ann.commentKey,JSON.stringify(Object.fromEntries((p.comments||[]).map(function(x){return[x.tableId+'::'+x.rowId,x]}))));v2Defaults();renderAllPages();pageSwitch('home');toast('备份已恢复')}
+function restoreV2Backup(){if(window.AndroidNative?.openBackupPicker){AndroidNative.openBackupPicker();return}const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=function(){const f=i.files?.[0];if(!f)return;const r=new FileReader();r.onload=function(){try{applyV2Backup(JSON.parse(r.result))}catch(e){toast('恢复失败：'+e.message,2600)}};r.readAsText(f)};i.click()}
+window.restoreBackupText=function(t){try{applyV2Backup(JSON.parse(t))}catch(e){toast('恢复失败：'+e.message,2600)}};
+function clearV2(){if(!confirm('确定清空全部本地数据吗？数据源和激活码保留。'))return;localStorage.removeItem('table.layout.v2');localStorage.removeItem(ann.favKey);localStorage.removeItem(ann.commentKey);localStorage.removeItem('table.migrated.2');state.table=null;renderAllPages();pageSwitch('settings');toast('本地数据已清空')}
+async function checkUpdateV2(){for(const u of UPDATE_URLS){try{const p=await manifest(u);if(Number(p.versionCode||0)>APP_VERSION_CODE){if(confirm('发现新版本 '+p.version+'，现在下载并安装？')){if(window.AndroidNative?.downloadApk)AndroidNative.downloadApk(p.apk_url||RELEASE_APK,'table-converter-'+p.version+'.apk');else window.open(p.apk_url||RELEASE_APK,'_blank')}return}$('v2UpdateDesc')&&($('v2UpdateDesc').textContent='当前已是最新版本 2.0.0（版本号 2000）');return}catch(e){}}$('v2UpdateDesc')&&($('v2UpdateDesc').textContent='检查更新失败')}
+document.addEventListener('click',function(e){const tr=e.target.closest('.v2-row');if(tr)openRow(tr.dataset.rowId);const t=e.target.closest('[data-v2-filter]');if(t){if(t.dataset.v2Filter==='type')state.typeValue=t.dataset.value;else state.conclusionValue=t.dataset.value;v2Filter(t.dataset.v2Filter)}});
 history.replaceState({root:true},'','');
-window.addEventListener('resize',updateStockTableSticky);loadArchives().then(()=>{loadLocal();boot(false)});
+window.addEventListener('resize',updateStockTableSticky);loadData(true);
 </script>
 </body>
 </html>
