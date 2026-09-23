@@ -210,7 +210,13 @@ jobs:
           echo "Current APK cert:  $CURRENT_DIGEST"
           echo "v2.1.5 APK cert:   $PREVIOUS_DIGEST"
           test "$CURRENT_DIGEST" = "$PREVIOUS_DIGEST"
-          echo "Release signing continuity verified."
+
+          curl -fsSL --retry 3 --connect-timeout 15 --max-time 60             "https://github.com/${GITHUB_REPOSITORY}/releases/download/v1.6.4/app.apk"             -o /tmp/previous-164.apk
+          PREVIOUS_164_DIGEST=$("${BT}apksigner" verify --print-certs /tmp/previous-164.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+          test -n "$PREVIOUS_164_DIGEST"
+          echo "v1.6.4 APK cert:   $PREVIOUS_164_DIGEST"
+          test "$CURRENT_DIGEST" = "$PREVIOUS_164_DIGEST"
+          echo "Release signing continuity verified: v1.6.4 -> v2.1.5 -> v2.1.6."
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
