@@ -2,8 +2,8 @@
 'use strict';
 
 const APP={
-  version:'2.1.9',
-  versionCode:2109,
+  version:'2.1.10',
+  versionCode:2110,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -117,6 +117,54 @@ function getSourceUrls(){
 
 function normalizePayload(payload){
   if(!payload||typeof payload!=='object')throw new Error('明文 JSON 不是对象');
+
+  /*
+   * 当前生产端实际明文格式：
+   * {"表头":[...],"数据":[[...],[...]]}
+   * 先按真实二维表结构归一化，再进入统一 TableModel。
+   */
+  if(Array.isArray(payload['表头'])&&Array.isArray(payload['数据'])){
+    const headers=payload['表头'].map(value=>String(value??'').trim());
+    if(!headers.length)throw new Error('合并表格式缺少表头');
+    const emptyIndex=headers.findIndex(value=>!value);
+    if(emptyIndex>=0)throw new Error('合并表格式存在空表头：第 '+(emptyIndex+1)+' 列');
+
+    const keys=headers.map((label,index)=>'C'+String(index+1).padStart(3,'0'));
+    const listColumns=headers.map((label,index)=>({
+      key:keys[index],
+      label,
+      type:label==='公告链接'?'url':'text'
+    }));
+
+    const records=payload['数据'].map((row,rowIndex)=>{
+      if(!Array.isArray(row))throw new Error('合并表第 '+(rowIndex+1)+' 行不是数组');
+      if(row.length!==headers.length){
+        throw new Error('合并表第 '+(rowIndex+1)+' 行有 '+row.length+' 列，表头为 '+headers.length+' 列');
+      }
+      const record={};
+      row.forEach((value,index)=>{record[keys[index]]=value==null?'':value});
+      const identity=row.map(value=>String(value??'')).join('\u241f');
+      record.rowId='R-'+hash(identity);
+      return record;
+    });
+
+    if(!records.length)throw new Error('合并表格式没有数据行');
+
+    return {
+      meta:{
+        schema:3,
+        source_schema:'merged-table-v1',
+        generated_at:String(payload.generated_at||payload.生成时间||'')
+      },
+      layout:{
+        list_columns:listColumns,
+        detail_columns:listColumns.map(column=>Object.assign({},column))
+      },
+      display:{},
+      records
+    };
+  }
+
   if(!Array.isArray(payload.records))throw new Error('明文 JSON 缺少 records[]');
 
   const meta=payload.meta&&typeof payload.meta==='object'?payload.meta:{};
@@ -125,11 +173,8 @@ function normalizePayload(payload){
   const hasLayout=!!(payload.layout&&typeof payload.layout==='object'&&
     Array.isArray(payload.layout.list_columns)&&Array.isArray(payload.layout.detail_columns));
 
-  // 标准 schema v3：原样通过。
   if(numericSchema===3&&hasLayout)return payload;
 
-  // 部分生产端会把 schema 写成 schema_version，或暂时缺少 meta.schema。
-  // 只要核心结构已经满足 layout + records，就统一归一为内部 schema v3。
   if(hasLayout){
     return Object.assign({},payload,{
       meta:Object.assign({},meta,{
@@ -139,23 +184,15 @@ function normalizePayload(payload){
     });
   }
 
-  // 兼容旧的“records 直出”明文：根据真实字段生成最小 layout。
   const first=payload.records.find(row=>row&&typeof row==='object');
   const direct=first&&typeof first==='object'?first:{};
   const nested=direct.columns&&typeof direct.columns==='object'?direct.columns:{};
   const keys=[...new Set([...Object.keys(direct),...Object.keys(nested)])]
     .filter(key=>!['rowId','id','cells','columns'].includes(key));
   if(keys.length){
-    const layoutColumns=keys.map(key=>({
-      key,
-      label:key,
-      type:'text'
-    }));
+    const layoutColumns=keys.map(key=>({key,label:key,type:'text'}));
     return Object.assign({},payload,{
-      meta:Object.assign({},meta,{
-        schema:3,
-        source_schema:rawSchema==null?'missing':rawSchema
-      }),
+      meta:Object.assign({},meta,{schema:3,source_schema:rawSchema==null?'missing':rawSchema}),
       layout:{
         list_columns:layoutColumns,
         detail_columns:layoutColumns.map(column=>Object.assign({},column))
@@ -163,17 +200,13 @@ function normalizePayload(payload){
     });
   }
 
-  // 再兼容 cells[] 形式的通用行数据。
   const cells=Array.isArray(direct.cells)?direct.cells:[];
   if(cells.length){
-    const cellKeys=cells.map(cell=>clean(cell?.columnId)).filter(Boolean);
+    const cellKeys=cells.map(cell=>clean(cell?.columnId)||clean(cell?.key)||clean(cell?.label)).filter(Boolean);
     const unique=[...new Set(cellKeys)];
     const layoutColumns=unique.map(key=>({key,label:key,type:'text'}));
     return Object.assign({},payload,{
-      meta:Object.assign({},meta,{
-        schema:3,
-        source_schema:rawSchema==null?'missing':rawSchema
-      }),
+      meta:Object.assign({},meta,{schema:3,source_schema:rawSchema==null?'missing':rawSchema}),
       layout:{
         list_columns:layoutColumns,
         detail_columns:layoutColumns.map(column=>Object.assign({},column))
