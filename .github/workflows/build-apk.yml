@@ -40,8 +40,8 @@ jobs:
       - name: Set release version
         run: |
           set -euo pipefail
-          CODE=2104
-          NAME="2.1.4"
+          CODE=2105
+          NAME="2.1.5"
           echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "version -> code=$CODE name=$NAME"
@@ -197,7 +197,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: table-converter-gpt-v2.1.4-apk
+          name: stock-judge-gpt-v2.1.5-apk
           path: dist/app.apk
           if-no-files-found: error
           retention-days: 30
@@ -258,7 +258,7 @@ jobs:
               "versionCode": code,
               "published_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               "repo": repo,
-              "apk_url": f"https://github.com/{repo}/releases/download/v{version}/app.apk",
+              "apk_url": f"https://raw.githubusercontent.com/{repo}@apk/releases/{version}/app.apk",
               "apk_urls": [
                   f"https://github.com/{repo}/releases/download/v{version}/app.apk",
                   f"https://cdn.jsdelivr.net/gh/{repo}@apk/releases/{version}/app.apk",
@@ -266,7 +266,7 @@ jobs:
                   f"https://gcore.jsdelivr.net/gh/{repo}@apk/releases/{version}/app.apk",
                   f"https://github.com/{repo}/releases/download/v{version}/app.apk",
               ],
-              "notes": "2.1.4：修复旧版本更新器首跳 APK 地址 404；APK 主下载改用独立镜像分支，并增加多源回退；发布流程先校验镜像成功，再发布更新清单。",
+              "notes": "2.1.5：APK 更新改为应用内 HTTP 下载，手动处理 HTTPS 重定向、临时文件与安装。",
           }
 
           with open("update.json", "w", encoding="utf-8") as f:
