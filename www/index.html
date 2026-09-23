@@ -491,7 +491,14 @@ function renderSettings(){
       '<div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="v2UpdateDesc">当前版本 '+APP_VERSION+'（'+APP_VERSION_CODE+'）</div><div class="setting-actions"><button class="sbtn primary" id="v2Update">检查更新</button></div></div>'+
       '<div class="setting-item"><div class="setting-title">数据状态</div><div class="setting-desc" id="v2Status">'+(state.table?(state.table.rows.length+' 行 · '+cols().length+' 个表头'):'尚未加载')+'</div></div>'+
     '</div>';
-  if(!state.table){$('v2Cols').innerHTML='<div class="empty" style="padding:18px 8px">尚未加载数据</div>';return}
+  if(!state.table){
+    $('v2Cols').innerHTML='<div class="empty" style="padding:18px 8px">尚未加载数据</div>';
+    $('v2TS').innerHTML='<option>加载数据后设置</option>';$('v2CS').innerHTML='<option>加载数据后设置</option>';
+    $('v2Reload').onclick=()=>loadData(false);
+    $('v2Source').onclick=sourceSheet;$('v2Key').onclick=keySheet;
+    $('v2Export').onclick=exportBackup;$('v2Restore').onclick=restoreBackup;$('v2Clear').onclick=clearData;$('v2Update').onclick=checkUpdate;
+    return;
+  }
   const vis=new Set(visibleCols().map(c=>c.columnId));
   $('v2Cols').innerHTML=cols().map(c=>'<label class="column-item"><input type="checkbox" data-v2-col="'+esc(c.columnId)+'" '+(vis.has(c.columnId)?'checked':'')+'><span class="column-main"><span class="column-name">'+esc(c.columnId)+' '+esc(c.label)+'</span><br><span class="column-id">'+c.valueCatalog.length+' 种实际取值</span></span></label>').join('');
   defaultFilterColumns();loadPrefs();
