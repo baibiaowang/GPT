@@ -150,13 +150,6 @@ function idbDelete(key){
   }));
 }
 
-function loadDisplayPrefs(){
-  let prefs={};
-  try{prefs=JSON.parse(localStorage.getItem(LS.layout)||'{}')||{}}catch(e){}
-  const ids=state.table?prefs[state.table.tableId]:null;
-  return Array.isArray(ids)?ids.filter(Boolean):[];
-}
-
 function loadFilterPrefs(){
   let prefs={};
   try{prefs=JSON.parse(localStorage.getItem(LS.filters)||'{}')||{}}catch(e){}
@@ -266,8 +259,9 @@ function makeRowId(record,values){
 function buildTable(payload,url){
   if(Number(payload?.meta?.schema)!==3)throw new Error('schema v3 校验失败');
   const defs=schemaColumns(payload);
-  const source=clean(payload.meta?.source)||clean(url)||defs.map(x=>x.key).join('|');
-  const tableId='table-'+hash(source+'|'+defs.map(x=>x.key).join('|'));
+  const source=clean(payload.meta?.source)||clean(url)||'table';
+  const stableName=clean(payload.meta?.table_id||payload.meta?.table_name||payload.meta?.title)||'table';
+  const tableId='table-'+hash(source+'|'+stableName);
   const columns=assignColumnIds(tableId,defs);
   const rows=[];
 
