@@ -238,7 +238,7 @@ public class MainActivity extends BridgeActivity {
             @Override public void run() {
                 WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
                 if (wv == null) return;
-                String safeFn = (callbackFn == null || !callbackFn.matches("[A-Za-z0-9_.$]+")) ? "window.__sjNativeTextResult" : callbackFn;
+                String safeFn = (callbackFn == null || !callbackFn.matches("[A-Za-z0-9_.$]+")) ? "window.__tableNativeTextResult" : callbackFn;
                 String js = safeFn + "&&" + safeFn + "(" + (ok ? "true" : "false") + "," + jsStr(message) + ");";
                 try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
             }
