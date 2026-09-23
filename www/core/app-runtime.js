@@ -625,6 +625,19 @@ function selectDefaultFilterColumns(){
 
 function rowTableHtml(rows,columns=getVisibleColumns(),table=state.table,mode='normal'){
   if(!rows.length)return'<div class="empty">暂无数据</div>';
+
+  const widths=columns.map(column=>{
+    const headerChars=Array.from(String(column?.label||'')).length;
+    let maxChars=headerChars;
+    for(const row of rows.slice(0,120)){
+      const raw=getCell(row,column).value;
+      const shown=displayValue(raw,'list')||'';
+      maxChars=Math.max(maxChars,Array.from(String(shown)).length);
+    }
+    return Math.max(96,Math.min(260,Math.round(24+maxChars*7.1)));
+  });
+  const colgroup='<colgroup>'+widths.map(width=>'<col style="width:'+width+'px">').join('')+'</colgroup>';
+
   const head=columns.map(column=>'<th><span class="cid">'+esc(column.columnId)+'</span><span>'+esc(column.label)+'</span></th>').join('');
   const body=rows.map(row=>{
     const key=table?.tableId?esc(table.tableId):'';
@@ -637,8 +650,12 @@ function rowTableHtml(rows,columns=getVisibleColumns(),table=state.table,mode='n
       }).join('')+
     '</tr>';
   }).join('');
-  return '<div class="table-scroll"><table class="data-table"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+
+  const headerTable='<table class="data-table data-table-head">'+colgroup+'<thead><tr>'+head+'</tr></thead></table>';
+  const bodyTable='<table class="data-table data-table-body">'+colgroup+'<tbody>'+body+'</tbody></table>';
+  return '<div class="table-shell"><div class="table-head-scroll">'+headerTable+'</div><div class="table-scroll table-body-scroll">'+bodyTable+'</div></div>';
 }
+
 
 function renderHome(){
   const q=clean(state.query).toLowerCase();
@@ -1445,6 +1462,14 @@ function wireEvents(){
     if($('mask')?.classList.contains('show')){closeSheet();return}
     if($('detail')?.classList.contains('show'))closeDetail();
   });
+
+  document.addEventListener('scroll',event=>{
+    const body=event.target?.closest?.('.table-body-scroll');
+    if(body){
+      const header=body.previousElementSibling;
+      if(header)header.scrollLeft=body.scrollLeft;
+    }
+  },true);
 
   document.addEventListener('click',event=>{
     const external=event.target.closest('[data-external-url]');
