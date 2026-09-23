@@ -900,8 +900,13 @@ function renderSettings(){
   $('typeColumnSetting')?.addEventListener('change',event=>{
     state.typeColumn=event.target.value;
     state.typeValue='';
+    state.filterColumn=event.target.value;
+    state.filterValue='';
     saveFilter('type',state.typeColumn,'');
+    saveFilter('filter',state.filterColumn,'');
     renderTypes();
+    renderFilters();
+    renderSettings();
   });
 
   $('reloadData')?.addEventListener('click',()=>loadData(false));
