@@ -1112,7 +1112,7 @@ function validateUpdateManifest(manifest,source){
   if(!manifest||typeof manifest!=='object')throw new Error('更新清单不是 JSON 对象');
   const version=clean(manifest.version||'');
   const versionCode=Number(manifest.versionCode);
-  if(!/^\\d+(?:\\.\\d+){2}(?:[-+][0-9A-Za-z.-]+)?$/.test(version))throw new Error('更新版本号无效');
+  if(!/^\d+(?:\.\d+){2}(?:[-+][0-9A-Za-z.-]+)?$/.test(version))throw new Error('更新版本号无效');
   if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('更新 versionCode 无效');
   if(clean(manifest.repo)!=='baibiaowang/GPT')throw new Error('更新清单 repo 不可信');
   const sha256=clean(manifest.sha256||'').toLowerCase();
