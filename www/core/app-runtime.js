@@ -321,7 +321,7 @@ function getVisibleColumns(table=state.table){
 }
 function displayValue(value,mode='list'){
   const text=String(value??'');
-  if(mode==='list' && /^\\d{4}-\\d{2}-\\d{2}$/.test(text))return text.slice(5);
+  if(mode==='list' && /^\d{4}-\d{2}-\d{2}$/.test(text))return text.slice(5);
   return text;
 }
 function displayColor(table,value,column){
