@@ -2,6 +2,7 @@ package com.baibiaowang.stockjudge;
 
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -463,10 +464,24 @@ public class MainActivity extends BridgeActivity {
                 return;
             }
 
+            // 不同 Android / 厂商安装器对 content:// APK 的授权处理并不完全一致：
+            // 同时设置 FLAG_GRANT_READ_URI_PERMISSION + ClipData，确保安装器真正拿到读取权限。
             Intent i = new Intent(Intent.ACTION_VIEW);
             i.setDataAndType(uri, "application/vnd.android.package-archive");
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
+            i.setClipData(ClipData.newRawUri("APK", uri));
+            i.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+            try {
+                startActivity(i);
+            } catch (Exception first) {
+                // 某些系统对 APK 安装更偏好 ACTION_INSTALL_PACKAGE，再尝试一次。
+                Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+                install.setDataAndType(uri, "application/vnd.android.package-archive");
+                install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                install.setClipData(ClipData.newRawUri("APK", uri));
+                install.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                startActivity(install);
+            }
         } catch (Exception e) {
             final String msg = "安装 APK 失败：" + e.getMessage();
             Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
