@@ -479,7 +479,8 @@ function safeExternalUrl(value){
 
 function renderCellHtml(table,column,raw,mode='list'){
   const shown=displayValue(raw,mode)||'—';
-  const url=column?.type==='url'?safeExternalUrl(raw):'';
+  const isUrlColumn=column?.type==='url'||normalizeColumnLabel(column?.label)==='公告链接';
+  const url=isUrlColumn?safeExternalUrl(raw):'';
   if(url){
     return '<a class="url-link" href="'+esc(url)+'" data-external-url="'+esc(url)+'" rel="noopener noreferrer">查看公告 ↗</a>';
   }
