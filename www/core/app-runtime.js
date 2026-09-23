@@ -2,8 +2,8 @@
 'use strict';
 
 const APP={
-  version:'2.1.10',
-  versionCode:2110,
+  version:'2.1.11',
+  versionCode:2111,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -445,6 +445,56 @@ function getVisibleColumns(table=state.table){
   const fallback=ids.length?ids:table.columns.slice(0,Math.min(3,table.columns.length)).map(column=>column.columnId);
   return fallback.map(id=>table.getColumn(id)).filter(Boolean);
 }
+
+function normalizeColumnLabel(value){
+  return clean(value).replace(/\\s+/g,'').toLowerCase();
+}
+
+function findSemanticColumn(labels,types=[]){
+  const wanted=new Set(labels.map(normalizeColumnLabel));
+  const byLabel=getColumns().find(column=>wanted.has(normalizeColumnLabel(column.label)));
+  if(byLabel)return byLabel;
+  const typeSet=new Set(Array.isArray(types)?types:[types]);
+  return getColumns().find(column=>typeSet.has(clean(column.type)))||null;
+}
+
+function getMenuColumns(table,requiredColumnId){
+  const columns=getVisibleColumns(table);
+  const required=requiredColumnId?table?.getColumn(requiredColumnId):null;
+  if(required&&!columns.some(column=>String(column.columnId)===String(required.columnId))){
+    return columns.concat(required);
+  }
+  return columns;
+}
+
+function safeExternalUrl(value){
+  const text=clean(value);
+  if(!text)return'';
+  try{
+    const url=new URL(text);
+    if(url.protocol==='https:'||url.protocol==='http:')return url.toString();
+  }catch(e){}
+  return'';
+}
+
+function renderCellHtml(table,column,raw,mode='list'){
+  const shown=displayValue(raw,mode)||'—';
+  const url=column?.type==='url'?safeExternalUrl(raw):'';
+  if(url){
+    return '<a class="url-link" href="'+esc(url)+'" data-external-url="'+esc(url)+'" rel="noopener noreferrer">查看公告 ↗</a>';
+  }
+  return esc(shown);
+}
+
+function openExternalUrl(url){
+  const safe=safeExternalUrl(url);
+  if(!safe)return;
+  if(g.AndroidNative?.openUrl){
+    try{g.AndroidNative.openUrl(safe);return}catch(e){}
+  }
+  const opened=window.open(safe,'_blank','noopener,noreferrer');
+  if(!opened)location.href=safe;
+}
 function displayValue(value,mode='list'){
   const text=String(value??'');
   if(mode==='list' && /^\d{4}-\d{2}-\d{2}$/.test(text))return text.slice(5);
@@ -459,9 +509,11 @@ function displayColor(table,value,column){
 
 function selectDefaultFilterColumns(){
   const columns=getColumns();
-  if(!columns.length)return;
-  if(!state.typeColumn||!state.table.getColumn(state.typeColumn))state.typeColumn=columns[0].columnId;
-  if(!state.conclusionColumn||!state.table.getColumn(state.conclusionColumn))state.conclusionColumn=columns[columns.length-1].columnId;
+  if(!columns.length||!state.table)return;
+  const category=findSemanticColumn(['判断分类','公告分类','分类','category','type'],['tag']);
+  const conclusion=findSemanticColumn(['判定性质','判断结果','结论','conclusion','verdict'],['status']);
+  if(!state.typeColumn||!state.table.getColumn(state.typeColumn))state.typeColumn=category?.columnId||columns[0].columnId;
+  if(!state.conclusionColumn||!state.table.getColumn(state.conclusionColumn))state.conclusionColumn=conclusion?.columnId||columns[columns.length-1].columnId;
 }
 
 function rowTableHtml(rows,columns=getVisibleColumns(),table=state.table,mode='normal'){
@@ -474,7 +526,7 @@ function rowTableHtml(rows,columns=getVisibleColumns(),table=state.table,mode='n
         const raw=getCell(row,column).value;
         const color=displayColor(table,raw,column);
         const style=color?' style="color:'+esc(color)+';font-weight:800"':'';
-        return '<td title="'+esc(raw)+'"'+style+'>'+esc(displayValue(raw,'list')||'—')+'</td>';
+        return '<td title="'+esc(raw)+'"'+style+'>'+renderCellHtml(table,column,raw,'list')+'</td>';
       }).join('')+
     '</tr>';
   }).join('');
@@ -494,26 +546,65 @@ function renderFilter(kind){
   selectDefaultFilterColumns();
   loadFilterPrefs();
   selectDefaultFilterColumns();
-  const columnId=kind==='type'?state.typeColumn:state.conclusionColumn;
-  const tabs=$(kind==='type'?'typeTabs':'conclusionTabs');
-  const list=$(kind==='type'?'typesList':'conclusionList');
-  const column=state.table.getColumn(columnId);
-  if(!tabs||!list)return;
-  const values=column?.valueCatalog||[];
-  let valueId=kind==='type'?state.typeValue:state.conclusionValue;
-  if(!values.some(value=>value.valueId===valueId))valueId=values[0]?.valueId||'';
-  if(kind==='type')state.typeValue=valueId;else state.conclusionValue=valueId;
-  saveFilter(kind,columnId,valueId);
-  tabs.innerHTML=values.map(value=>
-    '<button class="tab '+(value.valueId===valueId?'on':'')+'" data-filter-kind="'+kind+'" data-value-id="'+esc(value.valueId)+'">'+
-    '<span>'+esc(value.valueId)+'</span><span>'+esc(value.label)+'</span><b>'+value.count+'</b></button>'
-  ).join('');
-  const selected=values.find(value=>value.valueId===valueId);
-  list.innerHTML=selected?rowTableHtml(FilterEngine.byValueId(state.table,columnId,valueId),getVisibleColumns(),state.table):'<div class="empty">该表头暂无非空取值</div>';
+
+  if(kind==='type'){
+    const columnId=state.typeColumn;
+    const tabs=$('typeTabs');
+    const list=$('typesList');
+    const column=state.table.getColumn(columnId);
+    if(!tabs||!list)return;
+    const values=column?.valueCatalog||[];
+    let valueId=state.typeValue;
+    if(!values.some(value=>value.valueId===valueId))valueId=values[0]?.valueId||'';
+    state.typeValue=valueId;
+    saveFilter('type',columnId,valueId);
+    tabs.innerHTML=values.map(value=>
+      '<button class="tab '+(value.valueId===valueId?'on':'')+'" data-filter-kind="type" data-value-id="'+esc(value.valueId)+'">'+
+      '<span>'+esc(value.valueId)+'</span><span>'+esc(value.label)+'</span><b>'+value.count+'</b></button>'
+    ).join('');
+    const selected=values.find(value=>value.valueId===valueId);
+    list.innerHTML=selected
+      ?rowTableHtml(FilterEngine.byValueId(state.table,columnId,valueId),getMenuColumns(state.table,columnId),state.table)
+      :'<div class="empty">该表头暂无非空取值</div>';
+    return;
+  }
+
+  renderConclusions();
 }
 
 function renderTypes(){renderFilter('type')}
-function renderConclusions(){renderFilter('conclusion')}
+
+function renderConclusionStats(){
+  const target=$('conclusionStats');
+  if(!target||!state.table)return;
+  selectDefaultFilterColumns();
+  const column=state.table.getColumn(state.conclusionColumn);
+  const values=column?.valueCatalog||[];
+  target.innerHTML=values.length
+    ?values.map(value=>{
+      const color=displayColor(state.table,value.label,column);
+      const style=color?' style="color:'+esc(color)+'"':'';
+      return '<div class="status-stat"><span class="status-stat-n"'+style+'>'+esc(value.count)+'</span><span class="status-stat-l">'+esc(value.label)+'</span></div>';
+    }).join('')
+    :'<div class="empty compact">暂无判定性质数据</div>';
+}
+
+function renderConclusions(){
+  if(!state.table)return;
+  selectDefaultFilterColumns();
+  loadFilterPrefs();
+  selectDefaultFilterColumns();
+  state.conclusionValue='';
+  renderConclusionStats();
+  const list=$('conclusionList');
+  if(!list)return;
+  list.innerHTML=rowTableHtml(
+    state.table.rows,
+    getMenuColumns(state.table,state.conclusionColumn),
+    state.table,
+    'normal'
+  );
+}
 
 function entryColumns(entry){
   if(Array.isArray(entry?.columns))return entry.columns;
@@ -595,11 +686,11 @@ function renderSettings(){
         '<div class="setting-actions"><button class="sbtn primary" id="saveDisplayColumns">保存首页显示</button></div>'+
       '</div>'+
       '<div class="setting-item">'+
-        '<div class="setting-title">类型 / 结论默认表头</div>'+
-        '<div class="setting-desc">这里只选择默认筛选表头；类型与结论页面本身不再显示手动选择器。</div>'+
+        '<div class="setting-title">判断分类 / 判定性质</div>'+
+        '<div class="setting-desc">判断分类属于归类字段，可在“类型”菜单按分类筛选；判定性质属于数值统计字段，在“结论”菜单全部展示并统计数量。</div>'+
         '<div class="filter-settings">'+
-          '<label>类型<select id="typeColumnSetting">'+columns.map(column=>'<option value="'+esc(column.columnId)+'">'+esc(column.columnId)+' '+esc(column.label)+'</option>').join('')+'</select></label>'+
-          '<label>结论<select id="conclusionColumnSetting">'+columns.map(column=>'<option value="'+esc(column.columnId)+'">'+esc(column.columnId)+' '+esc(column.label)+'</option>').join('')+'</select></label>'+
+          '<label>判断分类<select id="typeColumnSetting">'+columns.map(column=>'<option value="'+esc(column.columnId)+'">'+esc(column.columnId)+' '+esc(column.label)+'</option>').join('')+'</select></label>'+
+          '<div class="setting-readonly"><span>判定性质</span><strong>'+(state.table?.getColumn(conclusionId)?esc(conclusionId+' '+state.table.getColumn(conclusionId).label):'加载数据后自动识别')+'</strong><small>自动识别，不做筛选</small></div>'+
         '</div>'+
       '</div>'+
     '</div>'+
@@ -616,10 +707,8 @@ function renderSettings(){
 
   if(!state.table){
     $('typeColumnSetting').innerHTML='<option value="">加载数据后设置</option>';
-    $('conclusionColumnSetting').innerHTML='<option value="">加载数据后设置</option>';
   }else{
     $('typeColumnSetting').value=typeId;
-    $('conclusionColumnSetting').value=conclusionId;
   }
 
   $('saveDisplayColumns')?.addEventListener('click',()=>{
@@ -640,13 +729,6 @@ function renderSettings(){
     state.typeValue='';
     saveFilter('type',state.typeColumn,'');
     renderTypes();
-  });
-
-  $('conclusionColumnSetting')?.addEventListener('change',event=>{
-    state.conclusionColumn=event.target.value;
-    state.conclusionValue='';
-    saveFilter('conclusion',state.conclusionColumn,'');
-    renderConclusions();
   });
 
   $('reloadData')?.addEventListener('click',()=>loadData(false));
@@ -691,9 +773,13 @@ function openDetail(row,table=state.table){
     '<div class="meta"><span class="tag">rowId '+esc(row.rowId)+'</span><span class="tag">'+esc(table.tableName)+'</span></div>'+
     '<div class="detail-actions"><button id="detailFav" class="sbtn '+(annotations.isFavorite(table,row)?'primary':'')+'">'+(annotations.isFavorite(table,row)?'已收藏':'收藏')+'</button><button id="detailCopy" class="sbtn primary">复制整行</button></div></div>';
 
-  const details=columns.map(column=>
-    '<div class="standard-cell"><div class="standard-label"><span class="cid">'+esc(column.columnId)+'</span><span>'+esc(column.label)+'</span></div><div class="standard-value '+(column.type==='longtext'?'summary':'')+'">'+esc(getCell(row,column).value||'—')+'</div></div>'
-  ).join('');
+  const details=columns.map(column=>{
+    const raw=getCell(row,column).value;
+    const rendered=column.type==='url'
+      ?renderCellHtml(table,column,raw,'detail')
+      :esc(raw||'—');
+    return '<div class="standard-cell"><div class="standard-label"><span class="cid">'+esc(column.columnId)+'</span><span>'+esc(column.label)+'</span></div><div class="standard-value '+(column.type==='longtext'?'summary':'')+'">'+rendered+'</div></div>';
+  }).join('');
 
   const savedComment=(annotations.comment(table,row.rowId)||{}).comment||'';
   $('detailBody').innerHTML=
@@ -1172,6 +1258,14 @@ function wireEvents(){
   });
 
   document.addEventListener('click',event=>{
+    const external=event.target.closest('[data-external-url]');
+    if(external){
+      event.preventDefault();
+      event.stopPropagation();
+      openExternalUrl(external.dataset.externalUrl||external.getAttribute('href')||'');
+      return;
+    }
+
     const row=event.target.closest('.data-row');
     if(row){
       const tableId=String(row.dataset.tableId||'');
