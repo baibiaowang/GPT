@@ -32,7 +32,6 @@ import java.io.BufferedInputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import android.util.Base64;
 /**
  * 支持「用其他应用打开」一个 txt 文件后直接解密。
  *
