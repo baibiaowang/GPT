@@ -40,8 +40,8 @@ jobs:
       - name: Set release version
         run: |
           set -euo pipefail
-          CODE=2002
-          NAME="2.0.2"
+          CODE=2100
+          NAME="2.1.0"
           echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "version -> code=$CODE name=$NAME"
@@ -173,7 +173,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: table-converter-gpt-v2.0.2-apk
+          name: table-converter-gpt-v2.1.0-apk
           path: dist/app.apk
           if-no-files-found: error
           retention-days: 30
