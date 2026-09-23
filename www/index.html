@@ -51,7 +51,7 @@ button{cursor:pointer}
   position:sticky;
   top:0;
   z-index:80;
-  background:rgba(242,242,247,.86);
+  background:var(--bg);
   backdrop-filter:saturate(180%) blur(22px);
   -webkit-backdrop-filter:saturate(180%) blur(22px);
   padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
@@ -92,9 +92,8 @@ button{cursor:pointer}
 .table-scroll{
   width:100%;
   overflow-x:auto;
-  overflow-y:visible;
+  overflow-y:clip;
   position:relative;
-  isolation:isolate;
   -webkit-overflow-scrolling:touch;
 }
 .data-table{
@@ -108,7 +107,7 @@ button{cursor:pointer}
 .data-table thead th{
   position:sticky;
   top:var(--top-height);
-  z-index:50;
+  z-index:70;
   background:var(--card);
   color:var(--muted);
   text-align:left;
@@ -366,6 +365,7 @@ button{cursor:pointer}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 @media(max-width:520px){
   .filter-settings{grid-template-columns:1fr}
+  .status-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .standard-cell{grid-template-columns:96px minmax(0,1fr);gap:9px}
   .data-table thead th,.data-table tbody td{min-width:96px}
 }
@@ -392,7 +392,7 @@ button{cursor:pointer}
 
   <section id="page-conclusions" class="page">
     <div class="section-title">结论</div>
-    <div class="tabbar" id="conclusionTabs"></div>
+    <div class="status-stats" id="conclusionStats"></div>
     <div id="conclusionList"></div>
   </section>
 
