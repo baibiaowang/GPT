@@ -89,6 +89,20 @@ button{cursor:pointer}
 }
 .card-hd .sub{font-size:11px;font-weight:500}
 .section-title{font-size:28px;font-weight:800;letter-spacing:-.5px;margin:20px 2px 8px}
+.table-shell{
+  width:100%;
+  position:relative;
+}
+.table-head-scroll{
+  position:sticky;
+  top:var(--top-height);
+  z-index:70;
+  width:100%;
+  overflow-x:hidden;
+  overflow-y:hidden;
+  background:var(--card);
+  border-radius:0;
+}
 .table-scroll{
   width:100%;
   overflow-x:auto;
@@ -103,14 +117,12 @@ button{cursor:pointer}
   border-collapse:separate;
   border-spacing:0;
   background:var(--card);
-  table-layout:auto;
+  table-layout:fixed;
+}
+.data-table-head{
+  min-width:max-content;
 }
 .data-table thead{
-  position:sticky;
-  top:var(--top-height);
-  z-index:70;
-}
-.data-table thead tr{
   background:var(--card);
 }
 .data-table thead th{
@@ -121,7 +133,7 @@ button{cursor:pointer}
   font-size:11px;
   font-weight:800;
   line-height:1.15;
-  min-width:104px;
+  min-width:96px;
   padding:8px 10px;
   border-bottom:.5px solid var(--line);
   box-shadow:0 2px 0 var(--line),0 3px 8px rgba(0,0,0,.04);
@@ -136,7 +148,7 @@ button{cursor:pointer}
 }
 .data-table tbody td{
   background:var(--card);
-  min-width:104px;
+  min-width:96px;
   max-width:340px;
   padding:10px 10px;
   border-bottom:.5px solid var(--line);
