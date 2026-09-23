@@ -30,9 +30,22 @@ for(const marker of legacyMarkers){
   }
 }
 const runtime=fs.readFileSync(path.join(OUT,'core','app-runtime.js'),'utf8');
-if(!/version:\s*['"]2\.1\.1['"]/.test(runtime)||!/versionCode:\s*2101/.test(runtime)){
-  console.error('::error::runtime version is not 2.1.1 / 2101');
+const expectedVersion=String(process.env.APP_VERSION_NAME||'').trim();
+const expectedCode=String(process.env.APP_VERSION_CODE||'').trim();
+const versionMatch=runtime.match(/version:\s*['"]([^'"]+)['"]/);
+const codeMatch=runtime.match(/versionCode:\s*(\d+)/);
+if(!versionMatch||!codeMatch){
+  console.error('::error::runtime version fields missing');
+  process.exit(1);
+}
+if(expectedVersion && versionMatch[1]!==expectedVersion){
+  console.error('::error::runtime version mismatch: expected '+expectedVersion+', got '+versionMatch[1]);
+  process.exit(1);
+}
+if(expectedCode && codeMatch[1]!==expectedCode){
+  console.error('::error::runtime versionCode mismatch: expected '+expectedCode+', got '+codeMatch[1]);
   process.exit(1);
 }
 if(!h.includes('core/app-runtime.js')){console.error('::error::index.html does not load app-runtime.js');process.exit(1);}
-fs.writeFileSync(p,h);console.log('[inject] generic table runtime validated · v2.1.1');
+fs.writeFileSync(p,h);
+console.log('[inject] generic table runtime validated · v'+versionMatch[1]+' / '+codeMatch[1]);
