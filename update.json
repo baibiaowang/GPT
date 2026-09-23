@@ -1,15 +1,15 @@
 {
-  "version": "2.1.5",
-  "versionCode": 2105,
-  "published_at": "2026-09-23T04:07:26Z",
+  "version": "2.1.6",
+  "versionCode": 2106,
+  "published_at": "2026-09-23T04:21:17Z",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.5/app.apk",
+  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.6/app.apk",
   "apk_urls": [
-    "https://github.com/baibiaowang/GPT/releases/download/v2.1.5/app.apk",
-    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.5/app.apk",
-    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.5/app.apk",
-    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.5/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v2.1.5/app.apk"
+    "https://github.com/baibiaowang/GPT/releases/download/v2.1.6/app.apk",
+    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.6/app.apk",
+    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.6/app.apk",
+    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.6/app.apk",
+    "https://github.com/baibiaowang/GPT/releases/download/v2.1.6/app.apk"
   ],
-  "notes": "2.1.5：APK 更新改为应用内 HTTP 下载，手动处理 HTTPS 重定向、临时文件与安装。"
+  "notes": "2.1.6：修复部分 Android 安装器拿不到 content:// APK 读取授权导致下载完成却无法覆盖安装的问题。"
 }
