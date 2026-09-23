@@ -183,7 +183,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
       </div>
       <div class="setting-item">
         <div class="setting-title">应用更新</div>
-        <div class="setting-desc" id="updateDesc">当前版本 1.7.12。股票列表只显示股票名称、判断分类、公告时间三个字段，表头固定；收藏/点评过的股票会完整保存在本地。</div>
+        <div class="setting-desc" id="updateDesc">当前版本 2.0.1。股票列表只显示股票名称、判断分类、公告时间三个字段，表头固定；收藏/点评过的股票会完整保存在本地。</div>
         <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
         <div class="update-progress" id="updateProgress">
           <div class="update-progress-top"><span id="updateProgressText">准备下载…</span><span id="updateProgressPct">0%</span></div>
@@ -1169,7 +1169,7 @@ history.replaceState({root:true},'','');
 loadData(true);
 ch(e){toast('恢复失败：'+e.message,2600)}};
 function clearV2(){if(!confirm('确定清空全部本地数据吗？数据源和激活码保留。'))return;localStorage.removeItem('table.layout.v2');localStorage.removeItem(ann.favKey);localStorage.removeItem(ann.commentKey);localStorage.removeItem('table.migrated.2');state.table=null;renderAllPages();pageSwitch('settings');toast('本地数据已清空')}
-async function checkUpdateV2(){for(const u of UPDATE_URLS){try{const p=await manifest(u);if(Number(p.versionCode||0)>APP_VERSION_CODE){if(confirm('发现新版本 '+p.version+'，现在下载并安装？')){if(window.AndroidNative?.downloadApk)AndroidNative.downloadApk(p.apk_url||RELEASE_APK,'table-converter-'+p.version+'.apk');else window.open(p.apk_url||RELEASE_APK,'_blank')}return}$('v2UpdateDesc')&&($('v2UpdateDesc').textContent='当前已是最新版本 2.0.0（版本号 2000）');return}catch(e){}}$('v2UpdateDesc')&&($('v2UpdateDesc').textContent='检查更新失败')}
+async function checkUpdateV2(){for(const u of UPDATE_URLS){try{const p=await manifest(u);if(Number(p.versionCode||0)>APP_VERSION_CODE){if(confirm('发现新版本 '+p.version+'，现在下载并安装？')){if(window.AndroidNative?.downloadApk)AndroidNative.downloadApk(p.apk_url||RELEASE_APK,'table-converter-'+p.version+'.apk');else window.open(p.apk_url||RELEASE_APK,'_blank')}return}$('v2UpdateDesc')&&($('v2UpdateDesc').textContent='当前已是最新版本 2.0.1（版本号 2000）');return}catch(e){}}$('v2UpdateDesc')&&($('v2UpdateDesc').textContent='检查更新失败')}
 document.addEventListener('click',function(e){const tr=e.target.closest('.v2-row');if(tr)openRow(tr.dataset.rowId);const t=e.target.closest('[data-v2-filter]');if(t){if(t.dataset.v2Filter==='type')state.typeValue=t.dataset.value;else state.conclusionValue=t.dataset.value;v2Filter(t.dataset.v2Filter)}});
 history.replaceState({root:true},'','');
 window.addEventListener('resize',updateStockTableSticky);loadData(true);
