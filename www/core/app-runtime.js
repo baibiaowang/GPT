@@ -73,8 +73,10 @@ function scalar(value){
 }
 
 function hexBytes(hex){
+  const key=String(hex??'');
+  if(!/^[0-9a-fA-F]{64}$/.test(key))throw new Error('激活码必须是64位十六进制');
   const out=new Uint8Array(32);
-  for(let i=0;i<32;i++)out[i]=parseInt(hex.slice(i*2,i*2+2),16);
+  for(let i=0;i<32;i++)out[i]=parseInt(key.slice(i*2,i*2+2),16);
   return out;
 }
 
@@ -83,14 +85,19 @@ function b64Bytes(value){
   text=text.replace(/^data:[^,]*,/i,'');
   text=text.replace(/^['"]|['"]$/g,'');
   if(text.slice(0,4)==='SJ01'){
-    const raw=new TextEncoder().encode(text);
-    return raw;
+    return new TextEncoder().encode(text);
   }
-  text=text.replace(/-/g,'+').replace(/_/g,'/');
+
   text=text.replace(/\s+/g,'');
-  text=text.replace(/[^A-Za-z0-9+/=]/g,'');
+  text=text.replace(/-/g,'+').replace(/_/g,'/');
+  if(!text)throw new Error('数据内容为空');
+  if(!/^[A-Za-z0-9+/]*={0,2}$/.test(text))throw new Error('SJ01 Base64 字符串包含非法字符');
+  const firstPad=text.indexOf('=');
+  if(firstPad>=0&&firstPad<text.length-2)throw new Error('SJ01 Base64 填充格式无效');
+  if(text.length%4===1)throw new Error('SJ01 Base64 长度无效');
   while(text.length%4)text+='=';
-  const binary=atob(text);
+  let binary;
+  try{binary=atob(text)}catch(e){throw new Error('SJ01 Base64 解码失败')}
   const out=new Uint8Array(binary.length);
   for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);
   return out;
@@ -110,14 +117,14 @@ function getSourceUrls(){
 
 async function decryptSJ01(encoded){
   const bytes=b64Bytes(encoded);
-  if(bytes.length<33)throw new Error('SJ01 密文过短');
+  if(bytes.length<33)throw new Error('SJ01 密文过短：至少需要 4B 头 + 1B 版本 + 12B IV + 16B GCM 标签');
   if(String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3])!=='SJ01')throw new Error('数据格式不是 SJ01');
   if(bytes[4]!==3)throw new Error('SJ01 数据版本不是 0x03');
   const iv=bytes.slice(5,17);
   const cipher=bytes.slice(17);
   const cryptoKey=await crypto.subtle.importKey('raw',hexBytes(getKey()),{name:'AES-GCM'},false,['decrypt']);
   const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},cryptoKey,cipher);
-  const text=new TextDecoder().decode(plain);
+  let text;\n  try{text=new TextDecoder('utf-8',{fatal:true}).decode(plain)}catch(e){throw new Error('解密结果不是有效 UTF-8 文本')}
   let payload;
   try{payload=JSON.parse(text)}catch(e){throw new Error('解密成功，但明文不是 JSON')}
   if(!payload||typeof payload!=='object')throw new Error('明文 JSON 不是对象');
