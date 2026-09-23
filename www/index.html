@@ -1075,7 +1075,8 @@ window.restoreBackupText=function(t){try{applyV2Backup(JSON.parse(t))}catch(e){t
 async function clearV2(){
   if(!confirm('确定清空本地表格、收藏和点评吗？数据源地址与激活码保留。'))return;
   try{await IDB.del(T20_CACHE_KEY)}catch(e){}
-  localStorage.removeItem(T20_LAYOUT_KEY);localStorage.removeItem(T20_FILTER_KEY);localStorage.removeItem(gAnn.favKey);localStorage.removeItem(gAnn.commentKey);
+  [T20_LAYOUT_KEY,T20_FILTER_KEY,gAnn.favKey,gAnn.commentKey,'sj.fav.v3','sj.cmt.v3','sj.savedStocks.v1','sj.archivedRecords.v1','table.migrated.2.0.1'].forEach(k=>localStorage.removeItem(k));
+  try{await IDB.del('savedArchives.v1')}catch(e){}
   state.table=null;state.cur=null;renderAllPages();pageSwitch('settings');toast('本地数据已清空');
 }
 function t20LegacyRecordToRow(record){
@@ -1164,6 +1165,16 @@ document.addEventListener('click',function(e){
   const tab=e.target.closest('[data-v2-filter]');
   if(tab){const kind=tab.dataset.v2Filter,vid=tab.dataset.value;if(kind==='type')state.typeValue=vid;else state.conclusionValue=vid;t20SaveFilterPref(kind,kind==='type'?state.typeColumn:state.conclusionColumn,vid);t20RenderFilter(kind)}
 });
+function t20BindInitialSettings(){
+  if($('btnSource'))$('btnSource').onclick=t20SourceSheet;
+  if($('btnKey'))$('btnKey').onclick=t20KeySheet;
+  if($('btnReload'))$('btnReload').onclick=function(){loadData(false)};
+  if($('btnExport'))$('btnExport').onclick=exportV2Backup;
+  if($('btnRestore'))$('btnRestore').onclick=restoreV2Backup;
+  if($('btnClearData'))$('btnClearData').onclick=clearV2;
+  if($('btnUpdate'))$('btnUpdate').onclick=checkUpdate;
+}
+t20BindInitialSettings();
 window.addEventListener('resize',updateStockTableSticky);
 history.replaceState({root:true},'','');
 loadData(true);
