@@ -37,8 +37,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import android.util.Base64;
-import android.os.Environment;
-
 /**
  * 支持「用其他应用打开」一个 txt 文件后直接解密。
  *
@@ -131,7 +129,7 @@ public class MainActivity extends BridgeActivity {
             }
             @JavascriptInterface public void fetchUpdateManifest(final String url) {
                 new Thread(new Runnable() {
-                    @Override public void run() { fetchTextFileNative(url, UPDATE_FILE, UPDATE_PART, "更新清单", "window.__sjNativeUpdateResult"); }
+                    @Override public void run() { fetchTextFileNative(url, UPDATE_FILE, UPDATE_PART, "更新清单", "window.__tableNativeUpdateResult"); }
                 }).start();
             }
             @JavascriptInterface public String readUpdateChunk(final int offset, final int maxLength) {
@@ -207,7 +205,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void fetchDataSourceNative(final String urlString) {
-        fetchTextFileNative(urlString, DATA_SOURCE_FILE, DATA_SOURCE_PART, "数据源", "window.__sjNativeDataSourceResult");
+        fetchTextFileNative(urlString, DATA_SOURCE_FILE, DATA_SOURCE_PART, "数据源", "window.__tableNativeDataSourceResult");
     }
 
     private void fetchTextFileNative(final String urlString, final String outName, final String partName, final String label, final String callbackFn) {
@@ -370,7 +368,7 @@ public class MainActivity extends BridgeActivity {
             @Override public void run() {
                 WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
                 if (wv == null) return;
-                String js = "window.__sjApkDownloadProgress&&window.__sjApkDownloadProgress(" +
+                String js = "window.__tableApkDownloadProgress&&window.__tableApkDownloadProgress(" +
                     percent + "," + jsStr(status) + "," + jsStr(message) + ");";
                 try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
             }
@@ -382,7 +380,7 @@ public class MainActivity extends BridgeActivity {
             @Override public void run() {
                 WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
                 if (wv == null) return;
-                try { wv.evaluateJavascript("window.__sjApkDownloadComplete&&window.__sjApkDownloadComplete();", null); }
+                try { wv.evaluateJavascript("window.__tableApkDownloadComplete&&window.__tableApkDownloadComplete();", null); }
                 catch (Exception ignored) { }
             }
         });
@@ -393,7 +391,7 @@ public class MainActivity extends BridgeActivity {
             @Override public void run() {
                 WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
                 if (wv == null) return;
-                String js = "window.__sjApkDownloadFailed&&window.__sjApkDownloadFailed(" + jsStr(message) + ");";
+                String js = "window.__tableApkDownloadFailed&&window.__tableApkDownloadFailed(" + jsStr(message) + ");";
                 try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
             }
         });
