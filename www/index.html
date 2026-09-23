@@ -229,6 +229,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script src="core/filter-engine.js"></script>
 <script src="core/local-annotation.js"></script>
 <script>
+
 const DEF_KEY='';
 const DEF_URLS='https://stocks-txt-file.app.workbuddy.host/stocks.txt';
 const APP_VERSION='2.0.1';
@@ -1178,12 +1179,6 @@ t20BindInitialSettings();
 window.addEventListener('resize',updateStockTableSticky);
 history.replaceState({root:true},'','');
 loadData(true);
-ch(e){toast('恢复失败：'+e.message,2600)}};
-function clearV2(){if(!confirm('确定清空全部本地数据吗？数据源和激活码保留。'))return;localStorage.removeItem('table.layout.v2');localStorage.removeItem(ann.favKey);localStorage.removeItem(ann.commentKey);localStorage.removeItem('table.migrated.2');state.table=null;renderAllPages();pageSwitch('settings');toast('本地数据已清空')}
-async function checkUpdateV2(){for(const u of UPDATE_URLS){try{const p=await manifest(u);if(Number(p.versionCode||0)>APP_VERSION_CODE){if(confirm('发现新版本 '+p.version+'，现在下载并安装？')){if(window.AndroidNative?.downloadApk)AndroidNative.downloadApk(p.apk_url||RELEASE_APK,'table-converter-'+p.version+'.apk');else window.open(p.apk_url||RELEASE_APK,'_blank')}return}$('v2UpdateDesc')&&($('v2UpdateDesc').textContent='当前已是最新版本 2.0.1（版本号 2000）');return}catch(e){}}$('v2UpdateDesc')&&($('v2UpdateDesc').textContent='检查更新失败')}
-document.addEventListener('click',function(e){const tr=e.target.closest('.v2-row');if(tr)openRow(tr.dataset.rowId);const t=e.target.closest('[data-v2-filter]');if(t){if(t.dataset.v2Filter==='type')state.typeValue=t.dataset.value;else state.conclusionValue=t.dataset.value;v2Filter(t.dataset.v2Filter)}});
-history.replaceState({root:true},'','');
-window.addEventListener('resize',updateStockTableSticky);loadData(true);
 </script>
 </body>
 </html>
