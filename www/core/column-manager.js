@@ -4,7 +4,7 @@ class ColumnManager{
   get(id){return this.table.getColumn(id)}
   values(id){const c=this.get(id);return c&&Array.isArray(c.valueCatalog)?c.valueCatalog:[]}
   refreshCatalog(){
-    const storage=(typeof localStorage!=='undefined')?localStorage:null;
+    const storage=(g.localStorage&&typeof g.localStorage!=='undefined')?g.localStorage:null;
     let registry={};
     try{registry=JSON.parse(storage?.getItem('table.valueCatalog.v1')||'{}')||{}}catch(e){registry={}}
     const tableKey=String(this.table.tableId||'default-table');
