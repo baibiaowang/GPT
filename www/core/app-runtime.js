@@ -2,8 +2,8 @@
 'use strict';
 
 const APP={
-  version:'2.1.8',
-  versionCode:2108,
+  version:'2.1.9',
+  versionCode:2109,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -115,6 +115,75 @@ function getSourceUrls(){
   return urls.length?urls:[APP.defaultSource];
 }
 
+function normalizePayload(payload){
+  if(!payload||typeof payload!=='object')throw new Error('明文 JSON 不是对象');
+  if(!Array.isArray(payload.records))throw new Error('明文 JSON 缺少 records[]');
+
+  const meta=payload.meta&&typeof payload.meta==='object'?payload.meta:{};
+  const rawSchema=meta.schema??meta.schema_version??payload.schema??null;
+  const numericSchema=rawSchema==null?NaN:Number(rawSchema);
+  const hasLayout=!!(payload.layout&&typeof payload.layout==='object'&&
+    Array.isArray(payload.layout.list_columns)&&Array.isArray(payload.layout.detail_columns));
+
+  // 标准 schema v3：原样通过。
+  if(numericSchema===3&&hasLayout)return payload;
+
+  // 部分生产端会把 schema 写成 schema_version，或暂时缺少 meta.schema。
+  // 只要核心结构已经满足 layout + records，就统一归一为内部 schema v3。
+  if(hasLayout){
+    return Object.assign({},payload,{
+      meta:Object.assign({},meta,{
+        schema:3,
+        source_schema:rawSchema==null?'missing':rawSchema
+      })
+    });
+  }
+
+  // 兼容旧的“records 直出”明文：根据真实字段生成最小 layout。
+  const first=payload.records.find(row=>row&&typeof row==='object');
+  const direct=first&&typeof first==='object'?first:{};
+  const nested=direct.columns&&typeof direct.columns==='object'?direct.columns:{};
+  const keys=[...new Set([...Object.keys(direct),...Object.keys(nested)])]
+    .filter(key=>!['rowId','id','cells','columns'].includes(key));
+  if(keys.length){
+    const layoutColumns=keys.map(key=>({
+      key,
+      label:key,
+      type:'text'
+    }));
+    return Object.assign({},payload,{
+      meta:Object.assign({},meta,{
+        schema:3,
+        source_schema:rawSchema==null?'missing':rawSchema
+      }),
+      layout:{
+        list_columns:layoutColumns,
+        detail_columns:layoutColumns.map(column=>Object.assign({},column))
+      }
+    });
+  }
+
+  // 再兼容 cells[] 形式的通用行数据。
+  const cells=Array.isArray(direct.cells)?direct.cells:[];
+  if(cells.length){
+    const cellKeys=cells.map(cell=>clean(cell?.columnId)).filter(Boolean);
+    const unique=[...new Set(cellKeys)];
+    const layoutColumns=unique.map(key=>({key,label:key,type:'text'}));
+    return Object.assign({},payload,{
+      meta:Object.assign({},meta,{
+        schema:3,
+        source_schema:rawSchema==null?'missing':rawSchema
+      }),
+      layout:{
+        list_columns:layoutColumns,
+        detail_columns:layoutColumns.map(column=>Object.assign({},column))
+      }
+    });
+  }
+
+  throw new Error('明文 JSON 结构不兼容：schema='+(rawSchema==null?'缺失':String(rawSchema))+'，且没有可用 layout / records 字段');
+}
+
 async function decryptSJ01(encoded){
   const bytes=b64Bytes(encoded);
   if(bytes.length<33)throw new Error('SJ01 密文过短：至少需要 4B 头 + 1B 版本 + 12B IV + 16B GCM 标签');
@@ -128,16 +197,7 @@ async function decryptSJ01(encoded){
   try{text=new TextDecoder('utf-8',{fatal:true}).decode(plain)}catch(e){throw new Error('解密结果不是有效 UTF-8 文本')}
   let payload;
   try{payload=JSON.parse(text)}catch(e){throw new Error('解密成功，但明文不是 JSON')}
-  if(!payload||typeof payload!=='object')throw new Error('明文 JSON 不是对象');
-  if(Number(payload.meta?.schema)!==3)throw new Error('明文 JSON schema 必须为 3');
-  if(!payload.layout||!Array.isArray(payload.layout.list_columns)||!Array.isArray(payload.layout.detail_columns)){
-    throw new Error('schema v3 缺少完整 layout.list_columns / detail_columns');
-  }
-  if(!Array.isArray(payload.records))throw new Error('schema v3 缺少 records');
-  if(payload.display!=null&&typeof payload.display!=='object')throw new Error('schema v3 display 格式无效');
-  if(payload.judge_tables!=null&&typeof payload.judge_tables!=='object')throw new Error('schema v3 judge_tables 格式无效');
-  if(payload.announcements!=null&&typeof payload.announcements!=='object')throw new Error('schema v3 announcements 格式无效');
-  return payload;
+  return normalizePayload(payload);
 }
 
 function openIdb(){
