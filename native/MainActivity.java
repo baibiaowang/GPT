@@ -11,12 +11,8 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.provider.Settings;
-import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
 import android.webkit.JavascriptInterface;
-import android.webkit.ValueCallback;
 import android.webkit.WebView;
 import android.widget.Toast;
 import android.provider.MediaStore;
@@ -70,26 +66,18 @@ public class MainActivity extends BridgeActivity {
         }
     };
 
-    private static final String INCOMING_FILE = "incoming.txt";
     private static final String DATA_SOURCE_FILE = "data-source.txt";
     private static final String DATA_SOURCE_PART = "data-source.txt.part";
     private static final String UPDATE_FILE = "update.json";
     private static final String UPDATE_PART = "update.json.part";
     private static final int DATA_SOURCE_CHUNK = 196608;
-    /** 与前端 POLL_MAX 保持一致：240 * 500ms = 120s */
-    private static final int MAX_ATTEMPTS = 240;
-    private static final long RETRY_MS = 500L;
-    /** 与前端 decryptBytes() 的 `u8.length < 33` 保持一致 */
-    private static final int MIN_BYTES = 33;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         installBackHandler();
-        installPinchZoom();
         installNativeBridge();
         registerApkDownloadReceiver();
-        handle(getIntent());
     }
 
     @Override
