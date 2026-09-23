@@ -389,6 +389,8 @@ jobs:
           with open("update.json", "w", encoding="utf-8") as f:
               json.dump(update, f, ensure_ascii=False, indent=2)
               f.write("\n")
+          import shutil
+          shutil.copyfile("update.json", "/tmp/gpt-update.json")
 
           # 发布前硬校验：清单版本与 APK 镜像路径必须严格一致。
           check = json.loads(open("update.json", encoding="utf-8").read())
@@ -408,17 +410,16 @@ jobs:
           # 若 main 已出现更新版本，禁止旧构建覆盖新版本清单。
           for attempt in 1 2 3 4 5; do
             git fetch origin main
-            LATEST_MAIN="${git rev-parse origin/main}"
-            LATEST_VERSION="${git show "$LATEST_MAIN:www/core/app-runtime.js" | sed -n "s/.*version:'\\([^'\\]*\\)'.*/\\1/p" | head -1}"
-            LATEST_CODE="${git show "$LATEST_MAIN:www/core/app-runtime.js" | sed -n 's/.*versionCode:\\([0-9]*\\).*/\\1/p' | head -1}"
+            LATEST_MAIN="$(git rev-parse origin/main)"
+            LATEST_VERSION="$(git show "$LATEST_MAIN:www/core/app-runtime.js" | grep -m1 -o "version:'[^']*'" | cut -d"'" -f2)"
+            LATEST_CODE="$(git show "$LATEST_MAIN:www/core/app-runtime.js" | grep -m1 -o "versionCode:[0-9]*" | cut -d: -f2)"
             if [ "$LATEST_VERSION" != "$APP_VERSION_NAME" ] || [ "$LATEST_CODE" != "$APP_VERSION_CODE" ]; then
               echo "::error::main 已出现更新版本，拒绝覆盖更新清单。"
               exit 1
             fi
 
             git reset --hard "$LATEST_MAIN"
-            cp "$GITHUB_WORKSPACE/update.json" update.json.tmp
-            mv update.json.tmp update.json
+            cp /tmp/gpt-update.json update.json
             git add update.json
 
             if git diff --cached --quiet; then
@@ -432,7 +433,7 @@ jobs:
               break
             fi
 
-            echo "main 在推送期间发生变化，第 ${D}attempt 次重试。"
+            echo "main 在推送期间发生变化，第 $attempt 次重试。"
             git reset --hard "$LATEST_MAIN"
             if [ "$attempt" = "5" ]; then
               echo "::error::连续 5 次更新清单推送冲突，停止发布。"
