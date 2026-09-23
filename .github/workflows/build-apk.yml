@@ -384,7 +384,7 @@ jobs:
                   f"https://fastly.jsdelivr.net/gh/{repo}@apk/releases/{version}/app.apk",
                   f"https://gcore.jsdelivr.net/gh/{repo}@apk/releases/{version}/app.apk"
               ],
-              "notes": f"{version}：修复设置页函数名错配，并加强 APK 下载完整性校验与更新链路。",
+              "notes": f"{version}：修复 SJ01 明文 schema 兼容，保留标准 v3 并兼容结构化旧数据。",
           }
           with open("update.json", "w", encoding="utf-8") as f:
               json.dump(update, f, ensure_ascii=False, indent=2)
