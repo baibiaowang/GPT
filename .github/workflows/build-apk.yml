@@ -200,7 +200,7 @@ jobs:
           set -euo pipefail
           BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/ 2>/dev/null | sort -V | tail -1)
           APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
-          CURRENT_DIGEST=$("${BT}apksigner" verify --print-certs "$APK_SRC" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2; exit}')
+          CURRENT_DIGEST=$("${BT}apksigner" verify --print-certs "$APK_SRC" | awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}')
           test -n "$CURRENT_DIGEST"
           curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
             "https://github.com/${GITHUB_REPOSITORY}/releases/download/v2.1.4/app.apk" \
