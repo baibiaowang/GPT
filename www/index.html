@@ -229,8 +229,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script src="core/filter-engine.js"></script>
 <script src="core/local-annotation.js"></script>
 <script>
-
-const DEF_KEY='';
+/* ===== 股票判断机 GPT · 2.0.1 · schema v3 runtime ===== */
 const DEF_URLS='https://stocks-txt-file.app.workbuddy.host/stocks.txt';
 const APP_VERSION='2.0.1';
 const APP_VERSION_CODE=2001;
@@ -239,946 +238,506 @@ const UPDATE_URLS=[
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
 const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v2.0.1/app.apk';
-const LS={fav:'sj.fav.v3',cmt:'sj.cmt.v3',urls:'sj.urls.v4',key:'sj.activation.v4',override:'sj.overrides.v2',saved:'sj.savedStocks.v1',archive:'sj.archivedRecords.v1'};
-const IDB_ARCHIVE_KEY='savedArchives.v1';
-const STANDARD_COLUMNS=Object.freeze([
-  {key:'name',label:'股票名称'},
-  {key:'code',label:'股票代码'},
-  {key:'price',label:'当前价格'},
-  {key:'category',label:'判断分类'},
-  {key:'date',label:'公告时间'},
-  {key:'title',label:'公告标题'},
-  {key:'property',label:'判定性质'},
-  {key:'summary',label:'判定总结'}
-]);
-const STANDARD_LABELS=STANDARD_COLUMNS.map(x=>x.label);
-const STANDARD_CATEGORIES=['重组与出售资产','董事长离职与人事变化','严重亏损与财报利空','闲置资金','解除质押与再次质押','股份发行、回购与增持'];
-const state={data:null,kind:null,cur:null,query:'',page:'home',editOpen:false,overviewZoom:.72,annShown:30,detailPushed:false,typeTab:'',conclusionTab:''};
-let favs=new Set(),cmts={},overrides={},savedStocks={},savedArchives={};
-const $=id=>document.getElementById(id);
-function syncStockStickyTop(){
-  const top=document.querySelector('.top');
-  const h=top?Math.ceil(top.getBoundingClientRect().height):90;
-  document.documentElement.style.setProperty('--stock-sticky-top',h+'px');
-}
-window.addEventListener('resize',syncStockStickyTop,{passive:true});
-requestAnimationFrame(syncStockStickyTop);
-function toast(msg,ms){const e=$('toast');e.textContent=msg;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),ms||1800)}
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function hexToBytes(hex){const s=String(hex||'').trim();if(!/^[0-9a-fA-F]{64}$/.test(s))throw new Error('激活码需为64位十六进制');const a=new Uint8Array(32);for(let i=0;i<32;i++)a[i]=parseInt(s.substr(i*2,2),16);return a}
-function b64ToBytes(b64){const bin=atob(String(b64).replace(/[^A-Za-z0-9+/=]/g,''));const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a}
-function keyOf(r){return String(r.code||'')+'|'+String(r.category||'')}
-const IDB=(()=>{const DB='stockjudge-gpt',STORE='kv',VER=1;let p=null;function open(){if(p)return p;p=new Promise((res,rej)=>{const q=indexedDB.open(DB,VER);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(STORE))q.result.createObjectStore(STORE)};q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});return p}function tx(mode,fn){return open().then(db=>new Promise((res,rej)=>{const t=db.transaction(STORE,mode),s=t.objectStore(STORE);let r;try{r=fn(s)}catch(e){rej(e);return}t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error)}))}return{get:k=>tx('readonly',s=>s.get(k)),set:(k,v)=>tx('readwrite',s=>s.put(v,k)),del:k=>tx('readwrite',s=>s.delete(k))}})();
-const Cache={get:async()=>{try{const v=await IDB.get('data');if(v&&isNewStandardData(v))return v;if(v)await IDB.del('data')}catch(e){}try{const v=JSON.parse(localStorage.getItem('sj.cache.v4')||'null');if(v&&isNewStandardData(v))return v;localStorage.removeItem('sj.cache.v4')}catch(e){}return null},set:async d=>{try{await IDB.set('data',d);localStorage.removeItem('sj.cache.v4');return true}catch(e){try{localStorage.setItem('sj.cache.v4',JSON.stringify(d));return true}catch(e2){return false}}}};
-function loadLocal(){try{favs=new Set(JSON.parse(localStorage.getItem(LS.fav)||'[]'))}catch(e){favs=new Set()}try{cmts=JSON.parse(localStorage.getItem(LS.cmt)||'{}')}catch(e){cmts={}}try{overrides=JSON.parse(localStorage.getItem(LS.override)||'{}')}catch(e){overrides={}}try{savedStocks=JSON.parse(localStorage.getItem(LS.saved)||'{}')}catch(e){savedStocks={}}ensureSavedStockMeta()}
-async function loadArchives(){try{const v=await IDB.get(IDB_ARCHIVE_KEY);if(v&&typeof v==='object'){savedArchives=v;return}}catch(e){}try{const v=JSON.parse(localStorage.getItem(LS.archive)||'{}');if(v&&typeof v==='object')savedArchives=v}catch(e){savedArchives={}}}
-async function saveArchives(){const copy=savedArchives;try{await IDB.set(IDB_ARCHIVE_KEY,copy);localStorage.removeItem(LS.archive);return true}catch(e){try{localStorage.setItem(LS.archive,JSON.stringify(copy));return true}catch(e2){return false}}}
-const saveFav=()=>localStorage.setItem(LS.fav,JSON.stringify([...favs]));
-const saveCmt=()=>localStorage.setItem(LS.cmt,JSON.stringify(cmts));
-const saveOverrides=()=>localStorage.setItem(LS.override,JSON.stringify(overrides));
-const saveSavedStocks=()=>localStorage.setItem(LS.saved,JSON.stringify(savedStocks));
-function splitSavedKey(k){const s=String(k||'').split('|');return{code:s.shift()||'',category:s.join('|')}}
-function rememberStock(r){if(!r)return;const k=keyOf(r),old=savedStocks[k]||{};savedStocks[k]={code:String(r.code||old.code||''),category:String(r.category||old.category||''),name:String(r.name||old.name||r.code||''),saved_at:old.saved_at||new Date().toISOString()};saveSavedStocks()}
-function deepClone(v){try{return JSON.parse(JSON.stringify(v))}catch(e){return v}}
-function makeArchive(r){if(!r||!state.data)return null;const k=keyOf(r),record=deepClone(r)||{};delete record.localOnly;delete record._archive;return{version:1,key:k,record,judge_table:deepClone(state.data.judge_tables&&state.data.judge_tables[r.category]||null),announcements:deepClone(state.data.announcements&&state.data.announcements[r.code]||[]),meta:{generated_at:state.data.meta&&state.data.meta.generated_at||'',archived_at:new Date().toISOString()}}}
-function archiveRecord(r){if(!r)return false;const k=keyOf(r);if(r.localOnly&&r._archive){savedArchives[k]=r._archive;saveArchives();rememberStock(r);return true}const a=makeArchive(r);if(!a)return false;savedArchives[a.key]=a;saveArchives();rememberStock(r);return true}
-function ensureSavedStockMeta(){let changed=false;const keys=new Set([...favs,...Object.keys(cmts||{}),...Object.keys(savedArchives||{})]);keys.forEach(k=>{if(!savedStocks[k]){const a=savedArchives[k],x=splitSavedKey(k),rr=a&&a.record||{};savedStocks[k]={code:String(rr.code||x.code||''),category:String(rr.category!=null?rr.category:x.category||''),name:String(rr.name||rr.code||x.code||''),saved_at:(a&&a.meta&&a.meta.archived_at)||new Date().toISOString()};changed=true}});if(changed)saveSavedStocks()}
-function localRecordForKey(k){const a=savedArchives[k];if(a&&a.record){const r=deepClone(a.record)||{};r.localOnly=true;r._archive=a;return r}const m=savedStocks[k]||{};const x=splitSavedKey(k);return{code:String(m.code||x.code||''),category:String(m.category!=null?m.category:x.category||''),name:String(m.name||m.code||x.code||''),localOnly:true}}
-function hydrateSavedArchives(){if(!state.data)return;const keys=new Set([...favs,...Object.keys(cmts||{}),...Object.keys(savedStocks||{}),...Object.keys(savedArchives||{})]);const live=new Map(allRecords().map(r=>[keyOf(r),r]));let changed=false;keys.forEach(k=>{const r=live.get(k);if(r){const a=makeArchive(r);if(a){savedArchives[k]=a;changed=true}}});if(changed)saveArchives()}
-function savedRecordList(test){const map=new Map(allRecords().map(r=>[keyOf(r),r]));const keys=new Set([...favs,...Object.keys(cmts||{}),...Object.keys(savedStocks||{}),...Object.keys(savedArchives||{})]);keys.forEach(k=>{if(test(k)&&!map.has(k)){const r=localRecordForKey(k);if(r)map.set(k,r)}});return[...map.values()].filter(r=>test(keyOf(r)))}
-function getUrls(){const custom=(localStorage.getItem(LS.urls)||'').split(/\s*\n\s*/).map(s=>s.trim()).filter(Boolean);if(custom.length)return custom;return String(DEF_URLS).split(/\s*\n\s*/).map(s=>s.trim()).filter(s=>s&&s.indexOf('__')!==0)}
-function getKeyHex(){const custom=(localStorage.getItem(LS.key)||'').trim();if(/^[0-9a-fA-F]{64}$/.test(custom))return custom;throw new Error('尚未配置激活码，请到“设置 → 激活码”填写')}
-async function decryptText(txt){const u=b64ToBytes(txt);if(u.length<33)throw new Error('密文过短');if(String.fromCharCode(u[0],u[1],u[2],u[3])!=='SJ01')throw new Error('数据格式不匹配');const iv=u.slice(5,17),data=u.slice(17),key=await crypto.subtle.importKey('raw',hexToBytes(getKeyHex()),{name:'AES-GCM'},false,['decrypt']);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,data);const raw=new TextDecoder().decode(plain);try{return JSON.parse(raw)}catch(e){return raw}}
-function splitStandardRow(line){let s=String(line||'').trim();if(!s)return[];if(s.charAt(0)==='|')s=s.slice(1);if(s.charAt(s.length-1)==='|')s=s.slice(0,-1);const out=[];let cur='',escp=false;for(let i=0;i<s.length;i++){const ch=s[i];if(escp){cur+=ch;escp=false;continue}if(ch==='\\'){escp=true;continue}if(ch==='|'){out.push(cur.trim());cur=''}else cur+=ch}out.push(cur.trim());return out}
-function cleanHeader(h){return String(h||'').replace(/[*_]/g,'').replace(String.fromCharCode(96),'').replace(/^\s*#?\s*/,'').replace(/\s+/g,'').replace(/[（）()\[\]【】]/g,'').trim()}
-function isSeparatorRow(cells){return cells.length>0&&cells.every(x=>/^:?-{2,}:?$/.test(String(x||'')))}
-function findColumn(headers,aliases){const a=aliases.map(cleanHeader);for(let i=0;i<headers.length;i++){const h=cleanHeader(headers[i]);if(a.includes(h))return i}for(let i=0;i<headers.length;i++){const h=cleanHeader(headers[i]);if(a.some(x=>h.includes(x)||x.includes(h)))return i}return -1}
-function parseResultCounts(raw){
-  const s=String(raw||'').trim();
-  const result={good:0,bad:0,veto:0,hasAny:false};
-  if(!s)return result;
-  const find=(name)=>{
-    const m=s.match(new RegExp(name+'\\s*[（(]\\s*(-?\\d+)\\s*[）)]','u'));
-    return m?Math.max(0,Number(m[1])||0):null;
-  };
-  const good=find('利好'),bad=find('不利'),veto=find('否决');
-  if(good!==null){result.good=good;result.hasAny=true}
-  if(bad!==null){result.bad=bad;result.hasAny=true}
-  if(veto!==null){result.veto=veto;result.hasAny=true}
-  return result;
-}
-function formatResultCounts(c){
-  const x=c&&typeof c==='object'?c:{};
-  return '利好（'+(Number(x.good)||0)+'）不利（'+(Number(x.bad)||0)+'）否决（'+(Number(x.veto)||0)+'）';
-}
-
-function resultCountsText(r){
-  if(!r)return '';
-  const raw=String(r.raw_property??r['判定性质']??'').trim();
-  const c=r.result_counts&&typeof r.result_counts==='object'
-    ?{good:Number(r.result_counts.good)||0,bad:Number(r.result_counts.bad)||0,veto:Number(r.result_counts.veto)||0}
-    :parseResultCounts(raw);
-  if(c.veto>0)return '';
-  if(!raw && !(r.result_counts&&typeof r.result_counts==='object'))return '';
-  return formatResultCounts(c);
-}
-
-function normalizeConclusion(raw){
-  const s=String(raw||'').trim();
-  const m=s.match(/^(利好|不利|否决|待定)(?:[。．.]|$)/u);
-  if(m)return m[1];
-  if(s==='有利')return '利好';
-  if(s==='利空')return '不利';
-  return '待定';
-}
-function conclusionFromSummary(summary,fallback){
-  const s=String(summary||'').trim();
-  const m=s.match(/^(利好|不利|否决|待定)(?:[。．.]|$)/u);
-  if(m)return m[1];
-  return normalizeConclusion(fallback);
-}
-function fieldValue(r,key){
-  const aliases={
-    name:['股票名称','name','名称','证券名称','公司名称'],
-    code:['股票代码','code','代码','证券代码'],
-    price:['当前价格','price','现价','股票价格','价格'],
-    category:['判断分类','category','分类','判断类型','类型'],
-    date:['公告时间','date','公告日期','公告日','日期','时间'],
-    title:['公告标题','title','标题'],
-    property:['判定性质','raw_property'],
-    summary:['判定总结','summary','股票总结','最终股票总结','最终总结','结论总结','总结','股票详情','详情']
-  };
-  for(const k of (aliases[key]||[])){
-    if(r&&Object.prototype.hasOwnProperty.call(r,k)&&r[k]!=null&&String(r[k]).trim()!=='')return String(r[k]).trim();
-    if(r&&r.columns&&Object.prototype.hasOwnProperty.call(r.columns,k)&&r.columns[k]!=null&&String(r.columns[k]).trim()!=='')return String(r.columns[k]).trim();
-  }
-  return '';
-}
-function normalizePrice(v){
-  const s=String(v??'').trim();
-  if(!s)return '';
-  const n=Number(s.replace(/,/g,''));
-  return Number.isFinite(n)?n:s;
-}
-function canonicalProperty(raw,counts){
-  const c=counts||parseResultCounts(raw);
-  if(c.veto>0)return '';
-  if(!c.hasAny && !raw)return '';
-  return formatResultCounts(c);
-}
-
-function buildDynamicHeaders(payload){
-  const cols=(payload&&payload.layout&&(
-    Array.isArray(payload.layout.detail_columns)?payload.layout.detail_columns:
-    Array.isArray(payload.layout.list_columns)?payload.layout.list_columns:[]
-  ))||[];
-  const labels=cols.map(x=>String(x&&x.label||x&&x.key||'').trim()).filter(Boolean);
-  const keys=cols.map(x=>String(x&&x.key||'').trim()).filter(Boolean);
-  if(labels.length)return{labels,keys};
-  const first=payload&&Array.isArray(payload.records)?payload.records[0]:null;
-  const fallback=first&&typeof first==='object'?Object.keys(first):[];
-  return{labels:fallback.slice(),keys:fallback.slice()};
-}
-function normalizeSchema3Data(payload){
-  if(!payload||typeof payload!=='object'||!Array.isArray(payload.records))return null;
-  if(!(payload.meta&&Number(payload.meta.schema)===3))return null;
-  const records=payload.records.map((src)=>{
-    const r=(src&&typeof src==='object')?src:{};
-    const name=fieldValue(r,'name');
-    const code=fieldValue(r,'code');
-    const price=normalizePrice(fieldValue(r,'price'));
-    const category=fieldValue(r,'category');
-    const date=fieldValue(r,'date');
-    const title=fieldValue(r,'title');
-    const rawProperty=fieldValue(r,'property');
-    const summary=fieldValue(r,'summary');
-    const suppliedCounts=(r.result_counts&&typeof r.result_counts==='object')
-      ?{good:Number(r.result_counts.good)||0,bad:Number(r.result_counts.bad)||0,veto:Number(r.result_counts.veto)||0,hasAny:true}
-      :parseResultCounts(rawProperty);
-    const property=canonicalProperty(rawProperty,suppliedCounts);
-    const conclusion=conclusionFromSummary(summary,r.conclusion??r['结论']);
-    const columns={
-      '股票名称':name,'股票代码':code,'当前价格':price,'判断分类':category,
-      '公告时间':date,'公告标题':title,'判定性质':property,'判定总结':summary
-    };
-    return{
-      ...r,name,code,price,category,date,title,
-      raw_property:property,result_counts:{good:suppliedCounts.good,bad:suppliedCounts.bad,veto:suppliedCounts.veto},
-      conclusion,summary,columns,headers:STANDARD_LABELS.slice(),source_format:'JSON动态数据包'
-    };
-  }).filter(r=>r.name&&r.code);
-  if(!records.length)throw new Error('JSON数据包中没有有效股票记录');
-  return{
-    meta:{...(payload.meta||{}),source_format:'JSON动态数据包',headers:STANDARD_LABELS.slice()},
-    layout:{list_columns:STANDARD_COLUMNS.slice(),detail_columns:STANDARD_COLUMNS.slice()},
-    display:payload.display||{},records,
-    judge_tables:payload.judge_tables||{},announcements:payload.announcements||{}
-  };
-}
-
-function parseStandardRows(text){
-  const src=String(text||'').replace(/^\uFEFF/,'').replace(/\r/g,'');
-  const lines=src.split('\n').filter(x=>x.trim());
-  if(!lines.length)throw new Error('明文数据为空');
-  let headerIndex=-1,headers=[];
-  for(let i=0;i<lines.length;i++){
-    const cells=lines[i].indexOf('|')>=0?splitStandardRow(lines[i]):lines[i].split('\t').map(x=>x.trim());
-    if(cells.length===8&&!isSeparatorRow(cells)){
-      const ok=cells.every((x,j)=>cleanHeader(x)===cleanHeader(STANDARD_LABELS[j]));
-      if(ok){headerIndex=i;headers=cells;break}
-    }
-  }
-  if(headerIndex<0)throw new Error('未找到符合最新标准的8列表头；表头顺序必须固定为：'+STANDARD_LABELS.join(' | '));
-  const records=[];
-  for(let i=headerIndex+1;i<lines.length;i++){
-    const cells=lines[i].indexOf('|')>=0?splitStandardRow(lines[i]):lines[i].split('\t').map(x=>x.trim());
-    if(cells.length<8||isSeparatorRow(cells))continue;
-    const name=String(cells[0]??'').trim(),code=String(cells[1]??'').trim();
-    if(!name||!code)continue;
-    const price=normalizePrice(cells[2]),category=String(cells[3]??'').trim();
-    const date=String(cells[4]??'').trim(),title=String(cells[5]??'').trim();
-    const rawProperty=String(cells[6]??'').trim(),summary=String(cells[7]??'').trim();
-    const counts=parseResultCounts(rawProperty),property=canonicalProperty(rawProperty,counts);
-    records.push({
-      name,code,price,category,date,title,raw_property:property,
-      result_counts:{good:counts.good,bad:counts.bad,veto:counts.veto},
-      conclusion:conclusionFromSummary(summary,'待定'),summary,
-      columns:{'股票名称':name,'股票代码':code,'当前价格':price,'判断分类':category,'公告时间':date,'公告标题':title,'判定性质':property,'判定总结':summary},
-      headers:STANDARD_LABELS.slice(),judge:[],source_format:'明文动态表格'
-    });
-  }
-  if(!records.length)throw new Error('表头已识别，但没有有效股票记录');
-  return{
-    meta:{generated_at:new Date().toISOString(),source_format:'明文动态表格',headers:STANDARD_LABELS.slice()},
-    layout:{list_columns:STANDARD_COLUMNS.slice(),detail_columns:STANDARD_COLUMNS.slice()},
-    records,judge_tables:{},announcements:{}
-  };
-}
-
-function isNewStandardData(d){
-  return !!(d&&typeof d==='object'&&Array.isArray(d.records)&&(
-    (d.meta&&d.meta.source_format==='明文动态表格') ||
-    (d.meta&&d.meta.source_format==='JSON动态数据包') ||
-    Number(d.meta&&d.meta.schema)===3
-  ));
-}
-function normalizeData(payload){
-  const normalized=normalizeSchema3Data(payload);
-  if(normalized)return normalized;
-  if(isNewStandardData(payload))return payload;
-  if(typeof payload==='string')return parseStandardRows(payload);
-  if(payload&&typeof payload.data==='string')return parseStandardRows(payload.data);
-  throw new Error('解密成功，但无法识别当前标准数据格式');
-}
-async function loadFromUrl(url){
-  if(window.AndroidNative&&AndroidNative.fetchDataSource&&AndroidNative.readDataSourceChunk){
-    await new Promise((resolve,reject)=>{
-      const done=(ok,message)=>{window.__sjNativeDataWaiter=null;ok?resolve():reject(new Error(message||'原生网络请求失败'))};
-      window.__sjNativeDataWaiter=done;
-      try{AndroidNative.fetchDataSource(url)}catch(e){window.__sjNativeDataWaiter=null;reject(e)}
-    });
-    let text='',offset=0;const chunk=196608;
-    for(;;){
-      const piece=AndroidNative.readDataSourceChunk(offset,chunk);
-      if(!piece)break;
-      text+=piece;
-      offset+=piece.length;
-      if(piece.length<chunk)break;
-    }
-    if(!text)throw new Error('数据文件为空');
-    return normalizeData(await decryptText(text));
-  }
-  const r=await fetch(url,{cache:'no-cache'});
-  if(!r.ok)throw new Error('HTTP '+r.status);
-  return normalizeData(await decryptText(await r.text()));
-}
-window.__sjNativeDataSourceResult=function(ok,message){
-  const done=window.__sjNativeDataWaiter;
-  if(typeof done==='function')done(!!ok,String(message||''));
+const LS={
+  urls:'sj.urls.v4',
+  key:'sj.activation.v4',
+  layout:'table.layout.v3',
+  filters:'table.filters.v1',
+  legacyFav:'sj.fav.v3',
+  legacyCmt:'sj.cmt.v3',
+  migrated:'table.migrated.schema3.v1'
 };
-async function loadFromUrls(urls){const errs=[];for(const u of urls){try{return await loadFromUrl(u)}catch(e){errs.push(u.replace(/^https?:\/\//,'').slice(0,48)+' → '+e.message)}}throw new Error(errs.join('；'))}
-function statusColor(c){const m={'有利':'var(--good)','不利':'var(--bad)','待定':'var(--wait)','否决':'#5B0E1E'};return m[c]||'var(--gray)'}
-function allRecords(){return state.data&&Array.isArray(state.data.records)?state.data.records:[]}
-function getOverride(r){return overrides[keyOf(r)]||{}}
-function getConclusion(r){
-  return conclusionFromSummary(r&&r.summary,r&&r.conclusion);
+const IDB_DB='stockjudge-gpt',IDB_STORE='kv',IDB_CACHE='generic.table.cache.v3';
+const state={
+  table:null,cur:null,query:'',page:'home',detailPushed:false,
+  typeColumn:'',conclusionColumn:'',typeValue:'',conclusionValue:''
+};
+let ann=null;
+
+const $=id=>document.getElementById(id);
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function clean(v){return String(v==null?'':v).trim()}
+function pad3(n){return String(n).padStart(3,'0')}
+function hash(text){
+  let h=2166136261,s=String(text??'');
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}
+  return (h>>>0).toString(16).padStart(8,'0');
+}
+function scalar(v){
+  if(v==null)return '';
+  if(typeof v==='string'||typeof v==='number'||typeof v==='boolean')return String(v);
+  try{return JSON.stringify(v)}catch(e){return String(v)}
+}
+function toast(msg,ms=2200){
+  const e=$('toast');if(!e)return;
+  e.textContent=msg;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),ms);
+}
+function getUrls(){
+  const custom=String(localStorage.getItem(LS.urls)||'').split(/\s*\n\s*/).map(clean).filter(Boolean);
+  return custom.length?custom:[DEF_URLS];
+}
+function getKey(){
+  const k=String(localStorage.getItem(LS.key)||'').trim();
+  if(!/^[0-9a-fA-F]{64}$/.test(k))throw new Error('请先输入64位十六进制激活码');
+  return k;
+}
+function hexBytes(hex){
+  const s=clean(hex);const a=new Uint8Array(32);
+  for(let i=0;i<32;i++)a[i]=parseInt(s.slice(i*2,i*2+2),16);
+  return a;
+}
+function b64Bytes(b64){
+  const bin=atob(String(b64).replace(/[^A-Za-z0-9+/=]/g,''));
+  const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;
+}
+async function decryptSJ01(text){
+  const u=b64Bytes(text);
+  if(u.length<33)throw new Error('SJ01 密文过短');
+  if(String.fromCharCode(u[0],u[1],u[2],u[3])!=='SJ01')throw new Error('不是 SJ01 数据');
+  if(u[4]!==3)throw new Error('SJ01 版本不是 0x03');
+  const iv=u.slice(5,17),data=u.slice(17);
+  const key=await crypto.subtle.importKey('raw',hexBytes(getKey()),{name:'AES-GCM'},false,['decrypt']);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,data);
+  const raw=new TextDecoder().decode(plain);
+  let obj;try{obj=JSON.parse(raw)}catch(e){throw new Error('解密成功，但明文不是 JSON')};
+  if(!obj||typeof obj!=='object')throw new Error('明文 JSON 不是对象');
+  if(!obj.meta||Number(obj.meta.schema)!==3)throw new Error('明文 JSON schema 必须为 3');
+  if(!Array.isArray(obj.records))throw new Error('schema v3 缺少 records');
+  return obj;
 }
 
-function propertyOptions(){const s=new Set();allRecords().forEach(r=>{const t=state.data.judge_tables&&state.data.judge_tables[r.category];(t&&t.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))})});Object.values(savedArchives||{}).forEach(a=>(a&&a.judge_table&&a.judge_table.rows||[]).forEach(x=>{if(x[1])s.add(String(x[1]))}));['有利','不利','中性','待定'].forEach(x=>s.add(x));return [...s]}
-function judgmentOptions(){const s=new Set(['不确定','命中','未命中']);allRecords().forEach(r=>(r.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));Object.values(savedArchives||{}).forEach(a=>(a&&a.record&&a.record.judge||[]).forEach(x=>{if(x!=null&&String(x))s.add(String(x))}));return [...s]}
-function buildRows(r){const t=(r.localOnly&&r._archive&&r._archive.judge_table)||(state.data&&state.data.judge_tables&&state.data.judge_tables[r.category]);if(!t)return[];const ov=getOverride(r);return(t.rows||[]).map((row,i)=>({i,q:row[0]||'',property:(ov.properties&&ov.properties[i]!=null?ov.properties[i]:row[1]||'待定'),judge:(ov.judges&&ov.judges[i]!=null?ov.judges[i]:((r.judge||[])[i]||'不确定')),role:row[2]||''}))}
-function formatMonthDay(v){const s=String(v||'');const m=s.match(/(?:^|\D)(\d{1,2})[-\/.](\d{1,2})(?:\D|$)/);return m?String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0'):s.slice(5,10)||s}
-function stockTableHtml(records){
-  if(!records.length)return '<div class="empty">暂无内容</div>';
-  const head='<thead><tr><th>股票名称</th><th>判断分类</th><th>公告时间</th></tr></thead>';
-  const body=records.map(r=>{
-    const k=keyOf(r),local=!!r.localOnly;
-    return '<tr class="stock-row" data-code="'+esc(r.code)+'" data-cat="'+esc(r.category)+'" data-local-only="'+(local?'1':'0')+'">'+
-      '<td class="stock-name">'+esc(r.name||r.code)+(favs.has(k)?'<span class="star">★</span>':'')+(cmts[k]?'<span class="stock-note">✎</span>':'')+'</td>'+
-      '<td class="stock-category">'+esc(r.category||'')+'</td>'+
-      '<td class="stock-date">'+esc(formatMonthDay(r.date))+'</td>'+
-      '</tr>';
-  }).join('');
-  return '<div class="stock-table-wrap"><table class="stock-table">'+head+'<tbody>'+body+'</tbody></table></div>';
-}
-function renderList(container,records){container.innerHTML=stockTableHtml(records)}
-function renderHome(){
-  const rs=filtered();
-  $('countTitle').textContent='共 '+rs.length+' 条';
-  $('dataNote').textContent=state.data?(state.kind==='cache'?'缓存数据':state.kind==='local'?'本地导入':'实时数据'):'未加载';
-  renderList($('homeList'),rs);
-}
-function dynamicGroups(){
-  const map=new Map(),order=[];
-  allRecords().forEach(r=>{
-    const k=String(r.category||'未分类').trim()||'未分类';
-    if(!map.has(k)){map.set(k,[]);order.push(k)}
-    map.get(k).push(r);
-  });
-  return order.map(k=>[k,map.get(k)]);
-}
-function renderTypes(){
-  const groups=dynamicGroups();
-  if(!groups.length){
-    $('typeTabs').innerHTML='';
-    $('typesList').innerHTML='<div class="empty">暂无类型数据</div>';
-    return;
-  }
-  const names=groups.map(x=>x[0]);
-  if(!names.includes(state.typeTab))state.typeTab=names[0];
-  $('typeTabs').innerHTML=groups.map(([name,rs])=>'<button class="tab '+(name===state.typeTab?'on':'')+'" data-type-tab="'+esc(name)+'">'+esc(name)+'<b>'+rs.length+'</b></button>').join('');
-  const rs=groups.find(x=>x[0]===state.typeTab)?.[1]||[];
-  $('typesList').innerHTML=stockTableHtml(rs);
-  document.querySelectorAll('[data-type-tab]').forEach(b=>b.onclick=()=>{
-    state.typeTab=b.dataset.typeTab;
-    renderTypes();
-  });
-}
-function renderConclusions(){
-  const map=new Map();
-  allRecords().forEach(r=>{
-    const k=getConclusion(r);
-    if(!map.has(k))map.set(k,[]);
-    map.get(k).push(r);
-  });
-  const order=['利好','不利','否决','待定'];
-  const groups=order.filter(x=>map.has(x)).map(x=>[x,map.get(x)]);
-  if(!groups.length){
-    $('conclusionTabs').innerHTML='';
-    $('conclusionList').innerHTML='<div class="empty">暂无结果数据</div>';
-    return;
-  }
-  const names=groups.map(x=>x[0]);
-  if(!names.includes(state.conclusionTab))state.conclusionTab=names[0];
-  $('conclusionTabs').innerHTML=groups.map(([name,rs])=>'<button class="tab '+(name===state.conclusionTab?'on':'')+'" data-conclusion-tab="'+esc(name)+'">'+esc(name)+'<b>'+rs.length+'</b></button>').join('');
-  const rs=groups.find(x=>x[0]===state.conclusionTab)?.[1]||[];
-  $('conclusionList').innerHTML=stockTableHtml(rs);
-  document.querySelectorAll('[data-conclusion-tab]').forEach(b=>b.onclick=()=>{
-    state.conclusionTab=b.dataset.conclusionTab;
-    renderConclusions();
-  });
-}
-function renderComments(){
-  const rs=savedRecordList(k=>!!cmts[k]);
-  $('commentList').innerHTML=rs.length?stockTableHtml(rs):'<div class="empty">暂无点评</div>';
-}
-function renderFavorites(){
-  const rs=savedRecordList(k=>favs.has(k));
-  $('favList').innerHTML=rs.length?stockTableHtml(rs):'<div class="empty">还没有收藏</div>';
-}
-function filtered(){
-  const q=state.query.trim().toLowerCase();
-  return allRecords().filter(r=>!q||String(r.name||'').toLowerCase().includes(q)||String(r.code||'').includes(q));
-}
-function updateStockTableSticky(){
-  const top=document.querySelector('.top');
-  const h=top?Math.ceil(top.getBoundingClientRect().height):0;
-  document.documentElement.style.setProperty('--stock-sticky-top',h+'px');
-}
-function renderAllPages(){
-  renderHome();
-  renderTypes();
-  renderConclusions();
-  renderComments();
-  renderFavorites();
-  updateDataStatus();
-  updateStockTableSticky();
-}
-function pageSwitch(page){
-  if($('detail').classList.contains('show'))closeDetail(false);
-  state.page=page;
-  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+page));
-  document.querySelectorAll('.bottom button').forEach(x=>x.classList.toggle('on',x.dataset.page===page));
-  window.scrollTo(0,0);
-}
-
-function announcementTypes(a){const raw=a&&(a.types||a.type||a.categories||a.category||'');if(Array.isArray(raw))return raw.filter(Boolean).map(String);return String(raw||'').split(/[、,，/|]+/).map(s=>s.trim()).filter(Boolean)}
-function announcementsFor(r){const arr=(r.localOnly&&r._archive&&Array.isArray(r._archive.announcements)?r._archive.announcements:(state.data&&state.data.announcements&&state.data.announcements[r.code])||[]);return [...arr].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))}
-function annHtml(r){const arr=announcementsFor(r);if(!arr.length&&r.title)return '<div class="card"><div class="card-hd"><span>公告</span><span class="sub">'+esc(r.date||'')+'</span></div><div class="ann"><div class="ann-title">'+esc(r.title)+'</div><div class="ann-meta"><span>来自当前标准数据</span></div></div></div>';if(!arr.length)return '<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">0 条</span></div><div class="empty">暂无公告</div></div>';const show=arr.slice(0,state.annShown);return '<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">最新在前 · 共 '+arr.length+' 条</span></div>'+show.map(a=>a.url?'<a class="ann" href="'+esc(a.url)+'" target="_blank" rel="noopener"><div class="ann-title">'+esc(a.title||'未命名公告')+'</div><div class="ann-meta">'+(a.date?'<span>'+esc(a.date)+'</span>':'')+announcementTypes(a).map(t=>'<span class="tag type">'+esc(t)+'</span>').join('')+'</div></a>':'<div class="ann"><div class="ann-title">'+esc(a.title||'未命名公告')+'</div><div class="ann-meta">'+(a.date?'<span>'+esc(a.date)+'</span>':'')+announcementTypes(a).map(t=>'<span class="tag type">'+esc(t)+'</span>').join('')+'</div></div>').join('')+(arr.length>state.annShown?'<button class="edit-toggle" style="margin:8px 12px;width:calc(100% - 24px);text-align:center" id="annMore">展开全部</button>':'')+'</div>'}
-function editHtml(r){const rows=buildRows(r),props=propertyOptions(),judges=judgmentOptions(),ov=getOverride(r),concs=[...new Set(allRecords().map(getConclusion).concat([getConclusion(r)]))];const phtml=props.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join(''),jhtml=judges.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join(''),chtml=concs.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');return '<div class="card"><button class="edit-toggle" id="editToggle"><span>修改判定与性质</span><span>'+(state.editOpen?'⌃':'⌄')+'</span></button><div class="edit-panel '+(state.editOpen?'open':'')+'" id="editPanel"><div class="form-row"><label>最终判定结果</label><select id="editConclusion">'+chtml+'</select></div>'+rows.map(x=>'<div class="edit-rule"><div class="rule-q">'+esc(x.q)+'</div><div class="rule-meta"><div><label>性质</label><select data-prop="'+x.i+'">'+phtml+'</select></div><div><label>判定</label><select data-judge="'+x.i+'">'+jhtml+'</select></div></div><div class="setting-desc">'+esc(x.role)+'</div></div>').join('')+'<button class="save-btn" id="saveEdit">保存修改</button></div></div>'}
-function overviewHtml(r){const url='https://basic.10jqka.com.cn/'+encodeURIComponent(r.code)+'/';return '<div class="card overview"><div class="card-hd"><span>公司概况</span><span class="sub">'+esc(r.code)+'</span></div><div class="external-company"><div class="external-icon">10JQKA</div><div class="external-main"><div class="external-title">同花顺公司详情</div><div class="external-desc">在系统默认浏览器中打开完整公司资料，页面支持浏览器原生缩放、返回和分享。</div></div><button class="external-btn" id="ovOpen">打开 ↗</button></div></div>'}
-function detailJudgeHtml(r){const rows=buildRows(r);if(!rows.length)return '';let h='<div class="card"><div class="card-hd"><span>判定与性质</span><span class="sub">'+rows.length+' 条条件</span></div>';let last='';rows.forEach(x=>{if(x.property!==last){h+='<div style="padding:6px 16px;background:var(--brand-soft);color:var(--brand);font-size:12px;font-weight:700">'+esc(x.property)+'</div>';last=x.property}h+='<div class="jrow"><div class="jq">'+esc(x.q)+'</div><div class="jm"><span class="hit" style="color:'+(x.judge==='命中'?'var(--good)':x.judge==='未命中'?'var(--bad)':'var(--muted)')+'">'+esc(x.judge)+'</span><span class="tag">'+esc(x.property)+'</span></div></div>'});return h+'</div>'}
-function finalSummaryText(r){return String(r&&r.summary||'').trim()||'—'}
-function standardTableHtml(r){
-  const rows=[
-    ['股票名称',r.name||''],['股票代码',r.code||''],['当前价格',r.price||''],
-    ['判断分类',r.category||''],['公告时间',r.date||''],['公告标题',r.title||''],
-    ['判定性质',resultCountsText(r)],['判定总结',r.summary||'']
-  ];
-  return '<div class="card standard-table"><div class="card-hd"><span>判定表</span><span class="sub">8 个单元格 · 固定顺序</span></div>'+
-    rows.map(([label,value])=>'<div class="standard-cell"><div class="standard-label">'+esc(label)+'</div><div class="standard-value '+(label==='判定总结'?'summary':'')+'">'+(value?esc(value):'&nbsp;')+'</div></div>').join('')+
-    '</div>';
-}
-
-function openDetail(r){
-  if(!state.detailPushed){history.pushState({detail:true,stock:keyOf(r)},'','?stock='+encodeURIComponent(keyOf(r)));state.detailPushed=true}
-  state.cur=r;state.editOpen=false;state.annShown=30;
-  $('dTitle').textContent=r.name||r.code;
-  $('dHero').innerHTML='<div class="hero"><h1>'+esc(r.name||r.code)+'</h1><div class="meta"><span class="tag">'+esc(r.code)+'</span>'+(r.price?'<span class="tag">当前价格 '+esc(r.price)+'</span>':'')+'<span class="tag cat">'+esc(r.category||'')+'</span>'+(r.date?'<span class="tag">'+esc(r.date)+'</span>':'')+'</div></div>'+standardTableHtml(r);
-  $('dBody').innerHTML=overviewHtml(r)+annHtml(r)+'<div class="card"><div class="card-hd"><span>我的点评</span></div><div class="result-main" style="font-size:14px;line-height:1.65;white-space:pre-wrap">'+esc(cmts[keyOf(r)]||'还没有点评')+'</div></div>';
-  $('detail').classList.add('show');$('actions').classList.add('show');syncActions();bindOverview();
-  const more=$('annMore');if(more)more.onclick=()=>{state.annShown=announcementsFor(r).length;openDetail(r)};
-  $('detail').scrollTop=0;
-}
-
-function bindEdit(r){const t=$('editToggle');if(!t)return;t.onclick=()=>{state.editOpen=!state.editOpen;const p=$('editPanel');if(p)p.classList.toggle('open',state.editOpen);const arrow=t.querySelector('span:last-child');if(arrow)arrow.textContent=state.editOpen?'⌃':'⌄'};const c=$('editConclusion');if(c)c.value=getConclusion(r);const rows=buildRows(r);document.querySelectorAll('select[data-prop]').forEach(s=>{const i=+s.dataset.prop;const x=rows.find(y=>y.i===i);s.value=x?x.property:''});document.querySelectorAll('select[data-judge]').forEach(s=>{const i=+s.dataset.judge;const x=rows.find(y=>y.i===i);s.value=x?x.judge:''});const save=$('saveEdit');if(!save)return;save.onclick=()=>{const k=keyOf(r),ov=overrides[k]||{};ov.conclusion=c.value;ov.properties=ov.properties||{};ov.judges=ov.judges||{};document.querySelectorAll('select[data-prop]').forEach(s=>{ov.properties[s.dataset.prop]=s.value});document.querySelectorAll('select[data-judge]').forEach(s=>{ov.judges[s.dataset.judge]=s.value});overrides[k]=ov;saveOverrides();state.editOpen=false;renderAllPages();openDetail(r);toast('修改已保存')}}
-function applyZoom(){const f=$('ovFrame'),wrap=document.querySelector('.ov-canvas');if(!f||!wrap)return;const z=state.overviewZoom;f.style.width=(100/z)+'%';f.style.height=(100/z)+'%';f.style.transform='scale('+z+')';wrap.style.height=(72)+'vh';wrap.style.minHeight='460px';wrap.style.overflow='auto'}
-window.__sjPinchScale=function(factor,x,y){const n=Number(factor);if(!Number.isFinite(n)||n<=0)return false;const el=document.elementFromPoint(Number(x),Number(y));if(!el||!el.closest||!el.closest('.ov-frame'))return false;state.overviewZoom=Math.min(2.5,Math.max(.45,+(state.overviewZoom*n).toFixed(3)));applyZoom();return true};
-function bindOverview(){const b=$('ovOpen');if(!b)return;const url='https://basic.10jqka.com.cn/'+encodeURIComponent(state.cur.code)+'/';b.onclick=()=>{if(window.AndroidNative&&AndroidNative.openUrl){AndroidNative.openUrl(url)}else{window.open(url,'_blank')}}}
-function closeDetail(fromPop){if(!$('detail').classList.contains('show'))return;state.cur=null;$('detail').classList.remove('show');$('actions').classList.remove('show');if(!fromPop&&state.detailPushed){state.detailPushed=false;history.back()}}
-function syncActions(){if(!state.cur)return;const on=favs.has(keyOf(state.cur));$('aFav').textContent=on?'已收藏':'收藏';$('aFav').classList.toggle('on',on)}
-function openSheet(title,html,bind){$('sheet').innerHTML='<div class="sheet-grab"></div><h3>'+title+'</h3>'+html;$('mask').classList.add('show');if(bind)bind()}
-function closeSheet(){$('mask').classList.remove('show')}
-function sourceSheet(){openSheet('数据源','<div class="note">内置数据源已配置。你可以直接修改、增加或删除地址；每行一个。<br>全部留空 = 恢复内置数据源。</div><div style="padding:0 16px 8px"><textarea id="inUrls" placeholder="https://…/stocks.txt">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div class="sheet-actions" style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="sc">取消</button><button class="sbtn primary" id="ss">保存并加载</button></div>',()=>{$('sc').onclick=closeSheet;$('ss').onclick=()=>{const u=$('inUrls').value.trim();u?localStorage.setItem(LS.urls,u):localStorage.removeItem(LS.urls);closeSheet();boot(false,true)}})}
-function keySheet(){openSheet('激活码','<div class="note">必须由你自己输入；App 不内置、不从构建环境注入激活码。64 位十六进制。</div><div style="padding:0 16px 8px"><input id="inKey" type="text" value="'+esc(localStorage.getItem(LS.key)||'')+'" placeholder="请输入激活码" style="width:100%;height:42px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 10px;outline:none"></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="ks" style="width:100%">保存并加载</button></div>',()=>{$('ks').onclick=()=>{const k=$('inKey').value.trim();if(k&&!/^[0-9a-fA-F]{64}$/.test(k)){toast('激活码格式不正确');return}k?localStorage.setItem(LS.key,k):localStorage.removeItem(LS.key);closeSheet();boot(false,true)}})}
-function exportBackup(){const p={kind:'stock-judge-backup',version:6,exported_at:new Date().toISOString(),app_version:APP_VERSION,data:state.data,favorites:[...favs],comments:cmts,overrides,saved_stocks:savedStocks,saved_archives:savedArchives};const filename='stock-judge-data-'+new Date().toISOString().slice(0,10)+'.json';const text=JSON.stringify(p,null,2);if(window.AndroidNative&&AndroidNative.saveTextFile){AndroidNative.saveTextFile(filename,text);toast('已导出完整数据到“下载 / 股票判断机”',2600);return}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('已导出完整数据')}
-function applyBackupObject(p){if(!p||typeof p!=='object')throw new Error('备份格式无效');if(Array.isArray(p.favorites))p.favorites.forEach(k=>favs.add(k));if(p.comments&&typeof p.comments==='object')Object.assign(cmts,p.comments);if(p.overrides&&typeof p.overrides==='object')Object.assign(overrides,p.overrides);if(p.saved_stocks&&typeof p.saved_stocks==='object')Object.assign(savedStocks,p.saved_stocks);if(p.saved_archives&&typeof p.saved_archives==='object')Object.assign(savedArchives,p.saved_archives);ensureSavedStockMeta();if(p.data&&typeof p.data==='object'){state.data=p.data;state.kind='local';hydrateSavedArchives();Cache.set(p.data).catch(()=>{});}saveFav();saveCmt();saveOverrides();saveSavedStocks();saveArchives();renderAllPages();toast('备份已恢复')} function restoreBackup(){if(window.AndroidNative&&AndroidNative.openBackupPicker){AndroidNative.openBackupPicker();return}const el=document.createElement('input');el.type='file';el.accept='.json,application/json';el.onchange=()=>{const f=el.files&&el.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{applyBackupObject(JSON.parse(rd.result))}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};el.click()} function restoreBackupText(txt){try{applyBackupObject(JSON.parse(txt))}catch(e){toast('恢复失败：'+e.message,2800)}}
-async function clearAllData(){if(!confirm('确定清空本地数据吗？\n\n将删除当前数据缓存、收藏、点评、手动修改和本地归档；数据源地址与激活码不会删除。'))return;try{favs=new Set();cmts={};overrides={};savedStocks={};savedArchives={};saveFav();saveCmt();saveOverrides();saveSavedStocks();await saveArchives();try{await IDB.del('data')}catch(e){}try{localStorage.removeItem('sj.cache.v4')}catch(e){}state.data=null;state.kind=null;state.cur=null;renderAllPages();pageSwitch('settings');$('dataStatus').textContent='本地数据已清空，请重新加载数据';toast('数据已清空',2400)}catch(e){toast('清空失败：'+e.message,2800)}}
-function updateProgressShow(text,pct){const wrap=$('updateProgress');if(!wrap)return;wrap.classList.add('show');$('updateProgressText').textContent=text||'正在下载…';const n=Math.max(0,Math.min(100,Number(pct)||0));$('updateProgressPct').textContent=Math.round(n)+'%';$('updateProgressFill').style.width=n+'%'}
-async function loadUpdateManifest(url){
-  if(window.AndroidNative&&AndroidNative.fetchUpdateManifest&&AndroidNative.readUpdateChunk){
-    await new Promise((resolve,reject)=>{
-      const done=(ok,message)=>{window.__sjNativeUpdateWaiter=null;ok?resolve():reject(new Error(message||'原生更新清单读取失败'))};
-      window.__sjNativeUpdateWaiter=done;
-      try{AndroidNative.fetchUpdateManifest(url)}catch(e){window.__sjNativeUpdateWaiter=null;reject(e)}
+const IDB={
+  open(){
+    return new Promise((resolve,reject)=>{
+      const q=indexedDB.open(IDB_DB,1);
+      q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(IDB_STORE))q.result.createObjectStore(IDB_STORE)};
+      q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);
     });
-    let text='',offset=0;const chunk=65536;
-    for(;;){const piece=AndroidNative.readUpdateChunk(offset,chunk);if(!piece)break;text+=piece;offset+=piece.length;if(piece.length<chunk)break}
-    if(!text)throw new Error('更新清单为空');
-    return JSON.parse(text);
-  }
-  const r=await fetch(url+'?t='+Date.now(),{cache:'no-store',headers:{Accept:'application/json'}});
-  if(!r.ok)throw new Error('HTTP '+r.status);
-  return r.json();
-}
-window.__sjNativeUpdateResult=function(ok,message){const done=window.__sjNativeUpdateWaiter;if(typeof done==='function')done(!!ok,String(message||''))}
-window.__sjApkDownloadProgress=function(percent,status,message){updateProgressShow(message||'正在下载…',percent)}
-window.__sjApkDownloadComplete=function(){updateProgressShow('下载完成，正在打开安装…',100);$('updateDesc').textContent='APK 已下载完成，正在进入安装界面。';toast('下载完成，正在安装',2400)}
-window.__sjApkDownloadFailed=function(message){updateProgressShow(message||'下载失败',0);$('updateDesc').textContent=message||'APK 下载失败';toast(message||'APK 下载失败',2800)}
-async function checkUpdate(){
-  $('updateDesc').textContent='正在检查最新版本…';
+  },
+  get(key){return this.open().then(db=>new Promise((resolve,reject)=>{
+    const t=db.transaction(IDB_STORE,'readonly');const q=t.objectStore(IDB_STORE).get(key);
+    q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);
+  }))},
+  set(key,value){return this.open().then(db=>new Promise((resolve,reject)=>{
+    const t=db.transaction(IDB_STORE,'readwrite');t.objectStore(IDB_STORE).put(value,key);
+    t.oncomplete=()=>resolve(true);t.onerror=()=>reject(t.error);
+  }))},
+  del(key){return this.open().then(db=>new Promise((resolve,reject)=>{
+    const t=db.transaction(IDB_STORE,'readwrite');t.objectStore(IDB_STORE).delete(key);
+    t.oncomplete=()=>resolve(true);t.onerror=()=>reject(t.error);
+  }))}
+};
+
+function loadPrefs(){
   try{
-    const errs=[];
-    for(const u of UPDATE_URLS){
-      try{
-        const p=await loadUpdateManifest(u);
-        const remoteCode=Number(p.versionCode||0);
-        if(!remoteCode)throw new Error('更新清单缺少 versionCode');
-        if(remoteCode>APP_VERSION_CODE){
-          $('updateDesc').textContent='发现新版本 '+(p.version||remoteCode)+'，点击确认开始下载。';
-          toast('发现新版本 v'+(p.version||remoteCode),2200);
-          if(confirm('发现新版本 '+(p.version||remoteCode)+'。现在下载并安装？')){
-            const apk=p.apk_url||RELEASE_APK;
-            if(window.AndroidNative&&AndroidNative.downloadApk){updateProgressShow('准备下载…',0);AndroidNative.downloadApk(apk,'stock-judge-'+(p.version||remoteCode)+'.apk')}
-            else{window.open(apk,'_blank')}
-          }
-          return;
-        }
-        $('updateDesc').textContent='当前已是最新版本 v'+APP_VERSION+'（版本号 '+APP_VERSION_CODE+'） · 更新日期 '+(p.published_at||'未知');
-        toast('当前已是最新版本 v'+APP_VERSION,2200);
-        return;
-      }catch(e){errs.push(u.replace(/^https?:\/\//,'').slice(0,42)+' → '+e.message)}
-    }
-    throw new Error(errs.join('；'));
-  }catch(e){$('updateDesc').textContent='检查更新失败：'+e.message;toast('检查更新失败：'+e.message,3200)}
+    const p=JSON.parse(localStorage.getItem(LS.filters)||'{}')||{};
+    const a=state.table?p[state.table.tableId+'::type']||{}:{};
+    const b=state.table?p[state.table.tableId+'::conclusion']||{}:{};
+    state.typeColumn=a.columnId||state.typeColumn||'';state.typeValue=a.valueId||'';
+    state.conclusionColumn=b.columnId||state.conclusionColumn||'';state.conclusionValue=b.valueId||'';
+  }catch(e){}
 }
-function updateDataStatus(){const n=allRecords().length;const g=state.data&&state.data.meta&&state.data.meta.generated_at;$('dataStatus').textContent=n?(n+' 条记录 · '+(state.kind==='cache'?'缓存':state.kind==='local'?'本地导入':'实时')+(g?' · '+String(g).slice(0,16).replace('T',' '):'')):'未加载'}
-function hasUserConfig(){
-  const savedKey=(localStorage.getItem(LS.key)||'').trim();
-  /* 数据源有内置默认地址，不要求用户必须手动保存 URL；激活码才是解密必需项。 */
-  const hasKey=/^[0-9a-fA-F]{64}$/.test(savedKey);
-  const hasUrls=getUrls().length>0;
-  return hasKey && hasUrls;
+function saveFilter(kind,cid,vid){
+  let p={};try{p=JSON.parse(localStorage.getItem(LS.filters)||'{}')||{}}catch(e){}
+  p[(state.table?.tableId||'')+'::'+kind]={columnId:String(cid||''),valueId:String(vid||'')};
+  localStorage.setItem(LS.filters,JSON.stringify(p));
 }
-async function boot(silent,force){
-  loadLocal();
-
-  /* 启动规则：有可用激活码 + 有可用数据地址 → 首页；否则设置。 */
-  if(!hasUserConfig()){
-    pageSwitch('settings');
-    const hasKey=/^[0-9a-fA-F]{64}$/.test((localStorage.getItem(LS.key)||'').trim());
-    $('dataStatus').textContent=hasKey ? '数据地址可用，但数据尚未成功加载' : '请先配置激活码';
-    if(!silent)toast(hasKey ? '正在准备数据，请检查数据源' : '请先配置激活码',2600);
-    return;
-  }
-
-  if(state.kind==='local'&&!force){
-    if(!silent)toast('当前是本地导入数据');
-    return;
-  }
-
-  pageSwitch('home');
-  const cached=await Cache.get();
-  if(isNewStandardData(cached))apply(cached,'cache');
-
-  const urls=getUrls();
-  if(!urls.length){
-    pageSwitch('settings');
-    $('dataStatus').textContent='数据源为空，请配置数据源';
-    return;
-  }
-
-  try{
-    const d=await loadFromUrls(urls);
-    await Cache.set(d);
-    apply(d,'remote');
-    pageSwitch('home');
-    if(silent)toast('已更新到最新数据');
-  }catch(e){
-    if(!cached){
-      pageSwitch('settings');
-      $('dataStatus').textContent='数据加载失败：'+e.message;
-      toast('数据加载失败：请检查数据源地址、网络和激活码',2800);
-    }else{
-      pageSwitch('home');
-      toast('联网更新失败，继续显示缓存');
+function columnRegistry(){
+  let p={};try{p=JSON.parse(localStorage.getItem('table.columnIds.v1')||'{}')||{}}catch(e){}
+  return p;
+}
+function saveColumnRegistry(p){try{localStorage.setItem('table.columnIds.v1',JSON.stringify(p))}catch(e){}}
+function defsFromSchema(payload){
+  const l=payload.layout&&typeof payload.layout==='object'?payload.layout:{};
+  const list=Array.isArray(l.list_columns)?l.list_columns:[];
+  const detail=Array.isArray(l.detail_columns)?l.detail_columns:[];
+  const all=[];const byKey=new Map();
+  for(const source of [list,detail]){
+    for(const d of source){
+      const key=clean(d?.key)||clean(d?.label);if(!key)continue;
+      if(!byKey.has(key)){
+        const item={key,label:clean(d?.label)||key,type:clean(d?.type)||'text',list:false,detail:false};
+        byKey.set(key,item);all.push(item);
+      }
+      const item=byKey.get(key);
+      if(source===list)item.list=true;if(source===detail)item.detail=true;
+      if(source===detail&&d?.type)item.type=clean(d.type);
     }
   }
+  if(!all.length&&Array.isArray(payload.records)&&payload.records[0]){
+    const first=payload.records[0];
+    const c=first.columns&&typeof first.columns==='object'?first.columns:first;
+    Object.keys(c||{}).filter(k=>!['judge','rowId','id','cells','columns'].includes(k)).forEach(k=>all.push({key:k,label:k,type:'text',list:true,detail:true}));
+  }
+  if(!all.length)throw new Error('schema v3 没有可识别表头');
+  return{defs:all,listKeys:new Set(list.map(x=>clean(x?.key)||clean(x?.label)).filter(Boolean))};
 }
-function apply(d,kind){state.data=d;state.kind=kind;hydrateSavedArchives();renderAllPages()}
-document.querySelectorAll('.bottom button').forEach(b=>b.onclick=()=>pageSwitch(b.dataset.page));
-document.addEventListener('click',e=>{const row=e.target.closest('.stock-row');if(!row)return;const k=String(row.dataset.code||'')+'|'+String(row.dataset.cat||'');const r=row.dataset.localOnly==='1'?localRecordForKey(k):allRecords().find(x=>String(x.code)===String(row.dataset.code)&&String(x.category||'')===String(row.dataset.cat||''));if(r)openDetail(r)});
-$('q').addEventListener('input',e=>{state.query=e.target.value;renderHome()});
-$('btnBack').onclick=closeDetail;
-$('aFav').onclick=()=>{if(!state.cur)return;const k=keyOf(state.cur);if(!favs.has(k))archiveRecord(state.cur);else rememberStock(state.cur);favs.has(k)?(favs.delete(k),toast('已取消收藏')):(favs.add(k),toast('已收藏'));saveFav();syncActions();renderAllPages()};
-$('aCmt').onclick=()=>{if(!state.cur)return;const k=keyOf(state.cur);openSheet('点评 · '+esc(state.cur.name||state.cur.code),'<div style="padding:0 16px 10/* ===== 2.0.1 schema-v3 generic table runtime ===== */
-const T20_CACHE_KEY='generic.table.cache.v3';
-const T20_LAYOUT_KEY='table.layout.v3';
-const T20_FILTER_KEY='table.filters.v1';
-const T20_ANN_KEY='table.ann.v3';
-const gAnn=new LocalAnnotation(localStorage);
-state.table=null;
-state.typeColumn='';
-state.conclusionColumn='';
-state.typeValue='';
-state.conclusionValue='';
-state.filterColumn={type:'',conclusion:''};
-
-function t20Clean(v){return String(v==null?'':v).trim()}
-function t20Hash(text){let h=2166136261;const s=String(text??'');for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16).padStart(8,'0')}
-function t20Pad(n){return String(n).padStart(3,'0')}
-function t20Scalar(v){return v==null?'':(typeof v==='string'||typeof v==='number'||typeof v==='boolean'?String(v):JSON.stringify(v))}
-function t20Value(record,def){
-  const r=record&&typeof record==='object'?record:{};
-  const cols=r.columns&&typeof r.columns==='object'?r.columns:{};
-  const candidates=[def.key,def.label];
-  for(const k of candidates){
-    if(k&&Object.prototype.hasOwnProperty.call(r,k)&&r[k]!=null)return t20Scalar(r[k]);
-    if(k&&Object.prototype.hasOwnProperty.call(cols,k)&&cols[k]!=null)return t20Scalar(cols[k]);
+function recordValue(record,def){
+  const r=record&&typeof record==='object'?record:{},cols=r.columns&&typeof r.columns==='object'?r.columns:{};
+  for(const k of [def.key,def.label]){
+    if(k&&Object.prototype.hasOwnProperty.call(r,k)&&r[k]!=null)return scalar(r[k]);
+    if(k&&Object.prototype.hasOwnProperty.call(cols,k)&&cols[k]!=null)return scalar(cols[k]);
   }
   return '';
 }
-function t20Defs(payload){
-  const layout=payload&&payload.layout&&typeof payload.layout==='object'?payload.layout:{};
-  const list=Array.isArray(layout.list_columns)?layout.list_columns:[];
-  const detail=Array.isArray(layout.detail_columns)?layout.detail_columns:[];
-  const src=(detail.length?detail:list);
-  if(src.length)return src.map((d,i)=>({key:t20Clean(d&&d.key)||t20Clean(d&&d.label)||('col_'+i),label:t20Clean(d&&d.label)||t20Clean(d&&d.key)||('列'+t20Pad(i+1)),type:t20Clean(d&&d.type)||'text'}));
-  const first=payload&&Array.isArray(payload.records)?payload.records[0]:null;
-  if(first&&typeof first==='object'&&first.columns&&typeof first.columns==='object'){
-    return Object.keys(first.columns).map((k)=>({key:k,label:k,type:'text'}));
+function makeStableColumns(tableId,defs){
+  const reg=columnRegistry();const map=reg[tableId]||{};
+  let max=Object.values(map).reduce((m,v)=>Math.max(m,Number(v)||0),0);
+  const cols=[];
+  for(const d of defs){
+    let n=Number(map[d.key]||0);
+    if(!n){n=++max;map[d.key]=n}
+    cols.push({columnId:pad3(n),key:d.key,label:d.label,type:d.type,visible:false,valueCatalog:[]});
   }
-  if(first&&typeof first==='object'){
-    return Object.keys(first).filter(k=>!['judge','rowId','id','cells','columns'].includes(k)).map(k=>({key:k,label:k,type:'text'}));
-  }
-  throw new Error('schema v3 缺少 layout.columns 或 records');
+  reg[tableId]=map;saveColumnRegistry(reg);
+  cols.sort((a,b)=>Number(a.columnId)-Number(b.columnId));
+  return cols;
 }
-function t20StableTableId(payload,sourceUrl,defs){
-  const meta=payload&&payload.meta&&typeof payload.meta==='object'?payload.meta:{};
-  const seed=t20Clean(meta.source)||t20Clean(sourceUrl)||defs.map(d=>d.key).join('|');
-  return 'table-'+t20Hash(seed+'|'+defs.map(d=>d.key).join('|'));
+function stableRowId(record,values,columns){
+  const raw=clean(record?.rowId)||clean(record?.id);
+  if(raw)return raw;
+  const codeCol=columns.find(c=>/代码/.test(c.label)||/^code$/i.test(c.key));
+  const catCol=columns.find(c=>/分类|类型/.test(c.label)||/^category$/i.test(c.key));
+  const code=codeCol?recordValue(record,codeCol):'',cat=catCol?recordValue(record,catCol):'';
+  return 'R-'+hash(code&&cat?code+'|'+cat:values.join('\u241f'));
 }
-function t20RowId(record,values,defs){
-  if(record&&record.rowId!=null&&t20Clean(record.rowId))return t20Clean(record.rowId);
-  if(record&&record.id!=null&&t20Clean(record.id))return t20Clean(record.id);
-  const code=t20Value(record,defs.find(d=>/^(code|股票代码|代码)$/i.test(d.key)||/代码/.test(d.label))||{});
-  const cat=t20Value(record,defs.find(d=>/^(category|分类|类型)$/i.test(d.key)||/分类|类型/.test(d.label))||{});
-  return 'R-'+t20Hash(code&&cat?(code+'|'+cat):values.join('\u241f'));
-}
-function t20BuildTable(payload,sourceUrl){
-  if(!payload||typeof payload!=='object')throw new Error('解密结果不是 JSON 对象');
-  if(!payload.meta||Number(payload.meta.schema)!==3)throw new Error('数据 schema 不是 v3');
-  if(!Array.isArray(payload.records))throw new Error('schema v3 缺少 records');
-  const layout=payload.layout&&typeof payload.layout==='object'?payload.layout:{};
-  const defs=t20Defs(payload);
-  const seen=new Set(),columns=[];
-  defs.forEach((d,i)=>{
-    if(seen.has(d.key))return;
-    seen.add(d.key);
-    columns.push({columnId:t20Pad(i+1),key:d.key,label:d.label,type:d.type,visible:false,valueCatalog:[]});
-  });
-  if(!columns.length)throw new Error('schema v3 没有可用表头');
-  const tableId=t20StableTableId(payload,sourceUrl,columns);
-  const listDefs=Array.isArray(layout.list_columns)?layout.list_columns:[];
-  const listKeys=new Set(listDefs.map(d=>t20Clean(d&&d.key)).filter(Boolean));
-  const defaultIds=columns.filter(c=>listKeys.has(c.key)).map(c=>c.columnId);
-  if(defaultIds.length)columns.forEach(c=>{c.visible=defaultIds.includes(c.columnId)});
-  else columns.slice(0,Math.min(3,columns.length)).forEach(c=>c.visible=true);
+function buildTable(payload,url){
+  if(!payload?.meta||Number(payload.meta.schema)!==3)throw new Error('schema v3 校验失败');
+  if(!Array.isArray(payload.records))throw new Error('schema v3 records 缺失');
+  const {defs,listKeys}=defsFromSchema(payload);
+  const seed=clean(payload.meta.source)||url||defs.map(x=>x.key).join('|');
+  const tableId='table-'+hash(seed+'|'+defs.map(x=>x.key).join('|'));
+  const columns=makeStableColumns(tableId,defs);
+  const byKey=new Map(columns.map(c=>[c.key,c]));
+  columns.forEach(c=>{c.visible=listKeys.has(c.key)});
+  if(!columns.some(c=>c.visible))columns.slice(0,Math.min(3,columns.length)).forEach(c=>c.visible=true);
   const rows=[];
-  for(let i=0;i<payload.records.length;i++){
-    const record=payload.records[i]&&typeof payload.records[i]==='object'?payload.records[i]:{};
-    const values=columns.map(c=>t20Value(record,c));
-    if(values.every(v=>!t20Clean(v)))continue;
-    const row={rowId:t20RowId(record,values,columns),cells:columns.map((c,j)=>new CellModel({columnId:c.columnId,value:values[j],type:c.type}))};
-    rows.push(row);
+  for(const rec of payload.records){
+    const values=columns.map(c=>recordValue(rec,c));
+    if(values.every(v=>!clean(v)))continue;
+    rows.push({rowId:stableRowId(rec,values,columns),cells:columns.map((c,i)=>new CellModel({columnId:c.columnId,value:values[i],type:c.type}))});
   }
-  const meta=Object.assign({},payload.meta,{schema:3,source_url:sourceUrl||'',default_list_column_ids:columns.filter(c=>c.visible).map(c=>c.columnId),raw_layout:layout});
-  const extensions={layout:layout,display:payload.display||{},judge_tables:payload.judge_tables||{},announcements:payload.announcements||{}};
-  const table=new TableModel({tableId,tableName:t20Clean(payload.meta.table_name||payload.meta.title)||'数据表格',columns,rows,meta,extensions});
+  if(!rows.length)throw new Error('schema v3 中没有有效 records');
+  const table=new TableModel({
+    tableId,
+    tableName:clean(payload.meta.table_name||payload.meta.title)||'表格',
+    columns,rows,
+    meta:Object.assign({},payload.meta,{source_url:url||'',schema:3}),
+    extensions:{layout:payload.layout||{},display:payload.display||{},judge_tables:payload.judge_tables||{},announcements:payload.announcements||{}}
+  });
   new ColumnManager(table).refreshCatalog();
   return table;
 }
-function t20TableJSON(table){return JSON.stringify(table.toJSON())}
-async function t20CacheGet(){
-  try{const v=await IDB.get(T20_CACHE_KEY);if(v&&v.tableId&&Array.isArray(v.columns)&&Array.isArray(v.rows)){const t=new TableModel(v);new ColumnManager(t).refreshCatalog();return t}}catch(e){}
-  return null;
-}
-async function t20CacheSet(table){try{await IDB.set(T20_CACHE_KEY,table.toJSON());return true}catch(e){return false}}
-function t20LayoutPrefs(){
-  try{return JSON.parse(localStorage.getItem(T20_LAYOUT_KEY)||'{}')||{}}catch(e){return{}}
-}
-function t20SaveLayoutPrefs(v){localStorage.setItem(T20_LAYOUT_KEY,JSON.stringify(v||{}))}
-function v2Columns(){return state.table?state.table.columns:[]}
-function v2Col(id){return state.table?state.table.getColumn(id):null}
-function v2Cell(row,id){return(row&&row.cells||[]).find(c=>String(c.columnId)===String(id))||{value:'',valueId:''}}
-function v2Visible(){
+function cell(row,col){return(row?.cells||[]).find(c=>String(c.columnId)===String(col.columnId))||{value:'',valueId:''}}
+function cols(){return state.table?.columns||[]}
+function visibleCols(){
   if(!state.table)return[];
-  const prefs=t20LayoutPrefs();
-  let ids=Array.isArray(prefs[state.table.tableId])?prefs[state.table.tableId]:[];
-  if(!ids.length)ids=Array.isArray(state.table.meta.default_list_column_ids)?state.table.meta.default_list_column_ids:[];
+  let p={};try{p=JSON.parse(localStorage.getItem(LS.layout)||'{}')}catch(e){}
+  let ids=Array.isArray(p[state.table.tableId])?p[state.table.tableId]:[];
+  if(!ids.length)ids=state.table.columns.filter(c=>c.visible).map(c=>c.columnId);
   if(!ids.length)ids=state.table.columns.slice(0,Math.min(3,state.table.columns.length)).map(c=>c.columnId);
-  return ids.map(v2Col).filter(Boolean);
+  return ids.map(id=>state.table.getColumn(id)).filter(Boolean);
 }
-function v2FindRow(rowId){return state.table&&state.table.getRow(rowId)}
-function v2SavedSnapshot(rowId){
-  const a=[...gAnn.favorites(state.table?state.table.tableId:'')].concat(gAnn.comments(state.table?state.table.tableId:''));
-  return a.find(x=>String(x&&x.rowId)===String(rowId))?.snapshot||null;
+function defaultFilterColumns(){
+  const cs=cols();if(!cs.length)return;
+  const find=re=>cs.find(c=>re.test(String(c.key)+' '+String(c.label)));
+  if(!state.typeColumn||!state.table.getColumn(state.typeColumn))state.typeColumn=(find(/类型|分类|类别|category/i)||cs[0]).columnId;
+  if(!state.conclusionColumn||!state.table.getColumn(state.conclusionColumn))state.conclusionColumn=(find(/结论|结果|状态|等级|conclusion/i)||cs[cs.length-1]).columnId;
 }
-function v2RowData(row){return row||v2SavedSnapshot(row&&row.rowId)||null}
-function v2Format(v,type){
-  if(v==null||v==='')return '—';
-  return String(v);
+function tableHtml(rows,columns=visibleCols()){
+  if(!rows.length)return'<div class="empty">暂无内容</div>';
+  const head=columns.map(c=>'<th><span class="cid">'+esc(c.columnId)+'</span>'+esc(c.label)+'</th>').join('');
+  const body=rows.map(r=>'<tr class="v2-row" data-row-id="'+esc(r.rowId)+'">'+columns.map(c=>'<td title="'+esc(cell(r,c).value)+'">'+esc(cell(r,c).value||'—')+'</td>').join('')+'</tr>').join('');
+  return'<div class="stock-table-wrap"><table class="stock-table data-table"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
-function v2Table(rows,cols){
-  if(!rows.length)return '<div class="empty">暂无内容</div>';
-  const useCols=cols&&cols.length?cols:(state.table?state.table.columns:[]);
-  return '<div class="stock-table-wrap"><table class="stock-table data-table"><thead><tr>'+
-    useCols.map(c=>'<th><span class="cid">'+esc(c.columnId)+'</span>'+esc(c.label)+'</th>').join('')+
-    '</tr></thead><tbody>'+
-    rows.map(r=>'<tr class="v2-row" data-row-id="'+esc(r.rowId)+'">'+useCols.map(c=>'<td title="'+esc(v2Cell(r,c).value)+'">'+esc(v2Format(v2Cell(r,c).value,c.type))+'</td>').join('')+'</tr>').join('')+
-    '</tbody></table></div>';
-}
-function t20FilterKey(kind){return state.table?state.table.tableId+'::'+kind:''}
-function t20LoadFilterPrefs(){
-  let p={};try{p=JSON.parse(localStorage.getItem(T20_FILTER_KEY)||'{}')||{}}catch(e){}
-  const a=p[t20FilterKey('type')]||{};const b=p[t20FilterKey('conclusion')]||{};
-  state.typeColumn=a.columnId||state.typeColumn||'';state.typeValue=a.valueId||'';
-  state.conclusionColumn=b.columnId||state.conclusionColumn||'';state.conclusionValue=b.valueId||'';
-}
-function t20SaveFilterPref(kind,columnId,valueId){
-  let p={};try{p=JSON.parse(localStorage.getItem(T20_FILTER_KEY)||'{}')||{}}catch(e){}
-  p[t20FilterKey(kind)]={columnId:String(columnId||''),valueId:String(valueId||'')};
-  localStorage.setItem(T20_FILTER_KEY,JSON.stringify(p));
-}
-function v2Defaults(){
-  const cols=v2Columns();if(!cols.length)return;
-  const find=(re)=>cols.find(c=>re.test(String(c.key)+' '+String(c.label)));
-  const tc=find(/类型|分类|类别|category/i)||cols[0];
-  const cc=find(/结论|结果|状态|等级|conclusion/i)||cols[cols.length-1];
-  if(!v2Col(state.typeColumn))state.typeColumn=tc?.columnId||'';
-  if(!v2Col(state.conclusionColumn))state.conclusionColumn=cc?.columnId||'';
-}
-function t20RenderFilter(kind){
-  if(!state.table)return;
-  v2Defaults();
-  t20LoadFilterPrefs();
-  const cid=kind==='type'?state.typeColumn:state.conclusionColumn;
-  const selectId=kind==='type'?'v2TypeSelect':'v2ConclusionSelect';
-  const tabId=kind==='type'?'typeTabs':'conclusionTabs';
-  const listId=kind==='type'?'typesList':'conclusionList';
-  const tabs=$(tabId),list=$(listId);
-  const old=$(selectId);
-  if(!old){
-    const card=document.createElement('div');card.className='card v2-filter-card';
-    card.innerHTML='<div class="card-hd"><span>选择表头</span><span class="sub">'+(kind==='type'?'类型':'结论')+'</span></div><div style="padding:10px 12px"><select id="'+selectId+'"></select></div>';
-    tabs.parentNode.insertBefore(card,tabs);
-  }
-  const sel=$(selectId);
-  sel.innerHTML=v2Columns().map(c=>'<option value="'+esc(c.columnId)+'" '+(c.columnId===cid?'selected':'')+'>'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
-  sel.onchange=function(){if(kind==='type'){state.typeColumn=this.value;state.typeValue=''}else{state.conclusionColumn=this.value;state.conclusionValue=''};t20SaveFilterPref(kind,this.value,'');t20RenderFilter(kind)};
-  const col=v2Col(cid),vals=col&&Array.isArray(col.valueCatalog)?col.valueCatalog:[];
-  let cur=kind==='type'?state.typeValue:state.conclusionValue;
-  if(!vals.some(v=>v.valueId===cur))cur=vals[0]?.valueId||'';
-  if(kind==='type')state.typeValue=cur;else state.conclusionValue=cur;
-  if(cur)t20SaveFilterPref(kind,cid,cur);
-  tabs.innerHTML=vals.map(v=>'<button class="tab '+(v.valueId===cur?'on':'')+'" data-v2-filter="'+kind+'" data-value="'+esc(v.valueId)+'">'+esc(v.valueId)+' '+esc(v.label)+'<b>'+v.count+'</b></button>').join('');
-  const chosen=vals.find(v=>v.valueId===cur);
-  list.innerHTML=chosen?v2Table(FilterEngine.byValueId(state.table,cid,chosen.valueId),v2Visible()):'<div class="empty">该表头暂无非空取值</div>';
-}
-function renderTypes(){t20RenderFilter('type')}
-function renderConclusions(){t20RenderFilter('conclusion')}
 function renderHome(){
-  const q=String(state.query||'').trim().toLowerCase();
+  const q=state.query.toLowerCase();
   const rows=state.table?state.table.rows.filter(r=>!q||(r.cells||[]).some(c=>String(c.value??'').toLowerCase().includes(q))):[];
   if($('topTitle'))$('topTitle').textContent=state.table?'共 '+rows.length+' 行':'表格';
   if($('countTitle'))$('countTitle').textContent='';
-  if($('dataNote'))$('dataNote').textContent=state.table?(state.kind==='cache'?'缓存数据':'实时数据'):'未加载';
-  if($('homeList'))$('homeList').innerHTML=state.table?v2Table(rows,v2Visible()):'<div class="empty">请先加载数据</div>';
+  if($('dataNote'))$('dataNote').textContent=state.table?(state.kind==='cache'?'缓存':'实时'):'未加载';
+  if($('homeList'))$('homeList').innerHTML=state.table?tableHtml(rows):'<div class="empty">请先加载数据</div>';
 }
-function renderComments(){
-  const xs=gAnn.comments(state.table?state.table.tableId:'').map(x=>x.snapshot).filter(Boolean);
-  $('commentList').innerHTML=xs.length?v2Table(xs,v2Visible()):'<div class="empty">暂无点评</div>';
+function filterPage(kind){
+  if(!state.table)return;
+  defaultFilterColumns();loadPrefs();
+  const cid=kind==='type'?state.typeColumn:state.conclusionColumn;
+  const selectId=kind==='type'?'v2TypeSelect':'v2ConclusionSelect';
+  const tabsId=kind==='type'?'typeTabs':'conclusionTabs';
+  const listId=kind==='type'?'typesList':'conclusionList';
+  const anchor=$(tabsId);
+  if(anchor&&!$(selectId)){
+    const card=document.createElement('div');card.className='card v2-filter-card';
+    card.innerHTML='<div class="card-hd"><span>筛选表头</span><span class="sub">'+(kind==='type'?'类型':'结论')+'</span></div><div style="padding:10px 12px"><select id="'+selectId+'"></select></div>';
+    anchor.parentNode.insertBefore(card,anchor);
+  }
+  const sel=$(selectId);
+  sel.innerHTML=cols().map(c=>'<option value="'+esc(c.columnId)+'">'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
+  sel.value=cid;
+  sel.onchange=function(){if(kind==='type'){state.typeColumn=this.value;state.typeValue=''}else{state.conclusionColumn=this.value;state.conclusionValue=''}saveFilter(kind,this.value,'');filterPage(kind)};
+  const c=state.table.getColumn(cid),vals=c?.valueCatalog||[];
+  let vid=kind==='type'?state.typeValue:state.conclusionValue;
+  if(!vals.some(v=>v.valueId===vid))vid=vals[0]?.valueId||'';
+  if(kind==='type')state.typeValue=vid;else state.conclusionValue=vid;
+  saveFilter(kind,cid,vid);
+  anchor.innerHTML=vals.map(v=>'<button class="tab '+(v.valueId===vid?'on':'')+'" data-v2-filter="'+kind+'" data-value="'+esc(v.valueId)+'">'+esc(v.valueId)+' '+esc(v.label)+'<b>'+v.count+'</b></button>').join('');
+  const chosen=vals.find(v=>v.valueId===vid);
+  $(listId).innerHTML=chosen?tableHtml(FilterEngine.byValueId(state.table,cid,vid)): '<div class="empty">该表头暂无非空取值</div>';
 }
-function renderFavorites(){
-  const xs=gAnn.favorites(state.table?state.table.tableId:'').map(x=>x.snapshot).filter(Boolean);
-  $('favList').innerHTML=xs.length?v2Table(xs,v2Visible()):'<div class="empty">还没有收藏</div>';
+function renderTypes(){filterPage('type')}
+function renderConclusions(){filterPage('conclusion')}
+function renderSaved(which){
+  if(!state.table){$(which==='favorites'?'favList':'commentList').innerHTML='<div class="empty">尚未加载数据</div>';return}
+  const xs=(which==='favorites'?ann.favorites(state.table.tableId):ann.comments(state.table.tableId)).map(x=>x.snapshot).filter(Boolean);
+  $(which==='favorites'?'favList':'commentList').innerHTML=xs.length?tableHtml(xs):'<div class="empty">'+(which==='favorites'?'还没有收藏':'暂无点评')+'</div>';
 }
-function t20PageTitle(page){
-  const m={home:state.table?('共 '+state.table.rows.length+' 行'):'表格',types:'类型',conclusions:'结论',comments:'点评',favorites:'收藏',settings:'设置'};
-  return m[page]||'表格';
+function renderSettings(){
+  const sec=$('page-settings');if(!sec)return;
+  sec.innerHTML='<div class="section-title">设置</div><div class="card">'+
+    '<div class="setting-item"><div class="setting-title">首页展示表头</div><div class="setting-desc">表头编号由数据结构稳定分配为 001、002、003……；每个表头的实际取值动态编号为 V001、V002……。</div><div id="v2Cols"></div><div class="setting-actions"><button class="sbtn primary" id="v2SaveCols">保存展示表头</button></div></div>'+
+    '<div class="setting-item"><div class="setting-title">类型 / 结论</div><div class="setting-desc">选择任意表头，再按该表头下实际存在的取值动态筛选。</div><div class="setting-actions"><label style="flex:1;min-width:150px;font-size:12px;color:var(--muted)">类型<select id="v2TS" style="width:100%;margin-top:4px"></select></label><label style="flex:1;min-width:150px;font-size:12px;color:var(--muted)">结论<select id="v2CS" style="width:100%;margin-top:4px"></select></label></div></div>'+
+    '<div class="setting-item"><div class="setting-title">数据源</div><div class="setting-desc">直接下载 SJ01 加密 stocks.txt，App 使用你输入的激活码解密，再直接解析 schema v3 JSON；不需要手工转换数据。</div><div class="setting-actions"><button class="sbtn primary" id="v2Reload">重新加载</button><button class="sbtn" id="v2Source">配置地址</button><button class="sbtn" id="v2Key">输入激活码</button></div></div>'+
+    '<div class="setting-item"><div class="setting-title">备份</div><div class="setting-desc">保存当前表格、展示列、筛选选择、收藏和点评。</div><div class="setting-actions"><button class="sbtn primary" id="v2Export">导出</button><button class="sbtn" id="v2Restore">恢复</button><button class="sbtn" id="v2Clear">清空</button></div></div>'+
+    '<div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="v2UpdateDesc">当前版本 '+APP_VERSION+'（'+APP_VERSION_CODE+'）</div><div class="setting-actions"><button class="sbtn primary" id="v2Update">检查更新</button></div></div>'+
+    '<div class="setting-item"><div class="setting-title">数据状态</div><div class="setting-desc" id="v2Status">'+(state.table?(state.table.rows.length+' 行 · '+cols().length+' 个表头'):'尚未加载')+'</div></div>'+
+    '</div>';
+  if(!state.table){$('v2Cols').innerHTML='<div class="empty">尚未加载数据</div>';return}
+  const vis=new Set(visibleCols().map(c=>c.columnId));
+  $('v2Cols').innerHTML=cols().map(c=>'<label class="column-item"><input type="checkbox" data-v2-col="'+esc(c.columnId)+'" '+(vis.has(c.columnId)?'checked':'')+'><span class="column-main"><span class="column-name">'+esc(c.columnId)+' '+esc(c.label)+'</span><br><span class="column-id">'+c.valueCatalog.length+' 种实际取值</span></span></label>').join('');
+  defaultFilterColumns();loadPrefs();
+  $('v2TS').innerHTML=cols().map(c=>'<option value="'+esc(c.columnId)+'">'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
+  $('v2CS').innerHTML=cols().map(c=>'<option value="'+esc(c.columnId)+'">'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
+  $('v2TS').value=state.typeColumn;$('v2CS').value=state.conclusionColumn;
+  $('v2SaveCols').onclick=function(){
+    const ids=[...document.querySelectorAll('[data-v2-col]:checked')].map(x=>x.dataset.v2Col);
+    if(!ids.length){toast('至少选择一个表头');return}
+    let p={};try{p=JSON.parse(localStorage.getItem(LS.layout)||'{}')}catch(e){}
+    p[state.table.tableId]=ids;localStorage.setItem(LS.layout,JSON.stringify(p));renderHome();toast('首页展示列已保存');
+  };
+  $('v2TS').onchange=function(){state.typeColumn=this.value;state.typeValue='';saveFilter('type',this.value,'');renderTypes()};
+  $('v2CS').onchange=function(){state.conclusionColumn=this.value;state.conclusionValue='';saveFilter('conclusion',this.value,'');renderConclusions()};
+  $('v2Reload').onclick=()=>loadData(false);
+  $('v2Source').onclick=sourceSheet;
+  $('v2Key').onclick=keySheet;
+  $('v2Export').onclick=exportBackup;
+  $('v2Restore').onclick=restoreBackup;
+  $('v2Clear').onclick=clearData;
+  $('v2Update').onclick=checkUpdate;
+}
+function renderAll(){
+  renderHome();renderTypes();renderConclusions();renderSaved('comments');renderSaved('favorites');renderSettings();
+}
+function pageTitle(page){
+  if(page==='home')return state.table?'共 '+state.table.rows.length+' 行':'表格';
+  return ({types:'类型',conclusions:'结论',comments:'点评',favorites:'收藏',settings:'设置'})[page]||'表格';
 }
 function pageSwitch(page){
-  if($('detail').classList.contains('show'))closeDetail(false);
+  if($('detail')?.classList.contains('show'))closeDetail();
   state.page=page;
-  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+page));
-  document.querySelectorAll('.bottom button').forEach(x=>x.classList.toggle('on',x.dataset.page===page));
-  if($('topTitle'))$('topTitle').textContent=t20PageTitle(page);
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='page-'+page));
+  document.querySelectorAll('.bottom button').forEach(b=>b.classList.toggle('on',b.dataset.page===page));
+  if($('topTitle'))$('topTitle').textContent=pageTitle(page);
   window.scrollTo(0,0);
 }
-function t20DetailExtensions(row){
-  if(!state.table||!state.table.extensions)return '';
-  const codeCol=state.table.columns.find(c=>/^(code|股票代码|代码)$/i.test(c.key)||/代码/.test(c.label));
-  const catCol=state.table.columns.find(c=>/^(category|分类|类型)$/i.test(c.key)||/分类|类型/.test(c.label));
-  const code=codeCol?t20Clean(v2Cell(row,codeCol.columnId).value):'';
-  const cat=catCol?t20Clean(v2Cell(row,catCol.columnId).value):'';
-  const annos=code&&state.table.extensions.announcements&&state.table.extensions.announcements[code];
-  const jt=cat&&state.table.extensions.judge_tables&&state.table.extensions.judge_tables[cat];
+function detailExtensions(row){
+  const ex=state.table?.extensions||{};if(!ex)return'';
+  const codeCol=cols().find(c=>/代码/.test(c.label)||/^code$/i.test(c.key));
+  const catCol=cols().find(c=>/分类|类型/.test(c.label)||/^category$/i.test(c.key));
+  const code=codeCol?clean(cell(row,codeCol).value):'',cat=catCol?clean(cell(row,catCol).value):'';
   let h='';
-  if(Array.isArray(annos)&&annos.length){
-    h+='<div class="card"><div class="card-hd"><span>附加公告</span><span class="sub">'+annos.length+' 条</span></div>'+
-      annos.map(a=>'<div class="ann">'+(a.url?'<a href="'+esc(a.url)+'" target="_blank" rel="noopener">':'')+'<div class="ann-title">'+esc(a.title||'未命名公告')+'</div><div class="ann-meta">'+esc(a.date||'')+(a.column?'<span class="tag type">'+esc(a.column)+'</span>':'')+'</div>'+(a.url?'</a>':'')+'</div>').join('')+
-      '</div>';
-  }
-  if(jt&&Array.isArray(jt.rows)&&jt.rows.length){
-    h+='<div class="card"><div class="card-hd"><span>'+esc(jt.title||'附加判定表')+'</span><span class="sub">'+jt.rows.length+' 条</span></div>'+
-      jt.rows.map(r=>'<div class="jrow"><div class="jq">'+esc(r?.[0]||'')+'</div><div class="jm"><span class="tag">'+esc(r?.[1]||'')+'</span><span class="hit">'+esc(r?.[2]||'')+'</span></div></div>').join('')+
-      '</div>';
-  }
+  const anns=code&&ex.announcements&&ex.announcements[code];
+  if(Array.isArray(anns)&&anns.length)h+='<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">'+anns.length+' 条</span></div>'+anns.map(a=>'<div class="ann">'+(a.url?'<a href="'+esc(a.url)+'" target="_blank" rel="noopener">':'')+'<div class="ann-title">'+esc(a.title||'未命名公告')+'</div><div class="ann-meta">'+esc(a.date||'')+(a.column?'<span class="tag type">'+esc(a.column)+'</span>':'')+'</div>'+(a.url?'</a>':'')+'</div>').join('')+'</div>';
+  const jt=cat&&ex.judge_tables&&ex.judge_tables[cat];
+  if(jt&&Array.isArray(jt.rows)&&jt.rows.length)h+='<div class="card"><div class="card-hd"><span>'+esc(jt.title||cat)+'</span><span class="sub">'+jt.rows.length+' 条</span></div>'+jt.rows.map(r=>'<div class="jrow"><div class="jq">'+esc(r?.[0]||'')+'</div><div class="jm"><span class="tag">'+esc(r?.[1]||'')+'</span><span class="hit">'+esc(r?.[2]||'')+'</span></div></div>').join('')+'</div>';
   return h;
 }
+function copyText(text){
+  if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text);
+  const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy')}catch(e){}ta.remove();return ok?Promise.resolve():Promise.reject();
+}
 function openDetail(row){
-  row=v2RowData(row)||row;if(!row||!state.table)return;
+  if(!row||!state.table)return;
   state.cur=row;
-  if($('dTitle'))$('dTitle').textContent='行详情';
-  const first=v2Cell(row,state.table.columns[0]?.columnId).value||'当前行';
-  if($('dHero'))$('dHero').innerHTML='<div class="hero"><h1>'+esc(first)+'</h1><div class="meta"><span class="tag">rowId '+esc(row.rowId)+'</span><span class="tag">'+esc(state.table.tableName)+'</span></div><div style="display:flex;gap:8px;padding:9px 0"><button id="v20Fav" class="sbtn '+(gAnn.isFavorite(state.table,row)?'primary':'')+'">'+(gAnn.isFavorite(state.table,row)?'已收藏':'收藏')+'</button><button id="v20Cmt" class="sbtn">点评</button><button id="v20Copy" class="sbtn primary">复制整行</button></div></div>';
-  const detailCells=state.table.columns.map(c=>'<div class="standard-cell"><div class="standard-label"><span class="cid">'+esc(c.columnId)+'</span>'+esc(c.label)+'</div><div class="standard-value '+(c.type==='longtext'?'summary':'')+'">'+esc(v2Format(v2Cell(row,c.columnId).value,c.type))+'</div></div>').join('');
-  if($('dBody'))$('dBody').innerHTML='<div class="card"><div class="card-hd"><span>完整行数据</span><span class="sub">'+state.table.columns.length+' 个表头</span></div>'+detailCells+'</div>'+t20DetailExtensions(row)+'<div class="card"><div style="padding:14px 16px;font-weight:800">我的点评</div><div style="padding:0 16px 16px"><textarea id="v20Comment" placeholder="写下点评…">'+esc((gAnn.comment(state.table,row.rowId)||{}).comment||'')+'</textarea><button id="v20SaveComment" class="sbtn primary" style="width:100%;margin-top:8px">保存点评</button></div></div>';
+  const first=state.table.columns[0]?cell(row,state.table.columns[0]).value:'当前行';
+  $('dTitle').textContent='行详情';
+  $('dHero').innerHTML='<div class="hero"><h1>'+esc(first||'当前行')+'</h1><div class="meta"><span class="tag">rowId '+esc(row.rowId)+'</span><span class="tag">'+esc(state.table.tableName)+'</span></div><div style="display:flex;gap:8px;padding:9px 0"><button id="v20Fav" class="sbtn '+(ann.isFavorite(state.table,row)?'primary':'')+'">'+(ann.isFavorite(state.table,row)?'已收藏':'收藏')+'</button><button id="v20Copy" class="sbtn primary">复制整行</button></div></div>';
+  $('dBody').innerHTML='<div class="card"><div class="card-hd"><span>完整行数据</span><span class="sub">'+cols().length+' 个表头</span></div>'+cols().map(c=>'<div class="standard-cell"><div class="standard-label"><span class="cid">'+esc(c.columnId)+'</span>'+esc(c.label)+'</div><div class="standard-value '+(c.type==='longtext'?'summary':'')+'">'+esc(cell(row,c).value||'—')+'</div></div>').join('')+'</div>'+detailExtensions(row)+
+    '<div class="card"><div style="padding:14px 16px;font-weight:800">我的点评</div><div style="padding:0 16px 16px"><textarea id="v20Comment" placeholder="写下点评…">'+esc((ann.comment(state.table,row.rowId)||{}).comment||'')+'</textarea><button id="v20SaveComment" class="sbtn primary" style="width:100%;margin-top:8px">保存点评</button></div></div>';
   $('detail').classList.add('show');$('actions').classList.add('show');
   if(!state.detailPushed){history.pushState({detail:true,row:row.rowId},'','?row='+encodeURIComponent(row.rowId));state.detailPushed=true}
-  $('v20Fav').onclick=function(){gAnn.favorite(state.table,row);renderAllPages();openDetail(row);toast(gAnn.isFavorite(state.table,row.rowId)?'已收藏':'已取消收藏')};
-  $('v20Cmt').onclick=function(){$('v20Comment')?.focus()};
-  $('v20Copy').onclick=function(){const t=state.table.columns.map(c=>c.columnId+' '+c.label+': '+v2Cell(row,c.columnId).value).join('\n');if(navigator.clipboard?.writeText)navigator.clipboard.writeText(t).then(()=>toast('整行已复制'));else toast('复制失败')};
-  $('v20SaveComment').onclick=function(){gAnn.setComment(state.table,row,$('v20Comment').value);renderAllPages();openDetail(row);toast('点评已保存')};
+  $('v20Fav').onclick=()=>{ann.favorite(state.table,row);renderAll();openDetail(row);toast(ann.isFavorite(state.table,row)?'已收藏':'已取消收藏')};
+  $('v20Copy').onclick=()=>copyText(cols().map(c=>c.columnId+' '+c.label+': '+cell(row,c).value).join('\n')).then(()=>toast('整行已复制')).catch(()=>toast('复制失败'));
+  $('v20SaveComment').onclick=()=>{ann.setComment(state.table,row,$('v20Comment').value);renderAll();openDetail(row);toast('点评已保存')};
 }
 function closeDetail(){
   $('detail').classList.remove('show');$('actions').classList.remove('show');state.cur=null;state.detailPushed=false;
   const u=new URL(location.href);u.search='';history.replaceState({root:true},'',u.pathname+u.hash);
 }
-function renderV2Settings(){
-  const sec=$('page-settings');if(!sec)return;
-  if(!state.table){
-    sec.innerHTML='<div class="section-title">设置</div><div class="card"><div class="empty">尚未加载数据</div></div>';
-    return;
-  }
-  const vis=new Set(v2Visible().map(c=>c.columnId));
-  sec.innerHTML='<div class="section-title">设置</div><div class="card">'+
-    '<div class="setting-item"><div class="setting-title">首页展示表头</div><div class="setting-desc">每个表头使用 columnId 编号；每个表头下实际取值使用 V001、V002… 编号。勾选后决定首页展示哪些表头。</div><div id="v2Cols">'+
-    state.table.columns.map(c=>'<label class="column-item"><input type="checkbox" data-v2-col="'+esc(c.columnId)+'" '+(vis.has(c.columnId)?'checked':'')+'><span class="column-main"><span class="column-name">'+esc(c.label)+'</span><br><span class="column-id">columnId '+esc(c.columnId)+' · '+c.valueCatalog.length+' 种取值</span></span></label>').join('')+
-    '</div><div class="setting-actions"><button class="sbtn primary" id="v2SaveCols">保存展示表头</button></div></div>'+
-    '<div class="setting-item"><div class="setting-title">类型 / 结论筛选</div><div class="setting-desc">这两个页面都只是“选择某个表头 → 动态列出该表头全部实际取值 → 筛选行”，不固定业务字段。</div><div class="setting-actions"><label style="flex:1;min-width:160px;font-size:12px;color:var(--muted)">类型默认表头<select id="v2TS" style="width:100%;margin-top:4px"></select></label><label style="flex:1;min-width:160px;font-size:12px;color:var(--muted)">结论默认表头<select id="v2CS" style="width:100%;margin-top:4px"></select></label></div></div>'+
-    '<div class="setting-item"><div class="setting-title">数据源</div><div class="setting-desc">当前地址直接获取加密 SJ01 文件；App 自己解密后，直接解析 schema v3 JSON，不要求你再转换数据。</div><div class="setting-actions"><button class="sbtn primary" id="v2Reload">重新加载</button><button class="sbtn" id="v2Source">配置数据源</button><button class="sbtn" id="v2Key">输入激活码</button></div></div>'+
-    '<div class="setting-item"><div class="setting-title">备份</div><div class="setting-desc">备份当前通用表格、首页展示设置、类型/结论选择、收藏和点评。</div><div class="setting-actions"><button class="sbtn primary" id="v2Export">导出备份</button><button class="sbtn" id="v2Restore">恢复备份</button><button class="sbtn" id="v2Clear">清空本地</button></div></div>'+
-    '<div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="v2UpdateDesc">当前版本 2.0.1</div><div class="setting-actions"><button class="sbtn primary" id="v2Update">检查更新</button></div></div>'+
-    '<div class="setting-item"><div class="setting-title">数据状态</div><div class="setting-desc" id="v2Status"></div></div></div>';
-  $('v2Cols').querySelectorAll('[data-v2-col]').forEach(x=>x.onchange=function(){});
-  v2Defaults();
-  $('v2TS').innerHTML=v2Columns().map(c=>'<option value="'+esc(c.columnId)+'">'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
-  $('v2CS').innerHTML=v2Columns().map(c=>'<option value="'+esc(c.columnId)+'">'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
-  $('v2TS').value=state.typeColumn;$('v2CS').value=state.conclusionColumn;
-  $('v2SaveCols').onclick=function(){const ids=[...document.querySelectorAll('[data-v2-col]:checked')].map(x=>x.dataset.v2Col);if(!ids.length)return toast('至少保留一个表头');const p=t20LayoutPrefs();p[state.table.tableId]=ids;t20SaveLayoutPrefs(p);renderHome();toast('首页展示表头已保存')};
-  $('v2TS').onchange=function(){state.typeColumn=this.value;state.typeValue='';t20SaveFilterPref('type',this.value,'');renderTypes()};
-  $('v2CS').onchange=function(){state.conclusionColumn=this.value;state.conclusionValue='';t20SaveFilterPref('conclusion',this.value,'');renderConclusions()};
-  $('v2Reload').onclick=function(){loadData(false)};
-  $('v2Source').onclick=t20SourceSheet;
-  $('v2Key').onclick=t20KeySheet;
-  $('v2Export').onclick=exportV2Backup;
-  $('v2Restore').onclick=restoreV2Backup;
-  $('v2Clear').onclick=clearV2;
-  $('v2Update').onclick=checkUpdate;
-  $('v2Status').textContent=(state.table.rows.length+' 行 · '+state.table.columns.length+' 个表头 · '+(state.table.meta?.source||'SJ01 schema v3'));
-}
-function renderAllPages(){renderHome();renderTypes();renderConclusions();renderComments();renderFavorites();renderV2Settings()}
-function t20SourceSheet(){
-  openSheet('数据源','<div class="note">每行一个地址。留空恢复内置地址。当前默认：'+esc(DEF_URLS)+'</div><div style="padding:0 16px 8px"><textarea id="t20Urls" placeholder="https://…/stocks.txt">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="t20Cancel">取消</button><button class="sbtn primary" id="t20Save">保存并加载</button></div>',function(){
+function sourceSheet(){
+  openSheet('数据源','<div class="note">每行一个地址。留空恢复默认数据源。<br>'+esc(DEF_URLS)+'</div><div style="padding:0 16px 8px"><textarea id="t20Urls" placeholder="'+esc(DEF_URLS)+'">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="t20Cancel">取消</button><button class="sbtn primary" id="t20Save">保存并加载</button></div>',()=>{
     $('t20Cancel').onclick=closeSheet;
-    $('t20Save').onclick=function(){const v=$('t20Urls').value.trim();if(v)localStorage.setItem(LS.urls,v);else localStorage.removeItem(LS.urls);closeSheet();loadData(false)};
+    $('t20Save').onclick=()=>{const v=$('t20Urls').value.trim();if(v)localStorage.setItem(LS.urls,v);else localStorage.removeItem(LS.urls);closeSheet();loadData(false)};
   });
 }
-function t20KeySheet(){
-  openSheet('激活码','<div class="note">SJ01 的 AES-256-GCM 64 位十六进制密钥必须由你自己输入。App 不内置密钥。</div><div style="padding:0 16px 8px"><input id="t20KeyInput" type="text" value="'+esc(localStorage.getItem(LS.key)||'')+'" placeholder="64位十六进制激活码" style="width:100%;height:42px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 10px;outline:none"></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="t20KeySave" style="width:100%">保存并加载</button></div>',function(){
-    $('t20KeySave').onclick=function(){const v=$('t20KeyInput').value.trim();if(!/^[0-9a-fA-F]{64}$/.test(v)){toast('激活码必须是64位十六进制');return}localStorage.setItem(LS.key,v);closeSheet();loadData(false)};
+function keySheet(){
+  openSheet('激活码','<div class="note">SJ01 使用 AES-256-GCM。请输入你自己的 64 位十六进制激活码，App 不内置。</div><div style="padding:0 16px 8px"><input id="t20KeyInput" type="text" value="'+esc(localStorage.getItem(LS.key)||'')+'" placeholder="64位十六进制激活码" style="width:100%;height:42px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 10px;outline:none"></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="t20KeySave" style="width:100%">保存并加载</button></div>',()=>{
+    $('t20KeySave').onclick=()=>{const v=$('t20KeyInput').value.trim();if(!/^[0-9a-fA-F]{64}$/.test(v)){toast('激活码必须是64位十六进制');return}localStorage.setItem(LS.key,v);closeSheet();loadData(false)};
   });
 }
-function exportV2Backup(){
-  if(!state.table)return toast('暂无表格可备份');
-  const payload={kind:'generic-table-converter',version:3,exported_at:new Date().toISOString(),table:state.table.toJSON(),layout:t20LayoutPrefs(),filters:(function(){try{return JSON.parse(localStorage.getItem(T20_FILTER_KEY)||'{}')}catch(e){return{}}})(),favorites:gAnn.favorites(state.table.tableId),comments:gAnn.comments(state.table.tableId)};
-  const text=JSON.stringify(payload,null,2),name='table-converter-backup-'+new Date().toISOString().slice(0,10)+'.json';
+function exportBackup(){
+  if(!state.table){toast('暂无表格可备份');return}
+  const p={kind:'stock-judge-table-backup',version:3,exported_at:new Date().toISOString(),table:state.table.toJSON(),layout:(()=>{try{return JSON.parse(localStorage.getItem(LS.layout)||'{}')}catch(e){return{}}})(),filters:(()=>{try{return JSON.parse(localStorage.getItem(LS.filters)||'{}')}catch(e){return{}}})(),favorites:ann.favorites(state.table.tableId),comments:ann.comments(state.table.tableId)};
+  const text=JSON.stringify(p,null,2),name='stock-judge-table-backup-'+new Date().toISOString().slice(0,10)+'.json';
   if(window.AndroidNative?.saveTextFile){AndroidNative.saveTextFile(name,text);toast('备份已导出');return}
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('备份已导出');
 }
-function applyV2Backup(p){
+function applyBackup(p){
   if(!p?.table)throw new Error('备份中没有表格');
   state.table=new TableModel(p.table);new ColumnManager(state.table).refreshCatalog();state.kind='local';
-  t20SaveLayoutPrefs(p.layout||{});
-  if(p.filters)localStorage.setItem(T20_FILTER_KEY,JSON.stringify(p.filters));
-  const f=Object.fromEntries((p.favorites||[]).map(x=>[String(x.tableId)+'::'+String(x.rowId),x]));
-  const c=Object.fromEntries((p.comments||[]).map(x=>[String(x.tableId)+'::'+String(x.rowId),x]));
-  localStorage.setItem(gAnn.favKey,JSON.stringify(f));localStorage.setItem(gAnn.commentKey,JSON.stringify(c));
-  state.typeColumn='';state.conclusionColumn='';state.typeValue='';state.conclusionValue='';
-  renderAllPages();pageSwitch('home');toast('备份已恢复');
+  localStorage.setItem(LS.layout,JSON.stringify(p.layout||{}));
+  localStorage.setItem(LS.filters,JSON.stringify(p.filters||{}));
+  const fid=Object.fromEntries((p.favorites||[]).map(x=>[String(x.tableId)+'::'+String(x.rowId),x]));
+  const cid=Object.fromEntries((p.comments||[]).map(x=>[String(x.tableId)+'::'+String(x.rowId),x]));
+  localStorage.setItem(ann.favKey,JSON.stringify(fid));localStorage.setItem(ann.commentKey,JSON.stringify(cid));
+  renderAll();pageSwitch('home');toast('备份已恢复');
 }
-function restoreV2Backup(){
+function restoreBackup(){
   if(window.AndroidNative?.openBackupPicker){AndroidNative.openBackupPicker();return}
-  const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=function(){const f=i.files?.[0];if(!f)return;const rd=new FileReader();rd.onload=function(){try{applyV2Backup(JSON.parse(rd.result))}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};i.click();
+  const i=document.createElement('input');i.type='file';i.accept='.json,application/json';
+  i.onchange=()=>{const f=i.files?.[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{applyBackup(JSON.parse(rd.result))}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};i.click();
 }
-window.restoreBackupText=function(t){try{applyV2Backup(JSON.parse(t))}catch(e){toast('恢复失败：'+e.message,2800)}};
-async function clearV2(){
+window.restoreBackupText=function(t){try{applyBackup(JSON.parse(t))}catch(e){toast('恢复失败：'+e.message,2800)}};
+async function clearData(){
   if(!confirm('确定清空本地表格、收藏和点评吗？数据源地址与激活码保留。'))return;
-  try{await IDB.del(T20_CACHE_KEY)}catch(e){}
-  [T20_LAYOUT_KEY,T20_FILTER_KEY,gAnn.favKey,gAnn.commentKey,'sj.fav.v3','sj.cmt.v3','sj.savedStocks.v1','sj.archivedRecords.v1','table.migrated.2.0.1'].forEach(k=>localStorage.removeItem(k));
+  try{await IDB.del(IDB_CACHE)}catch(e){}
+  for(const k of [LS.layout,LS.filters,ann.favKey,ann.commentKey,LS.legacyFav,LS.legacyCmt,LS.migrated])localStorage.removeItem(k);
   try{await IDB.del('savedArchives.v1')}catch(e){}
-  state.table=null;state.cur=null;renderAllPages();pageSwitch('settings');toast('本地数据已清空');
-}
-function t20LegacyRecordToRow(record){
-  if(!state.table||!record)return null;
-  const values=state.table.columns.map(c=>t20Value(record,c));
-  const id=t20RowId(record,values,state.table.columns);
-  return{rowId:id,cells:state.table.columns.map((c,i)=>new CellModel({columnId:c.columnId,value:values[i],type:c.type}))};
+  state.table=null;state.cur=null;renderAll();pageSwitch('settings');toast('本地数据已清空');
 }
 async function t20MigrateLegacy(){
-  if(!state.table||localStorage.getItem('table.migrated.2.0.1')==='1')return;
-  let fav=[];try{fav=JSON.parse(localStorage.getItem('sj.fav.v3')||'[]')}catch(e){}
-  let cm={};try{cm=JSON.parse(localStorage.getItem('sj.cmt.v3')||'{}')}catch(e){}
-  let archives={};try{archives=JSON.parse(localStorage.getItem('sj.archivedRecords.v1')||'{}')}catch(e){}
-  try{
-    const oldIdb=await IDB.get('savedArchives.v1');
-    if(oldIdb&&typeof oldIdb==='object')archives=Object.assign({},oldIdb,archives);
-  }catch(e){}
-  const codeCol=state.table.columns.find(c=>/代码/.test(c.label)||/^code$/i.test(c.key));
-  const catCol=state.table.columns.find(c=>/分类|类型/.test(c.label)||/^category$/i.test(c.key));
+  if(!state.table||localStorage.getItem(LS.migrated)==='1')return;
+  let oldFav=[];try{oldFav=JSON.parse(localStorage.getItem(LS.legacyFav)||'[]')}catch(e){}
+  let oldCmt={};try{oldCmt=JSON.parse(localStorage.getItem(LS.legacyCmt)||'{}')}catch(e){}
+  let archives={};try{const x=await IDB.get('savedArchives.v1');if(x&&typeof x==='object')archives=x}catch(e){}
+  try{const x=JSON.parse(localStorage.getItem('sj.archivedRecords.v1')||'{}');archives=Object.assign({},archives,x)}catch(e){}
+  const code=cols().find(c=>/代码/.test(c.label)||/^code$/i.test(c.key));
+  const cat=cols().find(c=>/分类|类型/.test(c.label)||/^category$/i.test(c.key));
   const live=new Map();
-  state.table.rows.forEach(r=>{
-    const code=codeCol?t20Clean(v2Cell(r,codeCol.columnId).value):'';
-    const cat=catCol?t20Clean(v2Cell(r,catCol.columnId).value):'';
-    if(code)live.set(code+'|'+cat,r);
-  });
-  const keys=new Set([...(Array.isArray(fav)?fav:[]),...Object.keys(cm||{}),...Object.keys(archives||{})]);
+  state.table.rows.forEach(r=>{const a=code?clean(cell(r,code).value):'',b=cat?clean(cell(r,cat).value):'';if(a)live.set(a+'|'+b,r)});
+  const keys=new Set([...(Array.isArray(oldFav)?oldFav:[]),...Object.keys(oldCmt||{}),...Object.keys(archives||{})]);
   for(const k of keys){
     const row=live.get(k);
     if(row){
-      if(Array.isArray(fav)&&fav.includes(k)&&!gAnn.isFavorite(state.table,row))gAnn.favorite(state.table,row);
-      if(cm[k]&&!gAnn.comment(state.table,row.rowId))gAnn.setComment(state.table,row,cm[k]);
+      if(oldFav.includes(k)&&!ann.isFavorite(state.table,row))ann.favorite(state.table,row);
+      if(oldCmt[k]&&!ann.comment(state.table,row.rowId))ann.setComment(state.table,row,oldCmt[k]);
       continue;
     }
-    const a=archives[k],rec=a&&a.record;
-    if(rec){
-      const snap=t20LegacyRecordToRow(rec);
-      if(snap){
-        if(Array.isArray(fav)&&fav.includes(k)&&!gAnn.isFavorite(state.table,snap))gAnn.favorite(state.table,snap);
-        if(cm[k]&&!gAnn.comment(state.table,snap.rowId))gAnn.setComment(state.table,snap,cm[k]);
-      }
-    }
+    const a=archives[k],rec=a?.record;
+    if(!rec)continue;
+    const values=cols().map(c=>recordValue(rec,c));
+    if(values.every(v=>!clean(v)))continue;
+    const snap={rowId:stableRowId(rec,values,cols()),cells:cols().map((c,i)=>new CellModel({columnId:c.columnId,value:values[i],type:c.type}))};
+    if(oldFav.includes(k)&&!ann.isFavorite(state.table,snap))ann.favorite(state.table,snap);
+    if(oldCmt[k]&&!ann.comment(state.table,snap.rowId))ann.setComment(state.table,snap,oldCmt[k]);
   }
-  localStorage.setItem('table.migrated.2.0.1','1');
+  localStorage.setItem(LS.migrated,'1');
 }
-async function t20DecryptSource(url){
+async function loadFromSource(url){
   if(window.AndroidNative?.fetchDataSource&&window.AndroidNative?.readDataSourceChunk){
-    await new Promise((resolve,reject)=>{const done=(ok,msg)=>{window.__sjNativeDataWaiter=null;ok?resolve():reject(new Error(msg||'原生数据请求失败'))};window.__sjNativeDataWaiter=done;try{AndroidNative.fetchDataSource(url)}catch(e){window.__sjNativeDataWaiter=null;reject(e)}});
+    await new Promise((resolve,reject)=>{
+      window.__sjNativeDataWaiter=(ok,msg)=>{window.__sjNativeDataWaiter=null;ok?resolve():reject(new Error(msg||'原生网络请求失败'))};
+      try{AndroidNative.fetchDataSource(url)}catch(e){window.__sjNativeDataWaiter=null;reject(e)}
+    });
     let text='',offset=0;const chunk=196608;
-    for(;;){const piece=AndroidNative.readDataSourceChunk(offset,chunk);if(!piece)break;text+=piece;offset+=piece.length;if(piece.length<chunk)break}
+    for(;;){const part=AndroidNative.readDataSourceChunk(offset,chunk);if(!part)break;text+=part;offset+=part.length;if(part.length<chunk)break}
     if(!text)throw new Error('数据文件为空');
-    return decryptText(text);
+    return decryptSJ01(text);
   }
-  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return decryptText(await r.text());
+  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return decryptSJ01(await r.text());
 }
-async function loadData(silent){
-  const urls=getUrls();
-  const key=(localStorage.getItem(LS.key)||'').trim();
-  if(!/^[0-9a-fA-F]{64}$/.test(key)){
-    pageSwitch('settings');
-    if($('dataStatus'))$('dataStatus').textContent='请先输入64位十六进制激活码';
-    return;
-  }
-  const cached=await t20CacheGet();
-  if(cached){state.table=cached;state.kind='cache';await t20MigrateLegacy();renderAllPages()}
-  if(!urls.length){pageSwitch('settings');if($('v2Status'))$('v2Status').textContent='没有数据源地址';return}
-  let lastErr='';
-  for(const u of urls){
+window.__sjNativeDataSourceResult=(ok,msg)=>{const fn=window.__sjNativeDataWaiter;if(typeof fn==='function')fn(!!ok,String(msg||''))};
+async function loadData(silent=false){
+  const key=String(localStorage.getItem(LS.key)||'').trim();
+  if(!/^[0-9a-fA-F]{64}$/.test(key)){pageSwitch('settings');if($('dataStatus'))$('dataStatus').textContent='请先输入64位十六进制激活码';return}
+  ann=ann||new LocalAnnotation(localStorage);
+  let cached=null;try{const raw=await IDB.get(IDB_CACHE);if(raw?.tableId){cached=new TableModel(raw);new ColumnManager(cached).refreshCatalog();state.table=cached;state.kind='cache';await t20MigrateLegacy();renderAll()}}catch(e){}
+  const urls=getUrls();let last='';
+  for(const url of urls){
     try{
-      const payload=await t20DecryptSource(u);
-      const table=t20BuildTable(payload,u);
-      state.table=table;state.kind='remote';
-      await t20CacheSet(table);
-      await t20MigrateLegacy();
-      renderAllPages();pageSwitch('home');
-      if(silent)toast('数据已加载 · schema v3');
+      const payload=await loadFromSource(url);
+      const table=buildTable(payload,url);
+      state.table=table;state.kind='remote';state.cur=null;state.typeColumn='';state.conclusionColumn='';state.typeValue='';state.conclusionValue='';
+      await IDB.set(IDB_CACHE,table.toJSON());await t20MigrateLegacy();renderAll();pageSwitch('home');
+      if(silent)toast('数据已加载 · SJ01 / schema v3');
       return;
-    }catch(e){lastErr=String(u).replace(/^https?:\/\//,'').slice(0,54)+' → '+e.message}
+    }catch(e){last=url.replace(/^https?:\/\//,'').slice(0,55)+' → '+e.message}
   }
-  if(cached){pageSwitch('home');toast('联网更新失败，继续显示缓存');return}
-  pageSwitch('settings');if($('v2Status'))$('v2Status').textContent='数据加载失败：'+lastErr;if($('dataStatus'))$('dataStatus').textContent='数据加载失败：'+lastErr;
-  toast('数据加载失败：请检查数据源、网络和激活码',3000);
+  if(cached){pageSwitch('home');toast('联网更新失败，继续显示缓存',2600);return}
+  pageSwitch('settings');if($('dataStatus'))$('dataStatus').textContent='数据加载失败：'+last;toast('数据加载失败：'+last,3200);
 }
-document.addEventListener('click',function(e){
-  const tr=e.target.closest('.v2-row');
-  if(tr){const row=v2FindRow(tr.dataset.rowId)||v2SavedSnapshot(tr.dataset.rowId);if(row)openDetail(row);return}
+async function loadUpdateManifest(url){
+  if(window.AndroidNative?.fetchUpdateManifest&&window.AndroidNative?.readUpdateChunk){
+    await new Promise((resolve,reject)=>{
+      window.__sjNativeUpdateWaiter=(ok,msg)=>{window.__sjNativeUpdateWaiter=null;ok?resolve():reject(new Error(msg||'更新清单读取失败'))};
+      try{AndroidNative.fetchUpdateManifest(url)}catch(e){window.__sjNativeUpdateWaiter=null;reject(e)}
+    });
+    let text='',offset=0;const chunk=65536;
+    for(;;){const part=AndroidNative.readUpdateChunk(offset,chunk);if(!part)break;text+=part;offset+=part.length;if(part.length<chunk)break}
+    if(!text)throw new Error('更新清单为空');return JSON.parse(text);
+  }
+  const r=await fetch(url+'?t='+Date.now(),{cache:'no-store',headers:{Accept:'application/json'}});if(!r.ok)throw new Error('HTTP '+r.status);return r.json();
+}
+window.__sjNativeUpdateResult=(ok,msg)=>{const fn=window.__sjNativeUpdateWaiter;if(typeof fn==='function')fn(!!ok,String(msg||''))};
+window.__sjApkDownloadProgress=(pct,status,msg)=>{if($('updateProgress'))$('updateProgress').classList.add('show');if($('updateProgressText'))$('updateProgressText').textContent=msg||'正在下载…';if($('updateProgressPct'))$('updateProgressPct').textContent=Math.round(Number(pct)||0)+'%';if($('updateProgressFill'))$('updateProgressFill').style.width=(Math.max(0,Math.min(100,Number(pct)||0)))+'%'};
+window.__sjApkDownloadComplete=()=>{if($('updateDesc'))$('updateDesc').textContent='APK 已下载完成，正在打开安装界面。';toast('下载完成，正在安装',2400)};
+window.__sjApkDownloadFailed=msg=>{if($('updateDesc'))$('updateDesc').textContent=String(msg||'APK 下载失败');toast(String(msg||'APK 下载失败'),3000)};
+async function checkUpdate(){
+  if($('updateDesc'))$('updateDesc').textContent='正在检查最新版本…';
+  const errs=[];
+  for(const url of UPDATE_URLS){
+    try{
+      const p=await loadUpdateManifest(url),remote=Number(p.versionCode||0);
+      if(!remote)throw new Error('更新清单缺少 versionCode');
+      if(remote>APP_VERSION_CODE){
+        if($('updateDesc'))$('updateDesc').textContent='发现新版本 '+(p.version||remote);
+        if(confirm('发现新版本 '+(p.version||remote)+'，现在下载并安装？')){
+          const apk=p.apk_url||RELEASE_APK;
+          if(window.AndroidNative?.downloadApk){if($('updateProgress'))$('updateProgress').classList.add('show');AndroidNative.downloadApk(apk,'stock-judge-'+(p.version||remote)+'.apk')}
+          else window.open(apk,'_blank');
+        }
+        return;
+      }
+      if($('updateDesc'))$('updateDesc').textContent='当前已是最新版本 '+APP_VERSION+'（'+APP_VERSION_CODE+'） · '+(p.published_at||'');
+      toast('当前已是最新版本',2200);return;
+    }catch(e){errs.push(url.replace(/^https?:\/\//,'').slice(0,50)+' → '+e.message)}
+  }
+  if($('updateDesc'))$('updateDesc').textContent='检查更新失败：'+errs.join('；');toast('检查更新失败',3000);
+}
+
+document.querySelectorAll('.bottom button').forEach(b=>b.onclick=()=>pageSwitch(b.dataset.page));
+$('q')?.addEventListener('input',e=>{state.query=e.target.value||'';renderHome()});
+$('btnBack')?.addEventListener('click',closeDetail);
+$('mask')?.addEventListener('click',e=>{if(e.target===$('mask'))closeSheet()});
+$('aFav')?.addEventListener('click',()=>{if(!state.cur||!state.table)return;ann.favorite(state.table,state.cur);renderAll();openDetail(state.cur)});
+$('aCmt')?.addEventListener('click',()=>{$('v20Comment')?.focus()});
+window.addEventListener('popstate',()=>{if($('mask')?.classList.contains('show')){closeSheet();return}if($('detail')?.classList.contains('show'))closeDetail()});
+document.addEventListener('click',e=>{
+  const row=e.target.closest('.v2-row');
+  if(row){const r=state.table?.getRow(row.dataset.rowId);if(r)openDetail(r);return}
   const tab=e.target.closest('[data-v2-filter]');
-  if(tab){const kind=tab.dataset.v2Filter,vid=tab.dataset.value;if(kind==='type')state.typeValue=vid;else state.conclusionValue=vid;t20SaveFilterPref(kind,kind==='type'?state.typeColumn:state.conclusionColumn,vid);t20RenderFilter(kind)}
+  if(tab){const k=tab.dataset.v2Filter,v=tab.dataset.value;if(k==='type')state.typeValue=v;else state.conclusionValue=v;saveFilter(k,k==='type'?state.typeColumn:state.conclusionColumn,v);filterPage(k)}
 });
-function t20BindInitialSettings(){
-  if($('btnSource'))$('btnSource').onclick=t20SourceSheet;
-  if($('btnKey'))$('btnKey').onclick=t20KeySheet;
-  if($('btnReload'))$('btnReload').onclick=function(){loadData(false)};
-  if($('btnExport'))$('btnExport').onclick=exportV2Backup;
-  if($('btnRestore'))$('btnRestore').onclick=restoreV2Backup;
-  if($('btnClearData'))$('btnClearData').onclick=clearV2;
-  if($('btnUpdate'))$('btnUpdate').onclick=checkUpdate;
+window.addEventListener('resize',()=>{const top=document.querySelector('.top');if(top)document.documentElement.style.setProperty('--stock-sticky-top',Math.ceil(top.getBoundingClientRect().height)+'px')});
+function closeSheet(){$('mask')?.classList.remove('show');$('sheet').innerHTML=''}
+function openSheet(title,html,bind){$('sheet').innerHTML='<div class="sheet-grab"></div><h3>'+esc(title)+'</h3>'+html;$('mask').classList.add('show');bind&&bind()}
+async function boot(){
+  ann=ann||new LocalAnnotation(localStorage);
+  const hasKey=/^[0-9a-fA-F]{64}$/.test(String(localStorage.getItem(LS.key)||'').trim());
+  if(!hasKey){renderAll();pageSwitch('settings');if($('dataStatus'))$('dataStatus').textContent='请先输入64位十六进制激活码';return}
+  await loadData(true);
 }
-t20BindInitialSettings();
-window.addEventListener('resize',updateStockTableSticky);
 history.replaceState({root:true},'','');
-loadData(true);
+boot();
 </script>
 </body>
 </html>
