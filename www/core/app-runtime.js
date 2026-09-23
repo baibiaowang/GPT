@@ -2,8 +2,8 @@
 'use strict';
 
 const APP={
-  version:'2.1.11',
-  versionCode:2111,
+  version:'2.1.12',
+  versionCode:2112,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -119,9 +119,11 @@ function normalizePayload(payload){
   if(!payload||typeof payload!=='object')throw new Error('明文 JSON 不是对象');
 
   /*
-   * 当前生产端实际明文格式：
-   * {"表头":[...],"数据":[[...],[...]]}
-   * 先按真实二维表结构归一化，再进入统一 TableModel。
+   * 当前生产明文支持两种明确协议：
+   * 1) 合并二维表：{"表头":[...],"数据":[...]}
+   * 2) 严格 schema v3：meta.schema=3 + layout + records
+   *
+   * 不再把未知/错误 schema “猜测转换”为 schema v3。
    */
   if(Array.isArray(payload['表头'])&&Array.isArray(payload['数据'])){
     const headers=payload['表头'].map(value=>String(value??'').trim());
@@ -139,12 +141,10 @@ function normalizePayload(payload){
     const records=payload['数据'].map((row,rowIndex)=>{
       if(!Array.isArray(row))throw new Error('合并表第 '+(rowIndex+1)+' 行不是数组');
       if(row.length!==headers.length){
-        throw new Error('合并表第 '+(rowIndex+1)+' 行有 '+row.length+' 列，表头为 '+headers.length+' 列');
+        throw new Error('合并表第 '+(rowIndex+1)+' 行有 '+row.length+' 列，表头为 '+headers.length);
       }
       const record={};
       row.forEach((value,index)=>{record[keys[index]]=value==null?'':value});
-      const identity=row.map(value=>String(value??'')).join('\u241f');
-      record.rowId='R-'+hash(identity);
       return record;
     });
 
@@ -154,7 +154,9 @@ function normalizePayload(payload){
       meta:{
         schema:3,
         source_schema:'merged-table-v1',
-        generated_at:String(payload.generated_at||payload.生成时间||'')
+        table_id:clean(payload.table_id||payload.表格ID||payload.meta?.table_id||''),
+        table_name:clean(payload.table_name||payload.表格名称||payload.meta?.table_name||''),
+        generated_at:String(payload.generated_at||payload.生成时间||payload.meta?.generated_at||'')
       },
       layout:{
         list_columns:listColumns,
@@ -168,55 +170,15 @@ function normalizePayload(payload){
   if(!Array.isArray(payload.records))throw new Error('明文 JSON 缺少 records[]');
 
   const meta=payload.meta&&typeof payload.meta==='object'?payload.meta:{};
-  const rawSchema=meta.schema??meta.schema_version??payload.schema??null;
+  const rawSchema=meta.schema;
   const numericSchema=rawSchema==null?NaN:Number(rawSchema);
   const hasLayout=!!(payload.layout&&typeof payload.layout==='object'&&
     Array.isArray(payload.layout.list_columns)&&Array.isArray(payload.layout.detail_columns));
 
-  if(numericSchema===3&&hasLayout)return payload;
-
-  if(hasLayout){
-    return Object.assign({},payload,{
-      meta:Object.assign({},meta,{
-        schema:3,
-        source_schema:rawSchema==null?'missing':rawSchema
-      })
-    });
-  }
-
-  const first=payload.records.find(row=>row&&typeof row==='object');
-  const direct=first&&typeof first==='object'?first:{};
-  const nested=direct.columns&&typeof direct.columns==='object'?direct.columns:{};
-  const keys=[...new Set([...Object.keys(direct),...Object.keys(nested)])]
-    .filter(key=>!['rowId','id','cells','columns'].includes(key));
-  if(keys.length){
-    const layoutColumns=keys.map(key=>({key,label:key,type:'text'}));
-    return Object.assign({},payload,{
-      meta:Object.assign({},meta,{schema:3,source_schema:rawSchema==null?'missing':rawSchema}),
-      layout:{
-        list_columns:layoutColumns,
-        detail_columns:layoutColumns.map(column=>Object.assign({},column))
-      }
-    });
-  }
-
-  const cells=Array.isArray(direct.cells)?direct.cells:[];
-  if(cells.length){
-    const cellKeys=cells.map(cell=>clean(cell?.columnId)||clean(cell?.key)||clean(cell?.label)).filter(Boolean);
-    const unique=[...new Set(cellKeys)];
-    const layoutColumns=unique.map(key=>({key,label:key,type:'text'}));
-    return Object.assign({},payload,{
-      meta:Object.assign({},meta,{schema:3,source_schema:rawSchema==null?'missing':rawSchema}),
-      layout:{
-        list_columns:layoutColumns,
-        detail_columns:layoutColumns.map(column=>Object.assign({},column))
-      }
-    });
-  }
-
-  throw new Error('明文 JSON 结构不兼容：schema='+(rawSchema==null?'缺失':String(rawSchema))+'，且没有可用 layout / records 字段');
+  if(numericSchema!==3)throw new Error('明文 JSON schema 必须为 3');
+  if(!hasLayout)throw new Error('schema v3 缺少 layout.list_columns / layout.detail_columns');
+  return payload;
 }
-
 async function decryptSJ01(encoded){
   const bytes=b64Bytes(encoded);
   if(bytes.length<33)throw new Error('SJ01 密文过短：至少需要 4B 头 + 1B 版本 + 12B IV + 16B GCM 标签');
@@ -381,25 +343,118 @@ function assignColumnIds(tableId,defs){
   return columns;
 }
 
-function makeRowId(record,values){
+function normalizeIdentityToken(value){
+  return clean(value).replace(/\\s+/g,'').toLowerCase();
+}
+
+function stableRowIdentity(table,row){
+  const columns=Array.isArray(table?.columns)?table.columns:[];
+  const cells=Array.isArray(row?.cells)?row.cells:[];
+  const explicit=clean(row?.rowId)||clean(row?.id);
+  if(explicit)return 'rowid:'+explicit;
+
+  const values=columns.map(column=>{
+    const cell=cells.find(item=>String(item?.columnId)===String(column.columnId));
+    return cell?.value==null?'':String(cell.value);
+  });
+
+  const pick=(tests)=>{
+    for(const index of columns.keys()){
+      const label=normalizeIdentityToken(columns[index]?.label);
+      const key=normalizeIdentityToken(columns[index]?.key);
+      const value=clean(values[index]);
+      if(!value)continue;
+      if(tests.some(test=>test(label,key)))return value;
+    }
+    return '';
+  };
+
+  const idValue=pick([
+    (label,key)=>['id','rowid','记录id','记录编号','唯一id','唯一编号'].includes(label)||['id','rowid'].includes(key)
+  ]);
+  if(idValue)return 'id:'+idValue;
+
+  const urlValue=pick([
+    (label,key)=>label.includes('链接')||label.includes('网址')||label.includes('url')||key.includes('url')||key.includes('link')
+  ]);
+  if(urlValue)return 'url:'+urlValue;
+
+  const codeValue=pick([
+    (label,key)=>['股票代码','证券代码','代码','symbol','ticker','code'].includes(label)||
+      ['stockcode','securitycode','symbol','ticker','code'].includes(key)
+  ]);
+
+  const titleValue=pick([
+    (label,key)=>label.includes('公告标题')||label==='标题'||label==='名称'||label.includes('title')||
+      key.includes('title')||key==='name'
+  ]);
+
+  const dateValue=pick([
+    (label,key)=>label.includes('公告时间')||label.includes('公告日期')||label==='日期'||label==='时间'||
+      label.includes('date')||label.includes('time')||key.includes('date')||key.includes('time')
+  ]);
+
+  if(codeValue&&titleValue&&dateValue)return 'ctd:'+codeValue+'|'+titleValue+'|'+dateValue;
+  if(codeValue&&titleValue)return 'ct:'+codeValue+'|'+titleValue;
+  if(codeValue)return 'code:'+codeValue;
+  if(titleValue&&dateValue)return 'td:'+titleValue+'|'+dateValue;
+
+  /*
+   * 通用表若没有任何可识别稳定主键，只能退回整行 hash。
+   * 对这类数据，生产端应提供 records[].rowId/id，才能保证内容变化后仍稳定。
+   */
+  return 'row:'+hash(values.join('\\u241f'));
+}
+
+function makeRowId(record,table,values){
   const explicit=clean(record?.rowId)||clean(record?.id);
-  return explicit||'R-'+hash(values.join('\u241f'));
+  if(explicit)return explicit;
+  const row={rowId:'',cells:table.columns.map((column,index)=>({
+    columnId:column.columnId,
+    value:values[index]
+  }))};
+  return 'R-'+hash(stableRowIdentity(table,row));
+}
+
+function migrateTablePrefs(oldTable,newTable){
+  if(!oldTable||!newTable||oldTable.tableId===newTable.tableId)return;
+  let prefs={};
+  try{prefs=JSON.parse(localStorage.getItem(LS.layout)||'{}')||{}}catch(e){}
+  if(prefs[oldTable.tableId]&&!prefs[newTable.tableId])prefs[newTable.tableId]=prefs[oldTable.tableId];
+  try{localStorage.setItem(LS.layout,JSON.stringify(prefs))}catch(e){}
+
+  let filters={};
+  try{filters=JSON.parse(localStorage.getItem(LS.filters)||'{}')||{}}catch(e){}
+  for(const kind of ['type','conclusion']){
+    const oldKey=oldTable.tableId+'::'+kind;
+    const newKey=newTable.tableId+'::'+kind;
+    if(filters[oldKey]&&!filters[newKey])filters[newKey]=filters[oldKey];
+  }
+  try{localStorage.setItem(LS.filters,JSON.stringify(filters))}catch(e){}
 }
 
 function buildTable(payload,url){
   if(Number(payload?.meta?.schema)!==3)throw new Error('schema v3 校验失败');
   const defs=schemaColumns(payload);
-  const source=clean(payload.meta?.source)||clean(url)||'table';
-  const stableName=clean(payload.meta?.table_id||payload.meta?.table_name||payload.meta?.title)||'table';
-  const tableId='table-'+hash(source+'|'+stableName);
+  const explicitTableId=clean(payload.meta?.table_id||payload.meta?.dataset_id||payload.meta?.table_key);
+  const stableName=clean(payload.meta?.table_name||payload.meta?.title)||'table';
+  const columnSignature=defs.map(def=>normalizeIdentityToken(def.key)+'='+normalizeIdentityToken(def.label)).join('|');
+  const tableId='table-'+hash((explicitTableId||stableName)+'|'+columnSignature);
   const columns=assignColumnIds(tableId,defs);
   const rows=[];
+  const seenIds=new Set();
 
   for(const record of payload.records){
     const values=columns.map(column=>recordValue(record,column));
     if(values.every(value=>!clean(value)))continue;
+    let rowId=makeRowId(record,{columns},values);
+    if(seenIds.has(rowId)){
+      const collisionSeed=values.map(value=>String(value??'')).join('\\u241f');
+      rowId=rowId+'-'+hash(collisionSeed);
+    }
+    seenIds.add(rowId);
     rows.push({
-      rowId:makeRowId(record,values),
+      rowId,
       cells:columns.map((column,index)=>new CellModel({
         columnId:column.columnId,
         value:values[index],
@@ -415,7 +470,7 @@ function buildTable(payload,url){
 
   const table=new TableModel({
     tableId,
-    tableName:clean(payload.meta?.table_name||payload.meta?.title)||'表格',
+    tableName:stableName||'表格',
     columns,
     rows,
     meta:Object.assign({},payload.meta,{source_url:url||'',schema:3}),
@@ -427,6 +482,7 @@ function buildTable(payload,url){
   new ColumnManager(table).refreshCatalog();
   return table;
 }
+
 
 function getCell(row,column){
   return (row?.cells||[]).find(cell=>String(cell.columnId)===String(column.columnId))||{value:'',valueId:''};
@@ -941,6 +997,7 @@ async function clearData(){
   localStorage.removeItem('table.columnIds.v1');
   localStorage.removeItem('table.valueCatalog.v1');
   try{annotations.clear()}catch(e){}
+  try{g.AndroidNative?.clearLocalFiles?.()}catch(e){}
   state.table=null;
   state.currentRow=null;
   state.currentTable=null;
@@ -960,7 +1017,7 @@ async function fetchDataSource(url){
       catch(error){g.__tableNativeDataWaiter=null;reject(error)}
     });
     let text='',offset=0;
-    const chunk=196608;
+    const chunk=196196;
     for(;;){
       const part=AndroidNative.readDataSourceChunk(offset,chunk);
       if(!part)break;
@@ -982,7 +1039,16 @@ g.__tableNativeDataSourceResult=(ok,message)=>{
   if(typeof waiter==='function')waiter(!!ok,String(message||''));
 };
 
+let loadPromise=null;
+
 async function loadData(silent=false){
+  if(loadPromise)return loadPromise;
+  loadPromise=loadDataInternal(silent);
+  try{return await loadPromise}
+  finally{loadPromise=null}
+}
+
+async function loadDataInternal(silent=false){
   const key=clean(localStorage.getItem(LS.key)||'');
   if(!/^[0-9a-fA-F]{64}$/.test(key)){
     renderSettings();
@@ -1005,11 +1071,13 @@ async function loadData(silent=false){
   }catch(e){}
 
   let lastError='';
-
   for(const url of getSourceUrls()){
     try{
       const payload=await fetchDataSource(url);
       const table=buildTable(payload,url);
+      if(cached)migrateTablePrefs(cached,table);
+      if(annotations?.rebindTable)await annotations.rebindTable(table,stableRowIdentity);
+
       state.table=table;
       state.kind='remote';
       state.currentRow=null;
@@ -1037,6 +1105,32 @@ async function loadData(silent=false){
   switchPage('settings');
   if($('dataStatus'))$('dataStatus').textContent='数据加载失败：'+lastError;
   toast('数据加载失败：'+lastError,3200);
+}
+
+
+function validateUpdateManifest(manifest,source){
+  if(!manifest||typeof manifest!=='object')throw new Error('更新清单不是 JSON 对象');
+  const version=clean(manifest.version||'');
+  const versionCode=Number(manifest.versionCode);
+  if(!/^\\d+(?:\\.\\d+){2}(?:[-+][0-9A-Za-z.-]+)?$/.test(version))throw new Error('更新版本号无效');
+  if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('更新 versionCode 无效');
+  if(clean(manifest.repo)!=='baibiaowang/GPT')throw new Error('更新清单 repo 不可信');
+  const sha256=clean(manifest.sha256||'').toLowerCase();
+  if(!/^[0-9a-f]{64}$/.test(sha256))throw new Error('更新清单必须包含有效 SHA-256');
+  const urls=[];
+  if(Array.isArray(manifest.apk_urls))urls.push(...manifest.apk_urls);
+  if(manifest.apk_url)urls.push(manifest.apk_url);
+  if(!urls.length)throw new Error('更新清单缺少 APK 下载地址');
+  const allowedHosts=new Set(['raw.githubusercontent.com','github.com','cdn.jsdelivr.net','fastly.jsdelivr.net','gcore.jsdelivr.net']);
+  for(const raw of urls){
+    const u=new URL(String(raw));
+    if(u.protocol!=='https:')throw new Error('APK 地址必须使用 HTTPS');
+    if(!allowedHosts.has(u.hostname.toLowerCase()))throw new Error('APK 地址域名不受信任');
+    if(u.hostname==='raw.githubusercontent.com'&&!u.pathname.startsWith('/baibiaowang/GPT/'))throw new Error('raw APK 地址仓库不匹配');
+    if(u.hostname==='github.com'&&!u.pathname.startsWith('/baibiaowang/GPT/'))throw new Error('GitHub APK 地址仓库不匹配');
+    if(u.hostname.endsWith('jsdelivr.net')&&!u.pathname.includes('/baibiaowang/GPT@'))throw new Error('CDN APK 地址仓库不匹配');
+  }
+  return Object.assign({},manifest,{version,versionCode,sha256});
 }
 
 async function fetchUpdateManifest(url){
@@ -1069,6 +1163,7 @@ async function fetchUpdateManifest(url){
   if(!response.ok)throw new Error('HTTP '+response.status);
   return response.json();
 }
+
 
 g.__tableNativeUpdateResult=(ok,message)=>{
   const waiter=g.__tableNativeUpdateWaiter;
@@ -1157,66 +1252,58 @@ async function downloadApkWithFallback(urls,remoteName,remoteCode,remoteSha256){
   throw new Error(lastError);
 }
 
+let updatePromise=null;
+
 async function checkUpdate(){
+  if(updatePromise)return updatePromise;
+  updatePromise=checkUpdateInternal();
+  try{return await updatePromise}
+  finally{updatePromise=null}
+}
+
+async function checkUpdateInternal(){
   const desc=$('updateDesc');
   if(desc)desc.textContent='正在检查最新版本…';
   const errors=[];
-  const manifests=[];
 
   for(const source of APP.updateSources){
     try{
-      const manifest=await fetchUpdateManifest(source);
-      const remoteCode=Number(manifest?.versionCode||0);
-      if(!remoteCode)throw new Error('更新清单缺少 versionCode');
-      manifests.push({source,manifest,remoteCode});
+      const raw=await fetchUpdateManifest(source);
+      const manifest=validateUpdateManifest(raw,source);
+
+      if(manifest.versionCode>APP.versionCode){
+        const remoteName=manifest.version;
+        if(desc)desc.textContent='发现新版本 '+remoteName;
+        if(!confirm('发现新版本 '+remoteName+'，现在下载并安装？'))return;
+
+        const urls=[];
+        if(Array.isArray(manifest.apk_urls))urls.push(...manifest.apk_urls);
+        if(manifest.apk_url)urls.push(manifest.apk_url);
+        urls.push(releaseApkUrl(remoteName));
+
+        try{
+          await downloadApkWithFallback(urls,remoteName,manifest.versionCode,manifest.sha256);
+        }catch(error){
+          const message='APK 下载失败：'+String(error?.message||error);
+          if(desc)desc.textContent=message;
+          toast(message,3200);
+        }
+        return;
+      }
+
+      if(desc)desc.textContent='当前已是最新版本 '+APP.version+'（'+APP.versionCode+'） · '+String(manifest?.published_at||'');
+      toast('当前已是最新版本',2200);
+      return;
     }catch(error){
       errors.push(source.replace(/^https?:\/\//,'').slice(0,50)+' → '+error.message);
     }
   }
 
-  if(!manifests.length){
-    const message='检查更新失败：'+errors.join('；');
-    if(desc)desc.textContent=message;
-    toast('检查更新失败',3000);
-    return;
-  }
-
-  manifests.sort((a,b)=>b.remoteCode-a.remoteCode);
-  const best=manifests[0];
-  const manifest=best.manifest;
-  const remoteCode=best.remoteCode;
-
-  if(remoteCode>APP.versionCode){
-    const remoteName=String(manifest?.version||remoteCode);
-    if(desc)desc.textContent='发现新版本 '+remoteName;
-    if(!confirm('发现新版本 '+remoteName+'，现在下载并安装？'))return;
-
-    const remoteSha256=clean(manifest?.sha256||'').toLowerCase();
-    if(remoteSha256 && !/^[0-9a-f]{64}$/.test(remoteSha256)){
-      const message='更新清单中的 APK SHA-256 无效';
-      if(desc)desc.textContent=message;
-      toast(message,3000);
-      return;
-    }
-
-    const urls=[];
-    if(Array.isArray(manifest?.apk_urls))urls.push(...manifest.apk_urls);
-    if(manifest?.apk_url)urls.push(manifest.apk_url);
-    urls.push(releaseApkUrl(remoteName));
-
-    try{
-      await downloadApkWithFallback(urls,remoteName,remoteCode,remoteSha256);
-    }catch(error){
-      const message='APK 下载失败：'+String(error?.message||error);
-      if(desc)desc.textContent=message;
-      toast(message,3200);
-    }
-    return;
-  }
-
-  if(desc)desc.textContent='当前已是最新版本 '+APP.version+'（'+APP.versionCode+'） · '+String(manifest?.published_at||'');
-  toast('当前已是最新版本',2200);
+  const message='检查更新失败：'+errors.join('；');
+  if(desc)desc.textContent=message;
+  toast('检查更新失败',3000);
 }
+
 
 function copyText(text){
   if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text);
@@ -1310,6 +1397,7 @@ function wireInitialLayout(){
 
 async function boot(){
   annotations=annotations||new LocalAnnotation(localStorage);
+  try{await annotations.ready}catch(e){}
   wireEvents();
   wireInitialLayout();
 
