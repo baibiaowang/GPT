@@ -1,7 +1,5 @@
 package com.baibiaowang.stockjudge;
 
-import android.app.DownloadManager;
-import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -49,21 +47,10 @@ public class MainActivity extends BridgeActivity {
     private String pendingExportName;
     private String pendingExportText;
 
-    private long apkDownloadId = -1L;
+    private volatile boolean apkDownloading = false;
+    private volatile boolean apkDownloadCancel = false;
+    private Thread apkDownloadThread;
     private String pendingInstallUri;
-    private DownloadManager apkDownloadManager;
-    private final Handler apkHandler = new Handler(Looper.getMainLooper());
-    private Runnable apkProgressTask;
-    private boolean apkReceiverRegistered = false;
-
-    private final BroadcastReceiver apkDownloadReceiver = new BroadcastReceiver() {
-        @Override public void onReceive(Context context, Intent intent) {
-            if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) return;
-            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
-            if (id != apkDownloadId) return;
-            checkApkDownload(true);
-        }
-    };
 
     private static final String DATA_SOURCE_FILE = "data-source.txt";
     private static final String DATA_SOURCE_PART = "data-source.txt.part";
@@ -165,189 +152,183 @@ public class MainActivity extends BridgeActivity {
         }, "AndroidNative");
     }
 
-    private void registerApkDownloadReceiver() {
-        if (apkReceiverRegistered) return;
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(apkDownloadReceiver, new android.content.IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(apkDownloadReceiver, new android.content.IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+    /**
+     * APK 更新不再使用 Android DownloadManager。
+     *
+     * 原 DownloadManager 对 GitHub Release/跨域重定向链并不稳定，设备端
+     * 很容易出现“检测到更新，但没有真正开始下载”的情况。
+     * 这里改为 App 内直接 HTTP(S) 下载到 cache：
+     * 1) 手动跟随最多 5 次 HTTPS 302/301；
+     * 2) 每次写入 .part 临时文件，完成后原子改名；
+     * 3) 实时回传进度；
+     * 4) 完成后通过 FileProvider 交给系统安装器。
+     */
+    private void startApkDownload(final String url, final String filename) {
+        if (apkDownloading) {
+            notifyJsDownloadFailed("已有更新正在下载");
+            return;
         }
-        apkReceiverRegistered = true;
-    }
-
-    private String readFileChunk(final String filename, final int offset, final int maxLength, final String label) {
-        int safeOffset = Math.max(0, offset);
-        int safeLength = Math.max(1, Math.min(DATA_SOURCE_CHUNK, maxLength));
-        File f = new File(getFilesDir(), filename);
-        if (!f.exists() || safeOffset >= f.length()) return "";
-        int n = (int)Math.min((long)safeLength, f.length() - safeOffset);
-        byte[] buf = new byte[n];
-        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r")) {
-            raf.seek(safeOffset);
-            raf.readFully(buf);
-            return new String(buf, StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            throw new RuntimeException("读取" + label + "失败：" + e.getMessage());
+        final String rawUrl = url == null ? "" : url.trim();
+        if (!rawUrl.startsWith("https://")) {
+            notifyJsDownloadFailed("更新地址必须使用 HTTPS");
+            return;
         }
+
+        String safeName = (filename == null || filename.trim().isEmpty())
+            ? "stock-judge-update.apk" : filename.trim();
+        if (!safeName.toLowerCase().endsWith(".apk")) safeName += ".apk";
+        safeName = safeName.replaceAll("[\\\\/:*?\"<>|]+", "_");
+
+        final File partFile = new File(getCacheDir(), "stock-judge-update.apk.part");
+        final File apkFile = new File(getCacheDir(), "stock-judge-update.apk");
+
+        apkDownloading = true;
+        apkDownloadCancel = false;
+        apkDownloadThread = new Thread(new Runnable() {
+            @Override public void run() {
+                downloadApkNative(rawUrl, safeName, partFile, apkFile);
+            }
+        }, "stock-judge-apk-download");
+        apkDownloadThread.start();
     }
 
-    private void fetchDataSourceNative(final String urlString) {
-        fetchTextFileNative(urlString, DATA_SOURCE_FILE, DATA_SOURCE_PART, "数据源", "window.__tableNativeDataSourceResult");
-    }
-
-    private void fetchTextFileNative(final String urlString, final String outName, final String partName, final String label, final String callbackFn) {
+    private void downloadApkNative(final String startUrl, final String displayName,
+                                    final File partFile, final File apkFile) {
         HttpURLConnection conn = null;
-        File part = new File(getFilesDir(), partName);
-        File out = new File(getFilesDir(), outName);
         try {
-            if (urlString == null || !urlString.trim().startsWith("https://")) {
-                throw new Exception("数据源必须使用 HTTPS");
+            if (partFile.exists() && !partFile.delete()) {
+                throw new Exception("无法清理旧下载文件");
             }
-            URL url = new URL(urlString.trim());
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setInstanceFollowRedirects(true);
-            conn.setConnectTimeout(15000);
-            conn.setReadTimeout(30000);
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("Accept", "text/plain,*/*");
-            conn.setRequestProperty("Accept-Encoding", "identity");
-            conn.setRequestProperty("Cache-Control", "no-cache");
-            int code = conn.getResponseCode();
-            if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
-            try (InputStream in = new BufferedInputStream(conn.getInputStream());
-                 OutputStream outStream = new FileOutputStream(part, false)) {
-                byte[] buf = new byte[32768];
-                int n;
-                while ((n = in.read(buf)) != -1) outStream.write(buf, 0, n);
-                outStream.flush();
+
+            String current = startUrl;
+            long total = -1L;
+
+            for (int redirect = 0; redirect < 6; redirect++) {
+                URL u = new URL(current);
+                if (!"https".equalsIgnoreCase(u.getProtocol())) {
+                    throw new Exception("重定向到了非 HTTPS 地址");
+                }
+
+                conn = (HttpURLConnection) u.openConnection();
+                conn.setInstanceFollowRedirects(false);
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(45000);
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("User-Agent", "StockJudge-GPT-Updater/2.1.5");
+                conn.setRequestProperty("Accept", "application/vnd.android.package-archive,application/octet-stream,*/*");
+                conn.setRequestProperty("Accept-Encoding", "identity");
+                conn.setRequestProperty("Cache-Control", "no-cache");
+
+                int code = conn.getResponseCode();
+                if (code == HttpURLConnection.HTTP_MOVED_PERM
+                        || code == HttpURLConnection.HTTP_MOVED_TEMP
+                        || code == 307 || code == 308) {
+                    String location = conn.getHeaderField("Location");
+                    conn.disconnect();
+                    conn = null;
+                    if (location == null || location.trim().isEmpty()) {
+                        throw new Exception("服务器重定向但未提供新地址");
+                    }
+                    URL next = new URL(new URL(current), location);
+                    if (!"https".equalsIgnoreCase(next.getProtocol())) {
+                        throw new Exception("服务器重定向到了非 HTTPS 地址");
+                    }
+                    current = next.toString();
+                    continue;
+                }
+
+                if (code < 200 || code >= 300) {
+                    throw new Exception("HTTP " + code);
+                }
+
+                total = conn.getContentLengthLong();
+                final long expected = total;
+                notifyJsDownloadProgress(0, "running",
+                        expected > 0 ? "开始下载 " + displayName : "开始下载…");
+
+                try (InputStream in = new BufferedInputStream(conn.getInputStream());
+                     OutputStream out = new FileOutputStream(partFile, false)) {
+                    byte[] buf = new byte[32768];
+                    long done = 0L;
+                    int n;
+                    int lastPct = -1;
+                    long lastNotify = 0L;
+
+                    while ((n = in.read(buf)) != -1) {
+                        if (apkDownloadCancel) throw new InterruptedException("用户取消下载");
+                        out.write(buf, 0, n);
+                        done += n;
+
+                        long now = SystemClock.uptimeMillis();
+                        int pct = expected > 0
+                            ? Math.max(0, Math.min(99, (int)Math.floor(done * 100d / expected)))
+                            : 0;
+                        if (pct != lastPct || now - lastNotify >= 300L) {
+                            lastPct = pct;
+                            lastNotify = now;
+                            notifyJsDownloadProgress(pct, "running",
+                                expected > 0 ? "正在下载 " + pct + "%" : "正在下载…");
+                        }
+                    }
+                    out.flush();
+
+                    if (expected > 0 && done != expected) {
+                        throw new Exception("下载长度异常：" + done + "/" + expected);
+                    }
+                    if (done < 1024L * 1024L) {
+                        throw new Exception("下载文件过小，疑似不是 APK");
+                    }
+                }
+
+                conn.disconnect();
+                conn = null;
+
+                if (!partFile.exists() || partFile.length() < 1024L * 1024L) {
+                    throw new Exception("APK 临时文件无效");
+                }
+
+                // APK 是 ZIP 容器，正常文件应以 PK 开头。
+                try (InputStream in = new java.io.FileInputStream(partFile)) {
+                    int a = in.read();
+                    int b = in.read();
+                    if (a != 'P' || b != 'K') {
+                        throw new Exception("服务器返回内容不是 APK");
+                    }
+                }
+
+                if (apkFile.exists() && !apkFile.delete()) {
+                    throw new Exception("无法替换旧安装包");
+                }
+                if (!partFile.renameTo(apkFile)) {
+                    throw new Exception("无法保存安装包");
+                }
+
+                apkDownloading = false;
+                notifyJsDownloadProgress(100, "complete", "下载完成");
+                notifyJsDownloadComplete();
+
+                final String installPath = apkFile.getAbsolutePath();
+                apkHandler.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        installDownloadedApk(installPath);
+                    }
+                }, 300L);
+                return;
             }
-            if (!part.exists() || part.length() == 0) throw new Exception("服务器返回空文件");
-            if (out.exists() && !out.delete()) throw new Exception("无法替换旧数据文件");
-            if (!part.renameTo(out)) throw new Exception("无法保存数据文件");
-            notifyJsTextResult(callbackFn, true, label + "读取成功");
+
+            throw new Exception("重定向次数过多");
+        } catch (InterruptedException e) {
+            try { if (partFile.exists()) partFile.delete(); } catch (Exception ignored) { }
+            apkDownloading = false;
+            notifyJsDownloadFailed("更新下载已取消");
         } catch (Exception e) {
-            try { if (part.exists()) part.delete(); } catch (Exception ignored) { }
-            notifyJsTextResult(callbackFn, false, label + "读取失败：" + e.getMessage());
+            try { if (partFile.exists()) partFile.delete(); } catch (Exception ignored) { }
+            apkDownloading = false;
+            notifyJsDownloadFailed("APK 下载失败：" + e.getMessage());
         } finally {
             if (conn != null) conn.disconnect();
-        }
-    }
-
-    private void notifyJsTextResult(final String callbackFn, final boolean ok, final String message) {
-        runOnUiThread(new Runnable() {
-            @Override public void run() {
-                WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
-                if (wv == null) return;
-                String safeFn = (callbackFn == null || !callbackFn.matches("[A-Za-z0-9_.$]+")) ? "window.__tableNativeTextResult" : callbackFn;
-                String js = safeFn + "&&" + safeFn + "(" + (ok ? "true" : "false") + "," + jsStr(message) + ");";
-                try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
-            }
-        });
-    }
-
-    private void startApkDownload(final String url, final String filename) {
-        try {
-            Uri u = Uri.parse(url);
-            if (!"https".equalsIgnoreCase(u.getScheme())) {
-                notifyJsDownloadFailed("更新地址必须使用 HTTPS");
-                return;
-            }
-            if (apkDownloadManager == null) {
-                apkDownloadManager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            }
-            if (apkDownloadManager == null) {
-                notifyJsDownloadFailed("系统下载服务不可用");
-                return;
-            }
-
-            String safeName = (filename == null || filename.trim().isEmpty()) ? "stock-judge-update.apk" : filename.trim();
-            if (!safeName.toLowerCase().endsWith(".apk")) safeName += ".apk";
-            safeName = "股票判断机-" + safeName;
-
-            DownloadManager.Request req = new DownloadManager.Request(u);
-            req.setTitle("股票判断机更新");
-            req.setDescription("正在下载 " + safeName);
-            req.setMimeType("application/vnd.android.package-archive");
-            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            if (Build.VERSION.SDK_INT >= 24) {
-                req.setAllowedOverMetered(true);
-                req.setAllowedOverRoaming(true);
-            }
-            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "股票判断机/" + safeName);
-
-            apkDownloadId = apkDownloadManager.enqueue(req);
-            notifyJsDownloadProgress(0, "running", "正在下载…");
-            startApkProgressPolling();
-        } catch (Exception e) {
-            notifyJsDownloadFailed("APK 下载失败：" + e.getMessage());
-        }
-    }
-
-    private void startApkProgressPolling() {
-        if (apkProgressTask != null) apkHandler.removeCallbacks(apkProgressTask);
-        apkProgressTask = new Runnable() {
-            @Override public void run() {
-                if (apkDownloadId == -1L) return;
-                checkApkDownload(false);
-                if (apkDownloadId != -1L) apkHandler.postDelayed(this, 300L);
-            }
-        };
-        apkHandler.post(apkProgressTask);
-    }
-
-    private void checkApkDownload(boolean fromBroadcast) {
-        if (apkDownloadId == -1L) return;
-        DownloadManager.Query q = new DownloadManager.Query();
-        q.setFilterById(apkDownloadId);
-        try (android.database.Cursor c = apkDownloadManager.query(q)) {
-            if (c == null || !c.moveToFirst()) {
-                if (fromBroadcast) {
-                    notifyJsDownloadFailed("找不到下载任务");
-                    apkDownloadId = -1L;
-                }
-                return;
-            }
-
-            int status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
-            if (status == DownloadManager.STATUS_PENDING) {
-                notifyJsDownloadProgress(0, "pending", "等待下载…");
-                return;
-            }
-            if (status == DownloadManager.STATUS_RUNNING) {
-                long done = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                long total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
-                int pct = total > 0 ? (int)Math.max(0, Math.min(99, Math.round(done * 100f / total))) : 0;
-                notifyJsDownloadProgress(pct, "running", total > 0 ? "正在下载 " + pct + "%" : "正在下载…");
-                return;
-            }
-            if (status == DownloadManager.STATUS_PAUSED) {
-                notifyJsDownloadProgress(0, "paused", "下载暂停，等待恢复…");
-                return;
-            }
-            if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                String localUri = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI));
-                apkDownloadId = -1L;
-                if (apkProgressTask != null) {
-                    apkHandler.removeCallbacks(apkProgressTask);
-                    apkProgressTask = null;
-                }
-                notifyJsDownloadComplete();
-                apkHandler.postDelayed(new Runnable() {
-                    @Override public void run() { installDownloadedApk(localUri); }
-                }, 350L);
-                return;
-            }
-
-            int reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON));
-            apkDownloadId = -1L;
-            if (apkProgressTask != null) {
-                apkHandler.removeCallbacks(apkProgressTask);
-                apkProgressTask = null;
-            }
-            notifyJsDownloadFailed("APK 下载失败（原因 " + reason + "）");
-        } catch (Exception e) {
-            notifyJsDownloadFailed("下载状态读取失败：" + e.getMessage());
-            apkDownloadId = -1L;
+            apkDownloadThread = null;
+            apkDownloading = false;
         }
     }
 
@@ -368,8 +349,9 @@ public class MainActivity extends BridgeActivity {
             @Override public void run() {
                 WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
                 if (wv == null) return;
-                try { wv.evaluateJavascript("window.__tableApkDownloadComplete&&window.__tableApkDownloadComplete();", null); }
-                catch (Exception ignored) { }
+                try {
+                    wv.evaluateJavascript("window.__tableApkDownloadComplete&&window.__tableApkDownloadComplete();", null);
+                } catch (Exception ignored) { }
             }
         });
     }
@@ -381,27 +363,27 @@ public class MainActivity extends BridgeActivity {
                 if (wv == null) return;
                 String js = "window.__tableApkDownloadFailed&&window.__tableApkDownloadFailed(" + jsStr(message) + ");";
                 try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
             }
         });
     }
 
-    private void installDownloadedApk(String localUri) {
+    private void installDownloadedApk(String localPath) {
         try {
-            if (localUri == null || localUri.trim().isEmpty()) throw new Exception("安装文件地址为空");
-            Uri uri = Uri.parse(localUri);
-            // DownloadManager 返回的本地文件通常是 file:// URI。Android 不允许
-            // 直接把 file:// 暴露给外部安装器，这里转换成安全的 content:// URI。
-            if ("file".equalsIgnoreCase(uri.getScheme())) {
-                File apkFile = new File(uri.getPath());
-                if (!apkFile.exists()) throw new Exception("安装文件不存在：" + apkFile.getAbsolutePath());
-                uri = FileProvider.getUriForFile(
-                    MainActivity.this,
-                    getPackageName() + ".fileprovider",
-                    apkFile
-                );
+            if (localPath == null || localPath.trim().isEmpty()) throw new Exception("安装文件地址为空");
+            File apkFile = new File(localPath);
+            if (!apkFile.exists() || apkFile.length() < 1024L * 1024L) {
+                throw new Exception("安装文件不存在或文件不完整");
             }
+
+            Uri uri = FileProvider.getUriForFile(
+                MainActivity.this,
+                getPackageName() + ".fileprovider",
+                apkFile
+            );
+
             if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
-                pendingInstallUri = localUri;
+                pendingInstallUri = localPath;
                 notifyJsInstallNeedsPermission();
                 try {
                     Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -410,6 +392,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception ignored) { }
                 return;
             }
+
             Intent i = new Intent(Intent.ACTION_VIEW);
             i.setDataAndType(uri, "application/vnd.android.package-archive");
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -424,20 +407,19 @@ public class MainActivity extends BridgeActivity {
     private void notifyJsInstallNeedsPermission() {
         runOnUiThread(new Runnable() {
             @Override public void run() {
-                Toast.makeText(MainActivity.this, "请允许“股票判断机”安装未知应用，然后返回继续安装。", Toast.LENGTH_LONG).show();
+                Toast.makeText(MainActivity.this,
+                    "请允许“股票判断机”安装未知应用，然后返回继续安装。",
+                    Toast.LENGTH_LONG).show();
             }
         });
     }
 
     @Override
     public void onDestroy() {
-        if (apkProgressTask != null) {
-            apkHandler.removeCallbacks(apkProgressTask);
-            apkProgressTask = null;
-        }
-        if (apkReceiverRegistered) {
-            try { unregisterReceiver(apkDownloadReceiver); } catch (Exception ignored) { }
-            apkReceiverRegistered = false;
+        apkDownloadCancel = true;
+        if (apkDownloadThread != null) {
+            try { apkDownloadThread.interrupt(); } catch (Exception ignored) { }
+            apkDownloadThread = null;
         }
         super.onDestroy();
     }
