@@ -1,8 +1,8 @@
 {
-  "version": "2.0.2",
-  "versionCode": 2002,
+  "version": "2.1.0",
+  "versionCode": 2100,
   "published_at": "2026-09-23",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v2.0.2/app.apk",
-  "notes": "2.0.2：修正首页表头固定与列表层级、移除类型/结论页面手动表头选择，并将显示设置独立成卡片；同步更新应用版本号。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v2.1.0/app.apk",
+  "notes": "2.1.0：完成通用表格运行时重构；移除旧 v2/v20 股票专用界面与筛选代码；收藏与点评保存完整行快照；类型/结论默认表头统一在设置中配置。"
 }
