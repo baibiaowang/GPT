@@ -293,7 +293,7 @@ public class MainActivity extends BridgeActivity {
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(45000);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "StockJudge-GPT/" + BuildConfig.VERSION_NAME);
+                conn.setRequestProperty("User-Agent", "StockJudge-GPT-Updater/2");
                 conn.setRequestProperty("Accept", "application/vnd.android.package-archive,application/octet-stream,*/*");
                 conn.setRequestProperty("Accept-Encoding", "identity");
                 conn.setRequestProperty("Cache-Control", "no-cache");
