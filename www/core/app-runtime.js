@@ -437,6 +437,13 @@ function migrateTablePrefs(oldTable,newTable){
     if(filters[oldKey]&&!filters[newKey])filters[newKey]=filters[oldKey];
   }
   try{localStorage.setItem(LS.filters,JSON.stringify(filters))}catch(e){}
+
+  let filterColumns={};
+  try{filterColumns=JSON.parse(localStorage.getItem(LS.filterColumns)||'{}')||{}}catch(e){}
+  if(filterColumns[oldTable.tableId]&&!filterColumns[newTable.tableId]){
+    filterColumns[newTable.tableId]=filterColumns[oldTable.tableId];
+  }
+  try{localStorage.setItem(LS.filterColumns,JSON.stringify(filterColumns))}catch(e){}
 }
 
 function buildTable(payload,url){
@@ -1086,6 +1093,7 @@ async function clearData(){
   try{await idbDelete(IDB.cacheKey)}catch(e){}
   localStorage.removeItem(LS.layout);
   localStorage.removeItem(LS.filters);
+  localStorage.removeItem(LS.filterColumns);
   localStorage.removeItem('table.columnIds.v1');
   localStorage.removeItem('table.valueCatalog.v1');
   try{annotations.clear()}catch(e){}
