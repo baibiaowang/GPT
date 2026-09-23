@@ -308,6 +308,17 @@ function recordValue(record,column){
     if(key&&Object.prototype.hasOwnProperty.call(direct,key)&&direct[key]!=null)return scalar(direct[key]);
     if(key&&Object.prototype.hasOwnProperty.call(nested,key)&&nested[key]!=null)return scalar(nested[key]);
   }
+  const cells=Array.isArray(direct.cells)?direct.cells:[];
+  const cell=cells.find(item=>{
+    const id=clean(item?.columnId);
+    const key=clean(item?.key);
+    const label=clean(item?.label);
+    return [column.columnId,column.key,column.label].some(candidate=>{
+      const target=clean(candidate);
+      return target && (target===id||target===key||target===label);
+    });
+  });
+  if(cell&&cell.value!=null)return scalar(cell.value);
   return '';
 }
 
