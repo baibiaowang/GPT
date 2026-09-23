@@ -344,7 +344,7 @@ function assignColumnIds(tableId,defs){
 }
 
 function normalizeIdentityToken(value){
-  return clean(value).replace(/\\s+/g,'').toLowerCase();
+  return clean(value).replace(/\s+/g,'').toLowerCase();
 }
 
 function stableRowIdentity(table,row){
