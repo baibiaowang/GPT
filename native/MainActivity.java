@@ -51,6 +51,7 @@ public class MainActivity extends BridgeActivity {
     private volatile boolean apkDownloading = false;
     private volatile boolean apkDownloadCancel = false;
     private Thread apkDownloadThread;
+    private final Handler apkHandler = new Handler(Looper.getMainLooper());
     private String pendingInstallUri;
 
     private static final String DATA_SOURCE_FILE = "data-source.txt";
@@ -64,7 +65,6 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         installBackHandler();
         installNativeBridge();
-        registerApkDownloadReceiver();
     }
 
     @Override
@@ -153,10 +153,79 @@ public class MainActivity extends BridgeActivity {
         }, "AndroidNative");
     }
 
-    /**
-     * APK 更新不再使用 Android DownloadManager。
+    private String readFileChunk(final String filename, final int offset, final int maxLength, final String label) {
+        int safeOffset = Math.max(0, offset);
+        int safeLength = Math.max(1, Math.min(DATA_SOURCE_CHUNK, maxLength));
+        File f = new File(getFilesDir(), filename);
+        if (!f.exists() || safeOffset >= f.length()) return "";
+        int n = (int)Math.min((long)safeLength, f.length() - safeOffset);
+        byte[] buf = new byte[n];
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r")) {
+            raf.seek(safeOffset);
+            raf.readFully(buf);
+            return new String(buf, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException("读取" + label + "失败：" + e.getMessage());
+        }
+    }
+
+    private void fetchDataSourceNative(final String urlString) {
+        fetchTextFileNative(urlString, DATA_SOURCE_FILE, DATA_SOURCE_PART, "数据源", "window.__tableNativeDataSourceResult");
+    }
+
+    private void fetchTextFileNative(final String urlString, final String outName, final String partName, final String label, final String callbackFn) {
+        HttpURLConnection conn = null;
+        File part = new File(getFilesDir(), partName);
+        File out = new File(getFilesDir(), outName);
+        try {
+            if (urlString == null || !urlString.trim().startsWith("https://")) {
+                throw new Exception("数据源必须使用 HTTPS");
+            }
+            URL url = new URL(urlString.trim());
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setInstanceFollowRedirects(true);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(30000);
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "text/plain,*/*");
+            conn.setRequestProperty("Accept-Encoding", "identity");
+            conn.setRequestProperty("Cache-Control", "no-cache");
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
+            try (InputStream in = new BufferedInputStream(conn.getInputStream());
+                 OutputStream outStream = new FileOutputStream(part, false)) {
+                byte[] buf = new byte[32768];
+                int n;
+                while ((n = in.read(buf)) != -1) outStream.write(buf, 0, n);
+                outStream.flush();
+            }
+            if (!part.exists() || part.length() == 0) throw new Exception("服务器返回空文件");
+            if (out.exists() && !out.delete()) throw new Exception("无法替换旧数据文件");
+            if (!part.renameTo(out)) throw new Exception("无法保存数据文件");
+            notifyJsTextResult(callbackFn, true, label + "读取成功");
+        } catch (Exception e) {
+            try { if (part.exists()) part.delete(); } catch (Exception ignored) { }
+            notifyJsTextResult(callbackFn, false, label + "读取失败：" + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    private void notifyJsTextResult(final String callbackFn, final boolean ok, final String message) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+                if (wv == null) return;
+                String safeFn = (callbackFn == null || !callbackFn.matches("[A-Za-z0-9_.$]+")) ? "window.__tableNativeTextResult" : callbackFn;
+                String js = safeFn + "&&" + safeFn + "(" + (ok ? "true" : "false") + "," + jsStr(message) + ");";
+                try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
+            }
+        });
+    }
+
+     * APK 更新不再使用 Android 系统下载服务。
      *
-     * 原 DownloadManager 对 GitHub Release/跨域重定向链并不稳定，设备端
+     * 原 系统下载服务 对 GitHub Release/跨域重定向链并不稳定，设备端
      * 很容易出现“检测到更新，但没有真正开始下载”的情况。
      * 这里改为 App 内直接 HTTP(S) 下载到 cache：
      * 1) 手动跟随最多 5 次 HTTPS 302/301；
@@ -350,9 +419,8 @@ public class MainActivity extends BridgeActivity {
             @Override public void run() {
                 WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
                 if (wv == null) return;
-                try {
-                    wv.evaluateJavascript("window.__tableApkDownloadComplete&&window.__tableApkDownloadComplete();", null);
-                } catch (Exception ignored) { }
+                try { wv.evaluateJavascript("window.__tableApkDownloadComplete&&window.__tableApkDownloadComplete();", null); }
+                catch (Exception ignored) { }
             }
         });
     }
@@ -408,9 +476,7 @@ public class MainActivity extends BridgeActivity {
     private void notifyJsInstallNeedsPermission() {
         runOnUiThread(new Runnable() {
             @Override public void run() {
-                Toast.makeText(MainActivity.this,
-                    "请允许“股票判断机”安装未知应用，然后返回继续安装。",
-                    Toast.LENGTH_LONG).show();
+                Toast.makeText(MainActivity.this, "请允许“股票判断机”安装未知应用，然后返回继续安装。", Toast.LENGTH_LONG).show();
             }
         });
     }
