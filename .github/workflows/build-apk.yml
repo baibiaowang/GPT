@@ -14,6 +14,11 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: gpt-build-apk
+  cancel-in-progress: true
+
+
 env:
   # ★ 2026-09-20 改：原来从私有仓 APKSecrets 取 keystore，需要额外的
   #   APKSECRETS_TOKEN（一直没配，构建必然失败，见 run 35501438918）。
