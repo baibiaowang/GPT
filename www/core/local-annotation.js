@@ -44,12 +44,13 @@ class LocalAnnotation{
       this.save(this.favKey,data);
       return false;
     }
+    const saved=this.snapshot(table,row);
     data[id]={
       tableId:String(table.tableId),
       rowId:String(row.rowId),
       tableName:String(table.tableName||'表格'),
-      snapshot:this.snapshot(table,row),
-      columns:this.snapshot(table,row).columns,
+      snapshot:saved,
+      columns:saved.columns,
       savedAt:new Date().toISOString()
     };
     this.save(this.favKey,data);
@@ -74,13 +75,14 @@ class LocalAnnotation{
     const id=this.id(table.tableId,row.rowId);
     const comment=String(text||'').trim();
     if(comment){
+      const saved=this.snapshot(table,row);
       data[id]={
         tableId:String(table.tableId),
         rowId:String(row.rowId),
         tableName:String(table.tableName||'表格'),
         comment,
-        snapshot:this.snapshot(table,row),
-        columns:this.snapshot(table,row).columns,
+        snapshot:saved,
+        columns:saved.columns,
         updatedAt:new Date().toISOString()
       };
     }else{
