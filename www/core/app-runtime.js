@@ -3,7 +3,7 @@
 
 const APP={
   version:'2.1.6',
-  versionCode:2105,
+  versionCode:2106,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
