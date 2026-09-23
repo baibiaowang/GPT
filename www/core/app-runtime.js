@@ -17,7 +17,8 @@ const LS={
   urls:'sj.urls.v4',
   key:'sj.activation.v4',
   layout:'table.layout.v3',
-  filters:'table.filters.v1'
+  filters:'table.filters.v1',
+  filterColumns:'table.filter.columns.v1'
 };
 
 const IDB={
@@ -37,6 +38,8 @@ const state={
   conclusionColumn:'',
   typeValue:'',
   conclusionValue:'',
+  filterColumn:'',
+  filterValue:'',
   kind:'',
   savedEntries:new Map()
 };
@@ -237,10 +240,13 @@ function loadFilterPrefs(){
   if(!state.table)return;
   const t=prefs[state.table.tableId+'::type']||{};
   const c=prefs[state.table.tableId+'::conclusion']||{};
+  const f=prefs[state.table.tableId+'::filter']||{};
   state.typeColumn=String(t.columnId||state.typeColumn||'');
   state.typeValue=String(t.valueId||'');
   state.conclusionColumn=String(c.columnId||state.conclusionColumn||'');
   state.conclusionValue=String(c.valueId||'');
+  state.filterColumn=String(f.columnId||state.filterColumn||'');
+  state.filterValue=String(f.valueId||'');
 }
 
 function saveFilter(kind,columnId,valueId){
@@ -425,7 +431,7 @@ function migrateTablePrefs(oldTable,newTable){
 
   let filters={};
   try{filters=JSON.parse(localStorage.getItem(LS.filters)||'{}')||{}}catch(e){}
-  for(const kind of ['type','conclusion']){
+  for(const kind of ['type','conclusion','filter']){
     const oldKey=oldTable.tableId+'::'+kind;
     const newKey=newTable.tableId+'::'+kind;
     if(filters[oldKey]&&!filters[newKey])filters[newKey]=filters[oldKey];
@@ -500,6 +506,43 @@ function getVisibleColumns(table=state.table){
   const ids=saved.length?saved:table.columns.filter(column=>column.visible).map(column=>column.columnId);
   const fallback=ids.length?ids:table.columns.slice(0,Math.min(3,table.columns.length)).map(column=>column.columnId);
   return fallback.map(id=>table.getColumn(id)).filter(Boolean);
+}
+
+function readColumnSelection(storeKey,table){
+  let prefs={};
+  try{prefs=JSON.parse(localStorage.getItem(storeKey)||'{}')||{}}catch(e){}
+  return table&&Array.isArray(prefs[table.tableId])?prefs[table.tableId]:[];
+}
+
+function saveColumnSelection(storeKey,table,ids){
+  if(!table)return;
+  let prefs={};
+  try{prefs=JSON.parse(localStorage.getItem(storeKey)||'{}')||{}}catch(e){}
+  prefs[table.tableId]=ids.map(String);
+  localStorage.setItem(storeKey,JSON.stringify(prefs));
+}
+
+function getFilterDisplayColumns(table=state.table){
+  if(!table)return[];
+  const all=getColumns(table);
+  const selected=readColumnSelection(LS.filterColumns,table);
+  const result=[];
+  const seen=new Set();
+  const add=id=>{
+    const column=table.getColumn(id);
+    if(column&&!seen.has(String(column.columnId))){
+      seen.add(String(column.columnId));
+      result.push(column);
+    }
+  };
+  selected.forEach(add);
+  getVisibleColumns(table).forEach(column=>add(column.columnId));
+  all.forEach(column=>add(column.columnId));
+  return result.slice(0,Math.min(4,all.length));
+}
+
+function defaultFilterDisplayColumns(table=state.table){
+  return getFilterDisplayColumns(table).map(column=>column.columnId);
 }
 
 function normalizeColumnLabel(value){
@@ -626,7 +669,7 @@ function renderFilter(kind){
     return;
   }
 
-  renderConclusions();
+  renderFilters();
 }
 
 function renderTypes(){renderFilter('type')}
@@ -646,21 +689,35 @@ function renderConclusionStats(){
     :'<div class="empty compact">暂无判定性质数据</div>';
 }
 
-function renderConclusions(){
+function renderFilters(){
   if(!state.table)return;
   selectDefaultFilterColumns();
   loadFilterPrefs();
-  selectDefaultFilterColumns();
-  state.conclusionValue='';
-  renderConclusionStats();
-  const list=$('conclusionList');
-  if(!list)return;
-  list.innerHTML=rowTableHtml(
-    state.table.rows,
-    getMenuColumns(state.table,state.conclusionColumn),
-    state.table,
-    'normal'
-  );
+  if(!state.filterColumn||!state.table.getColumn(state.filterColumn))state.filterColumn=state.typeColumn;
+  const filterColumn=state.table.getColumn(state.filterColumn);
+  const tabs=$('filterTabs');
+  const list=$('filterList');
+  if(!tabs||!list)return;
+
+  const values=filterColumn?.valueCatalog||[];
+  let valueId=state.filterValue;
+  if(valueId && !values.some(value=>value.valueId===valueId))valueId='';
+  state.filterValue=valueId;
+  saveFilter('filter',state.filterColumn,valueId);
+
+  const allCount=state.table.rows.length;
+  tabs.innerHTML='<button class="tab '+(!valueId?'on':'')+'" data-filter-kind="filter" data-value-id=""><span>全部</span><b>'+allCount+'</b></button>'+
+    values.map(value=>
+      '<button class="tab '+(value.valueId===valueId?'on':'')+'" data-filter-kind="filter" data-value-id="'+esc(value.valueId)+'">'+
+      '<span>'+esc(value.valueId)+'</span><span>'+esc(value.label)+'</span><b>'+value.count+'</b></button>'
+    ).join('');
+
+  const rows=valueId?FilterEngine.byValueId(state.table,state.filterColumn,valueId):state.table.rows;
+  list.innerHTML=rowTableHtml(rows,getFilterDisplayColumns(state.table),state.table,'normal');
+}
+
+function renderConclusions(){
+  renderFilters();
 }
 
 function entryColumns(entry){
@@ -743,12 +800,22 @@ function renderSettings(){
         '<div class="setting-actions"><button class="sbtn primary" id="saveDisplayColumns">保存首页显示</button></div>'+
       '</div>'+
       '<div class="setting-item">'+
-        '<div class="setting-title">判断分类 / 判定性质</div>'+
-        '<div class="setting-desc">判断分类属于归类字段，可在“类型”菜单按分类筛选；判定性质属于数值统计字段，在“结论”菜单全部展示并统计数量。</div>'+
+        '<div class="setting-title">判断分类 / 筛选字段</div>'+
+        '<div class="setting-desc">判断分类属于归类字段，在“类型”和“筛选”页可按实际取值筛选；判定性质属于数值展示字段，不参与筛选。</div>'+
         '<div class="filter-settings">'+
           '<label>判断分类<select id="typeColumnSetting">'+columns.map(column=>'<option value="'+esc(column.columnId)+'">'+esc(column.columnId)+' '+esc(column.label)+'</option>').join('')+'</select></label>'+
-          '<div class="setting-readonly"><span>判定性质</span><strong>'+(state.table?.getColumn(conclusionId)?esc(conclusionId+' '+state.table.getColumn(conclusionId).label):'加载数据后自动识别')+'</strong><small>自动识别，不做筛选</small></div>'+
+          '<div class="setting-readonly"><span>判定性质</span><strong>'+(state.table?.getColumn(conclusionId)?esc(conclusionId+' '+state.table.getColumn(conclusionId).label):'加载数据后自动识别')+'</strong><small>数值展示，不作为筛选条件</small></div>'+
         '</div>'+
+      '</div>'+
+      '<div class="setting-item">'+
+        '<div class="setting-title">筛选页显示四列表格</div>'+
+        '<div class="setting-desc">筛选页固定展示 4 个表头，按这里选择；未选择的会按首页显示字段顺序自动补足。</div>'+
+        '<div class="filter-display-grid">'+
+          Array.from({length:4},(_,index)=>'<label>第 '+(index+1)+' 列<select data-filter-display-column="'+index+'">'+
+            (columns.map(column=>'<option value="'+esc(column.columnId)+'">'+esc(column.columnId)+' '+esc(column.label)+'</option>').join(''))+
+          '</select></label>').join('')+
+        '</div>'+
+        '<div class="setting-actions"><button class="sbtn primary" id="saveFilterDisplayColumns">保存筛选四列</button></div>'+
       '</div>'+
     '</div>'+
     '<div class="card">'+
@@ -766,7 +833,32 @@ function renderSettings(){
     $('typeColumnSetting').innerHTML='<option value="">加载数据后设置</option>';
   }else{
     $('typeColumnSetting').value=typeId;
+    const filterDefaults=defaultFilterDisplayColumns(state.table);
+    document.querySelectorAll('[data-filter-display-column]').forEach((select,index)=>{
+      const value=filterDefaults[index]||'';
+      if(value)select.value=value;
+    });
   }
+
+  $('saveFilterDisplayColumns')?.addEventListener('click',()=>{
+    if(!state.table){toast('请先加载数据');return}
+    const ids=[];
+    let duplicate=false;
+    document.querySelectorAll('[data-filter-display-column]').forEach(select=>{
+      const id=String(select.value||'');
+      if(!id)return;
+      if(ids.includes(id)){duplicate=true;return}
+      ids.push(id);
+    });
+    if(duplicate){toast('筛选四列不能重复');return}
+    if(ids.length!==Math.min(4,state.table.columns.length)){
+      toast('请把筛选四列完整设置好');return;
+    }
+    saveColumnSelection(LS.filterColumns,state.table,ids);
+    renderFilters();
+    renderSettings();
+    toast('筛选四列已保存');
+  });
 
   $('saveDisplayColumns')?.addEventListener('click',()=>{
     if(!state.table){toast('请先加载数据');return}
@@ -799,7 +891,7 @@ function renderSettings(){
 
 function pageTitle(page){
   if(page==='home')return state.table?'共 '+state.table.rows.length+' 行':'表格';
-  return ({types:'类型',conclusions:'结论',comments:'点评',favorites:'收藏',settings:'设置'})[page]||'表格';
+  return ({types:'类型',filters:'筛选',comments:'点评',favorites:'收藏',settings:'设置'})[page]||'表格';
 }
 
 function syncTopHeight(){
@@ -1084,6 +1176,7 @@ async function loadDataInternal(silent=false){
       state.currentTable=null;
       state.typeValue='';
       state.conclusionValue='';
+      state.filterValue='';
       loadFilterPrefs();
       await idbSet(IDB.cacheKey,table.toJSON());
       renderAll();
@@ -1371,9 +1464,19 @@ function wireEvents(){
     if(tab){
       const kind=tab.dataset.filterKind;
       const valueId=tab.dataset.valueId||'';
-      if(kind==='type')state.typeValue=valueId;else state.conclusionValue=valueId;
-      saveFilter(kind,kind==='type'?state.typeColumn:state.conclusionColumn,valueId);
-      renderFilter(kind);
+      if(kind==='type'){
+        state.typeValue=valueId;
+        saveFilter('type',state.typeColumn,valueId);
+        renderFilter('type');
+      }else if(kind==='filter'){
+        state.filterValue=valueId;
+        saveFilter('filter',state.filterColumn,valueId);
+        renderFilters();
+      }else{
+        state.conclusionValue=valueId;
+        saveFilter(kind,state.conclusionColumn,valueId);
+        renderFilter(kind);
+      }
     }
   });
 
