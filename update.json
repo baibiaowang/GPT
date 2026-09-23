@@ -1,15 +1,15 @@
 {
-  "version": "2.1.4",
-  "versionCode": 2104,
-  "published_at": "2026-09-23T03:34:59Z",
+  "version": "2.1.5",
+  "versionCode": 2105,
+  "published_at": "2026-09-23T04:07:26Z",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.4/app.apk",
+  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.5/app.apk",
   "apk_urls": [
-    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.4/app.apk",
-    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.4/app.apk",
-    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.4/app.apk",
-    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.4/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v2.1.4/app.apk"
+    "https://github.com/baibiaowang/GPT/releases/download/v2.1.5/app.apk",
+    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.5/app.apk",
+    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.5/app.apk",
+    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.5/app.apk",
+    "https://github.com/baibiaowang/GPT/releases/download/v2.1.5/app.apk"
   ],
-  "notes": "2.1.4：兼容旧版更新器，首个 APK 地址改为已发布的独立镜像分支直链。"
+  "notes": "2.1.5：APK 更新改为应用内 HTTP 下载，手动处理 HTTPS 重定向、临时文件与安装。"
 }
