@@ -145,7 +145,8 @@ public class MainActivity extends BridgeActivity {
                     @Override public void run() {
                         try {
                             Uri u = Uri.parse(url);
-                            if (!"https".equalsIgnoreCase(u.getScheme())) return;
+                            String scheme = u.getScheme();
+                            if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) return;
                             Intent i = new Intent(Intent.ACTION_VIEW, u);
                             startActivity(i);
                         } catch (Exception ignored) { }
