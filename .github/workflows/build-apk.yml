@@ -411,8 +411,9 @@ jobs:
           for attempt in 1 2 3 4 5; do
             git fetch origin main
             LATEST_MAIN="$(git rev-parse origin/main)"
-            LATEST_VERSION="$(git show "$LATEST_MAIN:www/core/app-runtime.js" | grep -m1 -o "version:'[^']*'" | cut -d"'" -f2)"
-            LATEST_CODE="$(git show "$LATEST_MAIN:www/core/app-runtime.js" | grep -m1 -o "versionCode:[0-9]*" | cut -d: -f2)"
+            LATEST_RUNTIME="$(git show "$LATEST_MAIN:www/core/app-runtime.js")"
+            LATEST_VERSION="$(printf '%s\n' "$LATEST_RUNTIME" | python -c 'import re,sys; s=sys.stdin.read(); m=re.search(r"version:\s*['"'"']([^'"'"']+)['"'"']",s); print(m.group(1) if m else "")')"
+            LATEST_CODE="$(printf '%s\n' "$LATEST_RUNTIME" | python -c 'import re,sys; s=sys.stdin.read(); m=re.search(r"versionCode:\s*(\d+)",s); print(m.group(1) if m else "")')"
             if [ "$LATEST_VERSION" != "$APP_VERSION_NAME" ] || [ "$LATEST_CODE" != "$APP_VERSION_CODE" ]; then
               echo "::error::main 已出现更新版本，拒绝覆盖更新清单。"
               exit 1
