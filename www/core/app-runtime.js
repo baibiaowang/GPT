@@ -124,7 +124,8 @@ async function decryptSJ01(encoded){
   const cipher=bytes.slice(17);
   const cryptoKey=await crypto.subtle.importKey('raw',hexBytes(getKey()),{name:'AES-GCM'},false,['decrypt']);
   const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},cryptoKey,cipher);
-  let text;\n  try{text=new TextDecoder('utf-8',{fatal:true}).decode(plain)}catch(e){throw new Error('解密结果不是有效 UTF-8 文本')}
+  let text;
+  try{text=new TextDecoder('utf-8',{fatal:true}).decode(plain)}catch(e){throw new Error('解密结果不是有效 UTF-8 文本')}
   let payload;
   try{payload=JSON.parse(text)}catch(e){throw new Error('解密成功，但明文不是 JSON')}
   if(!payload||typeof payload!=='object')throw new Error('明文 JSON 不是对象');
