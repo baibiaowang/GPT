@@ -194,6 +194,23 @@ jobs:
           cp "$APK_SRC" dist/app.apk
           echo "Built GPT app v$APP_VERSION_NAME (code $APP_VERSION_CODE) with fixed release signing."
 
+      - name: Verify release signing continuity
+        shell: bash
+        run: |
+          set -euo pipefail
+          BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/ 2>/dev/null | sort -V | tail -1)
+          APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
+          CURRENT_DIGEST=$("${BT}apksigner" verify --print-certs "$APK_SRC" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2; exit}')
+          test -n "$CURRENT_DIGEST"
+          curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/v2.1.4/app.apk" \
+            -o /tmp/previous-app.apk
+          PREVIOUS_DIGEST=$("${BT}apksigner" verify --print-certs /tmp/previous-app.apk | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2; exit}')
+          test -n "$PREVIOUS_DIGEST"
+          echo "Current APK cert:  $CURRENT_DIGEST"
+          echo "v2.1.4 APK cert:   $PREVIOUS_DIGEST"
+          test "$CURRENT_DIGEST" = "$PREVIOUS_DIGEST"
+          echo "Release signing continuity verified."
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -272,6 +289,13 @@ jobs:
           with open("update.json", "w", encoding="utf-8") as f:
               json.dump(update, f, ensure_ascii=False, indent=2)
               f.write("\n")
+
+          # 发布前硬校验：清单版本与 APK 镜像路径必须严格一致。
+          check = json.loads(open("update.json", encoding="utf-8").read())
+          assert check["version"] == version
+          assert int(check["versionCode"]) == code
+          assert check["apk_url"] == f"https://raw.githubusercontent.com/{repo}/apk/releases/{version}/app.apk"
+          assert f"/releases/{version}/app.apk" in check["apk_urls"]
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -282,6 +306,20 @@ jobs:
             git commit -m "发布更新清单 ${APP_VERSION_NAME}"
             git push origin HEAD:main
           fi
+      - name: Verify published update manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANIFEST_URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/update.json"
+          curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 "${MANIFEST_URL}?v=${APP_VERSION_CODE}" -o /tmp/live-update.json
+          python - <<'PY'
+          import json, os
+          data=json.load(open("/tmp/live-update.json",encoding="utf-8"))
+          assert data["version"] == os.environ["APP_VERSION_NAME"]
+          assert int(data["versionCode"]) == int(os.environ["APP_VERSION_CODE"])
+          assert data["apk_url"].endswith(f"/releases/{os.environ['APP_VERSION_NAME']}/app.apk")
+          print("Published manifest verified:", data["version"], data["versionCode"])
+          PY
       - name: Publish latest APK
         uses: softprops/action-gh-release@v2
         with:
@@ -297,7 +335,6 @@ jobs:
           overwrite_files: true
           files: dist/app.apk
       - name: Verify GitHub Release APK
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
