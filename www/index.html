@@ -815,6 +815,57 @@ function v2Filter(kind){
 function renderTypes(){v2Filter('type')}
 function renderConclusions(){v2Filter('conclusion')}
 function renderHome(){const q=String(state.query||'').toLowerCase();const rs=state.table?state.table.rows.filter(function(r){return!q||r.cells.some(function(c){return String(c.value).toLowerCase().includes(q)})}):[];if($('countTitle'))$('countTitle').textContent='共 '+rs.length+' 行';if($('topTitle'))$('topTitle').textContent=state.table?state.table.tableName:'表格整理器';if($('dataNote'))$('dataNote').textContent=state.table?(state.kind==='local'?'本地表格':'实时表格'):'未加载';if($('homeList'))$('homeList').innerHTML=state.table?v2Table(rs,v2Visible()):'<div class="empty">请先加载表格数据</div>'}
+async function v2ReadOldArchives(){
+  try{
+    return await new Promise(function(resolve){
+      const q=indexedDB.open('stockjudge-gpt',1);
+      q.onerror=function(){resolve({})};
+      q.onsuccess=function(){try{const db=q.result,t=db.transaction('kv','readonly'),g=t.objectStore('kv').get('savedArchives.v1');g.onsuccess=function(){resolve(g.result&&typeof g.result==='object'?g.result:{})};g.onerror=function(){resolve({})}}catch(e){resolve({})}};
+    });
+  }catch(e){return{}}
+}
+function v2RowFromOldRecord(rec){
+  if(!state.table||!rec)return null;
+  const aliases={};
+  state.table.columns.forEach(function(c){
+    const l=c.label;
+    const a=/股票名称|名称/.test(l)?['name','股票名称','名称']: /股票代码|代码/.test(l)?['code','股票代码','代码']: /当前价格|价格/.test(l)?['price','当前价格','价格']: /判断分类|分类|类型/.test(l)?['category','判断分类','分类','类型']: /公告时间|公告日期|日期/.test(l)?['date','公告时间','公告日期','日期']: /公告标题|标题/.test(l)?['title','公告标题','标题']: /判定性质/.test(l)?['raw_property','判定性质']: /判定总结|总结/.test(l)?['summary','判定总结','总结']:[c.label,c.columnId];
+    aliases[c.columnId]=a;
+  });
+  const vals=state.table.columns.map(function(c){const a=aliases[c.columnId]||[c.label,c.columnId];for(const k of a){if(rec[k]!=null&&String(rec[k]).trim()!=='')return String(rec[k])}if(rec.columns&&rec.columns[c.label]!=null)return String(rec.columns[c.label]);return''});
+  const rowId='R-'+hash(vals.join('\u241f'));
+  return{rowId:rowId,cells:state.table.columns.map(function(c,i){return new CellModel({columnId:c.columnId,value:vals[i]})}),localOnly:true};
+}
+async function v2MigrateLegacy(){
+  if(!state.table||localStorage.getItem('table.migrated.2.0')==='1')return;
+  let oldFavs=[];try{oldFavs=JSON.parse(localStorage.getItem('sj.fav.v3')||'[]')}catch(e){}
+  let oldComments={};try{oldComments=JSON.parse(localStorage.getItem('sj.cmt.v3')||'{}')}catch(e){}
+  let oldSaved={};try{oldSaved=JSON.parse(localStorage.getItem('sj.savedStocks.v1')||'{}')}catch(e){}
+  let archives=await v2ReadOldArchives();
+  try{const legacyLocal=JSON.parse(localStorage.getItem('sj.archivedRecords.v1')||'{}');archives=Object.assign({},archives,legacyLocal)}catch(e){}
+  const code=state.table.columns.find(function(c){return/代码|code/i.test(c.label)});
+  const cat=state.table.columns.find(function(c){return/分类|类型|category/i.test(c.label)});
+  const live=new Map();
+  state.table.rows.forEach(function(r){const k=code?v2Cell(r,code.columnId).value+'|'+(cat?v2Cell(r,cat.columnId).value:''):r.rowId;live.set(k,r)});
+  const keys=new Set([...(Array.isArray(oldFavs)?oldFavs:[]),...Object.keys(oldComments||{}),...Object.keys(oldSaved||{}),...Object.keys(archives||{})]);
+  for(const k of keys){
+    const liveRow=live.get(k);
+    if(liveRow){
+      if(oldFavs.includes(k))ann.favorite(state.table,liveRow);
+      if(oldComments[k])ann.setComment(state.table,liveRow,oldComments[k]);
+      continue;
+    }
+    const a=archives[k],rec=a&&a.record;
+    if(rec){
+      const snap=v2RowFromOldRecord(rec);
+      if(snap){
+        if(oldFavs.includes(k))ann.favorite(state.table,snap);
+        if(oldComments[k])ann.setComment(state.table,snap,oldComments[k]);
+      }
+    }
+  }
+  localStorage.setItem('table.migrated.2.0','1');
+}
 function renderComments(){const xs=ann.comments(state.table?state.table.tableId:'');$('commentList').innerHTML=xs.length?v2Table(xs.map(function(x){return x.snapshot}).filter(Boolean),v2Visible()):'<div class="empty">暂无点评</div>'}
 function renderFavorites(){const xs=ann.favorites(state.table?state.table.tableId:'');$('favList').innerHTML=xs.length?v2Table(xs.map(function(x){return x.snapshot}).filter(Boolean),v2Visible()):'<div class="empty">暂无收藏</div>'}
 function renderV2Settings(){
