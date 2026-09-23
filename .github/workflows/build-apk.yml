@@ -275,6 +275,8 @@ jobs:
           python - <<'PY'
           import json
           import os
+          import re
+          import hashlib
           from datetime import datetime, timezone
 
           version = os.environ["APP_VERSION_NAME"]
@@ -282,7 +284,6 @@ jobs:
           repo = os.environ["GITHUB_REPOSITORY"]
 
           apk_path = "dist/app.apk"
-          import hashlib
           with open(apk_path, "rb") as f:
               apk_sha256 = hashlib.sha256(f.read()).hexdigest()
           apk_size = os.path.getsize(apk_path)
