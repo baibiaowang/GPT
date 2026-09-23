@@ -2,8 +2,8 @@
 'use strict';
 
 const APP={
-  version:'2.1.12',
-  versionCode:2112,
+  version:'2.1.13',
+  versionCode:2113,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -1495,7 +1495,7 @@ function renderAll(){
   state.savedEntries.clear();
   renderHome();
   renderTypes();
-  renderConclusions();
+  renderFilters();
   renderSaved('comments');
   renderSaved('favorites');
   renderSettings();
