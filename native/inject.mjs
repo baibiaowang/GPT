@@ -30,9 +30,9 @@ for(const marker of legacyMarkers){
   }
 }
 const runtime=fs.readFileSync(path.join(OUT,'core','app-runtime.js'),'utf8');
-if(!/version:\s*['"]2\.1\.0['"]/.test(runtime)||!/versionCode:\s*2100/.test(runtime)){
-  console.error('::error::runtime version is not 2.1.0 / 2100');
+if(!/version:\s*['"]2\.1\.0['"]/.test(runtime)||!/versionCode:\s*2101/.test(runtime)){
+  console.error('::error::runtime version is not 2.1.1 / 2101');
   process.exit(1);
 }
 if(!h.includes('core/app-runtime.js')){console.error('::error::index.html does not load app-runtime.js');process.exit(1);}
-fs.writeFileSync(p,h);console.log('[inject] generic table runtime validated · v2.1.0');
+fs.writeFileSync(p,h);console.log('[inject] generic table runtime validated · v2.1.1');
