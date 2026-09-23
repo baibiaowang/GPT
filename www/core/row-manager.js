@@ -1,16 +1,1 @@
-export class RowManager {
-  constructor(rows = []) {
-    this.rows = rows;
-  }
-
-  getRow(rowId) {
-    return this.rows.find(row => row.rowId === rowId) || null;
-  }
-
-  filter(columnId, value) {
-    return this.rows.filter(row => {
-      const cell = row.cells.find(c => c.columnId === columnId);
-      return cell && cell.value === value;
-    });
-  }
-}
+(function(g){class RowManager{constructor(table){this.table=table}get(id){return this.table.getRow(id)}filter(columnId,value){return this.table.rows.filter(r=>String((r.cells.find(c=>c.columnId===columnId)||{}).value)===String(value))}}g.RowManager=RowManager;})(window);
