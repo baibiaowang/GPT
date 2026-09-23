@@ -125,10 +125,10 @@ async function decryptSJ01(encoded){
   if(!payload.layout||!Array.isArray(payload.layout.list_columns)||!Array.isArray(payload.layout.detail_columns)){
     throw new Error('schema v3 缺少完整 layout.list_columns / detail_columns');
   }
-  if(!payload.display||typeof payload.display!=='object')throw new Error('schema v3 缺少 display');
-  if(!payload.judge_tables||typeof payload.judge_tables!=='object')throw new Error('schema v3 缺少 judge_tables');
-  if(!payload.announcements||typeof payload.announcements!=='object')throw new Error('schema v3 缺少 announcements');
   if(!Array.isArray(payload.records))throw new Error('schema v3 缺少 records');
+  if(payload.display!=null&&typeof payload.display!=='object')throw new Error('schema v3 display 格式无效');
+  if(payload.judge_tables!=null&&typeof payload.judge_tables!=='object')throw new Error('schema v3 judge_tables 格式无效');
+  if(payload.announcements!=null&&typeof payload.announcements!=='object')throw new Error('schema v3 announcements 格式无效');
   return payload;
 }
 
@@ -668,8 +668,8 @@ function exportBackup(){
     table:state.table.toJSON(),
     layout:(()=>{try{return JSON.parse(localStorage.getItem(LS.layout)||'{}')}catch(e){return{}}})(),
     filters:(()=>{try{return JSON.parse(localStorage.getItem(LS.filters)||'{}')}catch(e){return{}}})(),
-    favorites:annotations.favorites(state.table.tableId),
-    comments:annotations.comments(state.table.tableId)
+    favorites:annotations.allFavorites(),
+    comments:annotations.allComments()
   };
   const text=JSON.stringify(payload,null,2);
   const name='table-backup-'+new Date().toISOString().slice(0,10)+'.json';
@@ -686,7 +686,7 @@ function exportBackup(){
   toast('备份已导出');
 }
 
-function applyBackup(payload){
+async function applyBackup(payload){
   if(!payload?.table)throw new Error('备份中没有表格');
   state.table=new TableModel(payload.table);
   new ColumnManager(state.table).refreshCatalog();
@@ -694,6 +694,8 @@ function applyBackup(payload){
   localStorage.setItem(LS.layout,JSON.stringify(payload.layout||{}));
   localStorage.setItem(LS.filters,JSON.stringify(payload.filters||{}));
   state.kind='local';
+  try{await idbSet(IDB.cacheKey,state.table.toJSON())}
+  catch(e){toast('备份已恢复，但本地缓存写入失败',2600)}
   loadFilterPrefs();
   renderAll();
   switchPage('home');
@@ -713,7 +715,7 @@ function restoreBackup(){
     if(!file)return;
     const reader=new FileReader();
     reader.onload=()=>{
-      try{applyBackup(JSON.parse(reader.result))}
+      try{await applyBackup(JSON.parse(reader.result))}
       catch(error){toast('恢复失败：'+error.message,2800)}
     };
     reader.readAsText(file);
@@ -721,8 +723,8 @@ function restoreBackup(){
   input.click();
 }
 
-g.restoreBackupText=function(text){
-  try{applyBackup(JSON.parse(text))}
+g.restoreBackupText=async function(text){
+  try{await applyBackup(JSON.parse(text))}
   catch(error){toast('恢复失败：'+error.message,2800)}
 };
 
@@ -1082,6 +1084,7 @@ function wireEvents(){
 }
 
 function renderAll(){
+  state.savedEntries.clear();
   renderHome();
   renderTypes();
   renderConclusions();
