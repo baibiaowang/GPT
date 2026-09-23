@@ -32,6 +32,7 @@ import java.io.BufferedInputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 /**
  * 支持「用其他应用打开」一个 txt 文件后直接解密。
  *
@@ -111,9 +112,9 @@ public class MainActivity extends BridgeActivity {
             @JavascriptInterface public String readUpdateChunk(final int offset, final int maxLength) {
                 return readFileChunk(UPDATE_FILE, offset, maxLength, "更新清单");
             }
-            @JavascriptInterface public void downloadApk(final String url, final String filename) {
+            @JavascriptInterface public void downloadApk(final String url, final String filename, final String expectedSha256) {
                 runOnUiThread(new Runnable() {
-                    @Override public void run() { startApkDownload(url, filename); }
+                    @Override public void run() { startApkDownload(url, filename, expectedSha256); }
                 });
             }
             @JavascriptInterface public void openBackupPicker() {
@@ -235,7 +236,7 @@ public class MainActivity extends BridgeActivity {
      * 3) 实时回传进度；
      * 4) 完成后通过 FileProvider 交给系统安装器。
      */
-    private void startApkDownload(final String url, final String filename) {
+    private void startApkDownload(final String url, final String filename, final String expectedSha256) {
         if (apkDownloading) {
             notifyJsDownloadFailed("已有更新正在下载");
             return;
@@ -253,19 +254,25 @@ public class MainActivity extends BridgeActivity {
 
         final File partFile = new File(getCacheDir(), "stock-judge-update.apk.part");
         final File apkFile = new File(getCacheDir(), "stock-judge-update.apk");
+        final String expectedDigest = expectedSha256 == null ? "" : expectedSha256.trim();
+        if (!expectedDigest.isEmpty() && !expectedDigest.matches("(?i)^[0-9a-f]{64}$")) {
+            notifyJsDownloadFailed("更新清单中的 APK SHA-256 无效");
+            return;
+        }
 
         apkDownloading = true;
         apkDownloadCancel = false;
         apkDownloadThread = new Thread(new Runnable() {
             @Override public void run() {
-                downloadApkNative(rawUrl, safeName, partFile, apkFile);
+                downloadApkNative(rawUrl, safeName, partFile, apkFile, expectedDigest);
             }
         }, "stock-judge-apk-download");
         apkDownloadThread.start();
     }
 
     private void downloadApkNative(final String startUrl, final String displayName,
-                                    final File partFile, final File apkFile) {
+                                    final File partFile, final File apkFile,
+                                    final String expectedSha256) {
         HttpURLConnection conn = null;
         try {
             if (partFile.exists() && !partFile.delete()) {
@@ -286,7 +293,7 @@ public class MainActivity extends BridgeActivity {
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(45000);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "StockJudge-GPT-Updater/2.1.5");
+                conn.setRequestProperty("User-Agent", "StockJudge-GPT/" + BuildConfig.VERSION_NAME);
                 conn.setRequestProperty("Accept", "application/vnd.android.package-archive,application/octet-stream,*/*");
                 conn.setRequestProperty("Accept-Encoding", "identity");
                 conn.setRequestProperty("Cache-Control", "no-cache");
@@ -294,6 +301,7 @@ public class MainActivity extends BridgeActivity {
                 int code = conn.getResponseCode();
                 if (code == HttpURLConnection.HTTP_MOVED_PERM
                         || code == HttpURLConnection.HTTP_MOVED_TEMP
+                        || code == HttpURLConnection.HTTP_SEE_OTHER
                         || code == 307 || code == 308) {
                     String location = conn.getHeaderField("Location");
                     conn.disconnect();
@@ -357,6 +365,13 @@ public class MainActivity extends BridgeActivity {
 
                 if (!partFile.exists() || partFile.length() < 1024L * 1024L) {
                     throw new Exception("APK 临时文件无效");
+                }
+
+                if (expectedSha256 != null && !expectedSha256.isEmpty()) {
+                    String actualSha256 = sha256Hex(partFile);
+                    if (!actualSha256.equalsIgnoreCase(expectedSha256)) {
+                        throw new Exception("APK 校验失败：SHA-256 不匹配");
+                    }
                 }
 
                 // APK 是 ZIP 容器，正常文件应以 PK 开头。
@@ -621,6 +636,19 @@ public class MainActivity extends BridgeActivity {
      *   排查时极易误判成「intent-filter 没生效」。
      *   现在先问 document.readyState，只有 complete 才注入，否则每 500ms 重试。
      */
+    private static String sha256Hex(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream in = new BufferedInputStream(new java.io.FileInputStream(file))) {
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) != -1) digest.update(buf, 0, n);
+        }
+        byte[] hash = digest.digest();
+        StringBuilder sb = new StringBuilder(hash.length * 2);
+        for (byte b : hash) sb.append(String.format("%02x", b & 0xff));
+        return sb.toString();
+    }
+
     /**
      * ★ 2026-09-20 新增：转义成 JS 双引号字符串字面量。
      *   原实现直接把路径拼进 `"...\" + path + "\"..."` ——

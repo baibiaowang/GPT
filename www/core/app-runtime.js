@@ -2,16 +2,15 @@
 'use strict';
 
 const APP={
-  version:'2.1.6',
-  versionCode:2106,
+  version:'2.1.7',
+  versionCode:2107,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
     'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
     'https://fastly.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
     'https://gcore.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
-  ],
-  releaseApk:'https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.6/app.apk'
+  ]
 };
 
 const LS={
@@ -539,8 +538,8 @@ function renderSettings(){
   });
 
   $('reloadData')?.addEventListener('click',()=>loadData(false));
-  $('configureSource')?.addEventListener('click',sourceSheet);
-  $('configureKey')?.addEventListener('click',keySheet);
+  $('configureSource')?.addEventListener('click',openSourceSheet);
+  $('configureKey')?.addEventListener('click',openKeySheet);
   $('exportBackup')?.addEventListener('click',exportBackup);
   $('restoreBackup')?.addEventListener('click',restoreBackup);
   $('clearData')?.addEventListener('click',clearData);
@@ -840,7 +839,7 @@ async function fetchUpdateManifest(url){
         g.__tableNativeUpdateWaiter=null;
         ok?resolve():reject(new Error(message||'更新清单读取失败'));
       };
-      try{AndroidNative.fetchUpdateManifest(url)}
+      try{AndroidNative.fetchUpdateManifest(bustUrl(url,'t',Date.now()))}
       catch(error){g.__tableNativeUpdateWaiter=null;reject(error)}
     });
     let text='',offset=0;
@@ -856,7 +855,7 @@ async function fetchUpdateManifest(url){
     return JSON.parse(text);
   }
 
-  const response=await fetch(url+'?t='+Date.now(),{
+  const response=await fetch(bustUrl(url,'t',Date.now()),{
     cache:'no-store',
     headers:{Accept:'application/json'}
   });
@@ -900,14 +899,25 @@ g.__tableApkDownloadFailed=message=>{
   toast(text,3000);
 };
 
-function bustApkUrl(url,versionCode){
+function bustUrl(url,key,value){
   const text=String(url||'').trim();
   if(!text)return'';
   const joiner=text.includes('?')?'&':'?';
-  return text+joiner+'v='+encodeURIComponent(String(versionCode||''));
+  return text+joiner+encodeURIComponent(String(key||''))+'='+encodeURIComponent(String(value??''));
 }
 
-async function downloadApkWithFallback(urls,remoteName,remoteCode){
+function bustApkUrl(url,versionCode){
+  return bustUrl(url,'v',versionCode);
+}
+
+function releaseApkUrl(version){
+  const name=clean(version).replace(/^v/i,'');
+  return name?'https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/'+encodeURIComponent(name)+'/app.apk':'';
+}
+
+async function downloadApkWithFallback(urls,remoteName,remoteCode,remoteSha256){
+  const expectedSha256=clean(remoteSha256||'').toLowerCase();
+  if(expectedSha256 && !/^[0-9a-f]{64}$/.test(expectedSha256))throw new Error('更新清单中的 APK SHA-256 无效');
   const list=[...new Set((Array.isArray(urls)?urls:[]).map(url=>bustApkUrl(url,remoteCode)).filter(Boolean))];
   if(!list.length)throw new Error('更新清单缺少 APK 下载地址');
 
@@ -926,7 +936,7 @@ async function downloadApkWithFallback(urls,remoteName,remoteCode){
           ok?resolve():reject(new Error(message||'APK 下载失败'));
         };
         try{
-          AndroidNative.downloadApk(apk,'table-converter-'+remoteName+'.apk');
+          AndroidNative.downloadApk(apk,'table-converter-'+remoteName+'.apk',expectedSha256);
         }catch(error){
           g.__tableApkDownloadWaiter=null;
           reject(error);
@@ -974,13 +984,21 @@ async function checkUpdate(){
     if(desc)desc.textContent='发现新版本 '+remoteName;
     if(!confirm('发现新版本 '+remoteName+'，现在下载并安装？'))return;
 
+    const remoteSha256=clean(manifest?.sha256||'').toLowerCase();
+    if(remoteSha256 && !/^[0-9a-f]{64}$/.test(remoteSha256)){
+      const message='更新清单中的 APK SHA-256 无效';
+      if(desc)desc.textContent=message;
+      toast(message,3000);
+      return;
+    }
+
     const urls=[];
     if(Array.isArray(manifest?.apk_urls))urls.push(...manifest.apk_urls);
     if(manifest?.apk_url)urls.push(manifest.apk_url);
-    urls.push(APP.releaseApk);
+    urls.push(releaseApkUrl(remoteName));
 
     try{
-      await downloadApkWithFallback(urls,remoteName,remoteCode);
+      await downloadApkWithFallback(urls,remoteName,remoteCode,remoteSha256);
     }catch(error){
       const message='APK 下载失败：'+String(error?.message||error);
       if(desc)desc.textContent=message;

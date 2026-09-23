@@ -30,6 +30,7 @@ for(const marker of legacyMarkers){
   }
 }
 const runtime=fs.readFileSync(path.join(OUT,'core','app-runtime.js'),'utf8');
+const packageJson=JSON.parse(fs.readFileSync('package.json','utf8'));
 const expectedVersion=String(process.env.APP_VERSION_NAME||'').trim();
 const expectedCode=String(process.env.APP_VERSION_CODE||'').trim();
 const versionMatch=runtime.match(/version:\s*['"]([^'"]+)['"]/);
@@ -44,6 +45,20 @@ if(expectedVersion && versionMatch[1]!==expectedVersion){
 }
 if(expectedCode && codeMatch[1]!==expectedCode){
   console.error('::error::runtime versionCode mismatch: expected '+expectedCode+', got '+codeMatch[1]);
+  process.exit(1);
+}
+if(packageJson.version && versionMatch[1]!==String(packageJson.version)){
+  console.error('::error::package.json version mismatch: runtime='+versionMatch[1]+' package='+packageJson.version);
+  process.exit(1);
+}
+const declared=new Set([
+  ...[...runtime.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(m=>m[1]),
+  ...[...runtime.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)].map(m=>m[1])
+]);
+const bareHandlers=[...runtime.matchAll(/addEventListener\s*\(\s*['"][^'"]+['"]\s*,\s*([A-Za-z_$][\w$]*)\s*\)/g)].map(m=>m[1]);
+const unresolvedHandlers=[...new Set(bareHandlers.filter(name=>!declared.has(name)))];
+if(unresolvedHandlers.length){
+  console.error('::error::unresolved event handler references: '+unresolvedHandlers.join(', '));
   process.exit(1);
 }
 if(!h.includes('core/app-runtime.js')){console.error('::error::index.html does not load app-runtime.js');process.exit(1);}
