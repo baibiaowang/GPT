@@ -1,15 +1,17 @@
 {
-  "version": "2.1.6",
-  "versionCode": 2106,
-  "published_at": "2026-09-23T04:21:17Z",
+  "version": "2.1.7",
+  "versionCode": 2107,
+  "published_at": "2026-09-23T04:37:07Z",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.6/app.apk",
+  "apk_size": 3196108,
+  "sha256": "fcfcde38c31dd6a4cd2c20879b18a2bb271bbaf32ccb3c8cdb4d9dfb54e39d96",
+  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.7/app.apk",
   "apk_urls": [
-    "https://github.com/baibiaowang/GPT/releases/download/v2.1.6/app.apk",
-    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.6/app.apk",
-    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.6/app.apk",
-    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.6/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v2.1.6/app.apk"
+    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.7/app.apk",
+    "https://github.com/baibiaowang/GPT/releases/download/v2.1.7/app.apk",
+    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.7/app.apk",
+    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.7/app.apk",
+    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.7/app.apk"
   ],
-  "notes": "2.1.6：修复部分 Android 安装器拿不到 content:// APK 读取授权导致下载完成却无法覆盖安装的问题。"
+  "notes": "2.1.7：修复设置页函数名错配，并加强 APK 下载完整性校验与更新链路。"
 }
