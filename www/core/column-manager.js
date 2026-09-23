@@ -1,16 +1,1 @@
-export class ColumnManager {
-  constructor(columns = []) {
-    this.columns = columns;
-  }
-
-  getColumn(columnId) {
-    return this.columns.find(c => c.columnId === columnId) || null;
-  }
-
-  uniqueValues(rows, columnId) {
-    return [...new Set(rows.map(r => {
-      const cell = r.cells.find(c => c.columnId === columnId);
-      return cell ? cell.value : null;
-    }).filter(v => v !== null && v !== ''))];
-  }
-}
+(function(g){class ColumnManager{constructor(table){this.table=table}get(id){return this.table.getColumn(id)}values(id){const c=this.get(id);return c&&c.valueCatalog||[]}refreshCatalog(){this.table.columns.forEach(c=>{const m=new Map;this.table.rows.forEach(r=>{const x=r.cells.find(y=>y.columnId===c.columnId);if(x&&String(x.value).trim()!==''){const k=String(x.value);if(!m.has(k))m.set(k,{label:k,count:0});m.get(k).count++}});let i=1;c.valueCatalog=[...m.values()].map(v=>({valueId:'V'+String(i++).padStart(3,'0'),label:v.label,count:v.count}))})}}g.ColumnManager=ColumnManager;})(window);
