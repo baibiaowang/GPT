@@ -7,189 +7,424 @@
 <title>股票判断机</title>
 <style>
 :root{
-  --bg:#f5f5f7;--card:#fff;--text:#1c1c1e;--muted:#6e6e73;--line:rgba(60,60,67,.12);
-  --brand:#c8102e;--brand-deep:#8e0000;--brand-soft:rgba(200,16,46,.1);
-  --good:#34c759;--bad:#ff3b30;--wait:#ff9500;--gray:#8e8e93;
-  --nav:rgba(249,249,249,.82);--shadow:0 1px 2px rgba(0,0,0,.04);--r:20px;--rs:13px;
+  --bg:#f5f5f7;
+  --card:#fff;
+  --text:#1c1c1e;
+  --muted:#6e6e73;
+  --line:rgba(60,60,67,.12);
+  --brand:#c8102e;
+  --brand-soft:rgba(200,16,46,.09);
+  --nav:rgba(249,249,249,.86);
+  --shadow:0 1px 3px rgba(0,0,0,.05);
+  --radius:18px;
+  --top-height:82px;
 }
-@media (prefers-color-scheme:dark){
-  :root{--bg:#000;--card:#1c1c1e;--text:#fff;--muted:#a1a1a6;--line:rgba(235,235,245,.12);--nav:rgba(28,28,30,.9);
-    --brand:#0a84ff;--brand-deep:#006ee6;--brand-soft:rgba(10,132,255,.16);--shadow:none}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#000;
+    --card:#1c1c1e;
+    --text:#fff;
+    --muted:#a1a1a6;
+    --line:rgba(235,235,245,.12);
+    --nav:rgba(28,28,30,.92);
+    --brand:#ff375f;
+    --brand-soft:rgba(255,55,95,.16);
+    --shadow:none;
+  }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;min-height:100%;max-width:100%;overflow-x:hidden;background:var(--bg);color:var(--text);
+html,body{
+  margin:0;
+  min-height:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  background:var(--bg);
+  color:var(--text);
   font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;
-  -webkit-font-smoothing:antialiased}
-body{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+  -webkit-font-smoothing:antialiased;
+}
+body{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 button,input,textarea,select{font:inherit;color:inherit;font-family:inherit;max-width:100%}
 button{cursor:pointer}
-a{color:inherit;text-decoration:none}
-.wrap{width:100%;max-width:760px;margin:0 auto;padding:0 16px calc(104px + env(safe-area-inset-bottom))}
-.top{position:sticky;top:0;z-index:40;background:rgba(242,242,247,.82);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
-  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:.5px solid var(--line)}
-.top-title{font-size:23px;line-height:1.15;font-weight:800;letter-spacing:-.3px;color:var(--text)}
-.search{margin-top:8px}.search input{width:100%;height:38px;border:0;border-radius:12px;padding:0 13px;
-  background:rgba(118,118,128,.12);color:var(--text);outline:none}.search input::placeholder{color:var(--muted)}
-.hero-count{display:flex;align-items:center;justify-content:space-between;padding:14px 2px 8px}
-.count{font-size:16px;font-weight:700;color:var(--text)}
+.wrap{width:100%;max-width:860px;margin:0 auto;padding:0 14px calc(105px + env(safe-area-inset-bottom))}
+.top{
+  position:sticky;
+  top:0;
+  z-index:80;
+  background:rgba(242,242,247,.86);
+  backdrop-filter:saturate(180%) blur(22px);
+  -webkit-backdrop-filter:saturate(180%) blur(22px);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+  border-bottom:.5px solid var(--line);
+}
+.top-title{font-size:22px;line-height:1.15;font-weight:800;letter-spacing:-.3px}
+.search{margin-top:8px}
+.search.hidden{display:none}
+.search input{
+  width:100%;
+  height:38px;
+  border:0;
+  border-radius:12px;
+  padding:0 13px;
+  background:rgba(118,118,128,.12);
+  outline:none;
+}
+.search input::placeholder{color:var(--muted)}
+.page{display:none}
+.page.on{display:block}
+.hero-count{display:flex;align-items:center;justify-content:space-between;padding:13px 2px 8px}
+.count{font-size:16px;font-weight:700}
 .mini-note{font-size:12px;color:var(--muted)}
-.page{display:none}.page.on{display:block}
-.card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);margin:12px 0}
-.card-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px 10px;
-  border-bottom:.5px solid var(--line);font-size:13px;font-weight:700;color:var(--muted)}
-.card-hd .sub{font-size:12px;font-weight:400}
-.row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:.5px solid var(--line)}
-.row:last-child{border-bottom:0}.row:active{background:var(--brand-soft)}
-.stock-table-wrap{width:100%;overflow:visible;-webkit-overflow-scrolling:touch}
-.stock-table{width:100%;min-width:0;border-collapse:separate;border-spacing:0;background:var(--card);table-layout:fixed}
-.stock-table thead th{position:sticky;top:var(--stock-sticky-top,90px);z-index:25;background:var(--card);color:var(--muted);font-size:11px;font-weight:800;text-align:left;white-space:nowrap;padding:7px 10px;border-bottom:.5px solid var(--line);box-shadow:0 1px 0 var(--line)}
-.stock-table tbody td{padding:11px 12px;border-bottom:.5px solid var(--line);font-size:13px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stock-table tbody tr:last-child td{border-bottom:0}
-.stock-table tbody tr:active td{background:var(--brand-soft)}
-.stock-table .stock-name{font-size:14px;font-weight:800}
-.stock-table .stock-category{color:var(--brand);font-weight:700}
-.stock-table .stock-date{color:var(--muted);font-variant-numeric:tabular-nums}
-.stock-table th:nth-child(1),.stock-table td:nth-child(1){width:42%}
-.stock-table th:nth-child(2),.stock-table td:nth-child(2){width:30%}
-.stock-table th:nth-child(3),.stock-table td:nth-child(3){width:28%}
-
-.main{flex:1;min-width:0}.t1{font-size:16px;font-weight:700;overflow-wrap:anywhere}.t2{margin-top:3px;font-size:12px;color:var(--muted);
-  display:flex;gap:5px;flex-wrap:wrap}.t3{margin-top:4px;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:7px;background:rgba(120,120,128,.12);font-size:11px;color:var(--muted)}
-.tag.cat{background:var(--brand-soft);color:var(--brand)}.tag.type{background:rgba(52,199,89,.11);color:#1f9e42}
-.pill{padding:4px 9px;border-radius:999px;color:#fff;font-size:11.5px;font-weight:700;white-space:nowrap;flex:0 0 auto}
-.chev{color:var(--muted);font-size:18px;flex:0 0 auto}
-.star{color:var(--wait);font-size:12px;margin-left:3px}
-.empty{padding:52px 20px;text-align:center;color:var(--muted);line-height:1.7}
-.spin{width:22px;height:22px;border:2.5px solid rgba(142,142,147,.25);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.section-title{font-size:28px;font-weight:800;letter-spacing:-.5px;margin:22px 2px 8px}.tabbar{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin:0 -2px;scrollbar-width:none}.tabbar::-webkit-scrollbar{display:none}
-.tab{flex:0 0 auto;border:0;background:rgba(118,118,128,.12);color:var(--muted);border-radius:999px;padding:9px 14px;font-size:13px;font-weight:700;box-shadow:none}
-.tab b{font-size:11px;margin-left:5px;font-weight:800;opacity:.72}.tab.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 4px 12px rgba(0,122,255,.20)}
-.tab-list{margin-top:2px}.tab-list .row{padding-top:13px;padding-bottom:13px}
-.external-company{display:flex;align-items:center;gap:12px;padding:16px}.external-icon{width:52px;height:52px;border-radius:15px;background:linear-gradient(145deg,#f1f5ff,#dfe7ff);color:#3767d8;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;letter-spacing:.5px;flex:0 0 auto}.external-main{flex:1;min-width:0}.external-title{font-size:16px;font-weight:800}.external-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-top:3px}.external-btn{border:0;background:var(--brand);color:#fff;border-radius:10px;padding:9px 11px;font-size:12px;font-weight:800;flex:0 0 auto}
-
-.group-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:var(--card);border-bottom:.5px solid var(--line);font-weight:700}
-.group-head button{border:0;background:transparent;color:var(--brand);font-size:17px}.group-items{display:none}.group.open .group-items{display:block}
-.group{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);margin:12px 0}
-.detail{position:fixed;inset:0;z-index:80;background:var(--bg);overflow:auto;transform:translateX(100%);
-  transition:transform .25s cubic-bezier(.32,.72,0,1);padding-bottom:calc(100px + env(safe-area-inset-bottom))}
+.card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin:12px 0}
+.card-hd{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:12px 16px 10px;
+  border-bottom:.5px solid var(--line);
+  font-size:13px;
+  font-weight:700;
+  color:var(--muted);
+}
+.card-hd .sub{font-size:11px;font-weight:500}
+.section-title{font-size:28px;font-weight:800;letter-spacing:-.5px;margin:20px 2px 8px}
+.table-scroll{
+  width:100%;
+  overflow-x:auto;
+  overflow-y:visible;
+  position:relative;
+  isolation:isolate;
+  -webkit-overflow-scrolling:touch;
+}
+.data-table{
+  width:max-content;
+  min-width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  background:var(--card);
+  table-layout:auto;
+}
+.data-table thead th{
+  position:sticky;
+  top:var(--top-height);
+  z-index:50;
+  background:var(--card);
+  color:var(--muted);
+  text-align:left;
+  font-size:11px;
+  font-weight:800;
+  line-height:1.15;
+  min-width:104px;
+  padding:8px 10px;
+  border-bottom:.5px solid var(--line);
+  box-shadow:0 2px 0 var(--line),0 3px 8px rgba(0,0,0,.04);
+  white-space:normal;
+}
+.data-table thead th .cid{
+  display:block;
+  font-size:9px;
+  line-height:1.05;
+  opacity:.62;
+  margin-bottom:2px;
+}
+.data-table tbody{position:relative;z-index:1}
+.data-table tbody tr{position:relative;z-index:1}
+.data-table tbody td{
+  position:relative;
+  z-index:1;
+  background:var(--card);
+  min-width:104px;
+  max-width:340px;
+  padding:10px 10px;
+  border-bottom:.5px solid var(--line);
+  font-size:13px;
+  vertical-align:middle;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.data-table tbody tr:last-child td{border-bottom:0}
+.data-table tbody tr:active td{background:var(--brand-soft)}
+.empty{padding:48px 20px;text-align:center;color:var(--muted);line-height:1.7}
+.tabbar{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:0 -2px;
+  scrollbar-width:none;
+}
+.tabbar::-webkit-scrollbar{display:none}
+.tab{
+  flex:0 0 auto;
+  border:0;
+  background:rgba(118,118,128,.12);
+  color:var(--muted);
+  border-radius:999px;
+  padding:8px 12px;
+  font-size:12px;
+  font-weight:700;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+.tab.on{background:var(--brand);color:#fff;box-shadow:0 4px 12px rgba(200,16,46,.2)}
+.tab b{font-size:10px;opacity:.72}
+.setting-item{padding:13px 16px;border-bottom:.5px solid var(--line)}
+.setting-item:last-child{border-bottom:0}
+.setting-title{font-size:14px;font-weight:700}
+.setting-desc{margin-top:4px;font-size:11.5px;color:var(--muted);line-height:1.5}
+.setting-actions{margin-top:9px;display:flex;gap:7px;flex-wrap:wrap}
+.sbtn{
+  border:0;
+  background:rgba(118,118,128,.12);
+  border-radius:11px;
+  padding:8px 10px;
+  font-size:12px;
+  font-weight:600;
+}
+.sbtn.primary{background:var(--brand);color:#fff}
+.display-settings-card{margin-top:10px}
+.column-item{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:.5px solid var(--line)}
+.column-item:first-child{border-top:0}
+.column-item input{flex:0 0 auto}
+.column-main{min-width:0}
+.column-name{display:block;font-size:12px;font-weight:700}
+.column-meta{display:block;margin-top:2px;font-size:10px;color:var(--muted)}
+.filter-settings{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+.filter-settings label{font-size:11px;color:var(--muted)}
+.filter-settings select{
+  width:100%;
+  min-height:37px;
+  margin-top:3px;
+  padding:5px 8px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--bg);
+  outline:none;
+  font-size:12px;
+}
+.detail{
+  position:fixed;
+  inset:0;
+  z-index:120;
+  background:var(--bg);
+  overflow:auto;
+  transform:translateX(100%);
+  transition:transform .25s cubic-bezier(.32,.72,0,1);
+  padding-bottom:calc(28px + env(safe-area-inset-bottom));
+}
 .detail.show{transform:translateX(0)}
-.dnav{position:sticky;top:0;z-index:10;background:rgba(242,242,247,.82);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
-  padding:calc(8px + env(safe-area-inset-top)) 12px 8px;display:flex;align-items:center;gap:8px}
-.back{border:0;background:rgba(118,118,128,.12);color:var(--brand);border-radius:10px;padding:7px 10px;font-weight:600}.dt{flex:1;min-width:0;text-align:center;color:var(--text);font-size:16px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dbody{max-width:760px;margin:0 auto;padding:0 16px}
-.hero{padding:18px 2px 6px}.hero h1{margin:0;font-size:27px;line-height:1.18}.meta{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
-.result-main{padding:17px 16px}.result-label{font-size:12px;color:var(--muted);font-weight:700}.result-value{margin-top:6px;font-size:28px;line-height:1.1;font-weight:900}
-.edit-toggle{width:100%;border:0;background:rgba(120,120,128,.08);border-radius:12px;padding:11px 12px;text-align:left;font-weight:700;display:flex;justify-content:space-between}
-.edit-panel{display:none;padding:0 16px 16px}.edit-panel.open{display:block}
-.form-row{margin-top:12px}.form-row label{display:block;font-size:12px;color:var(--muted);font-weight:700;margin-bottom:5px}
-select{width:100%;min-height:40px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:7px 10px;outline:none}
-.edit-rule{padding:12px 0;border-top:.5px solid var(--line)}.edit-rule:first-child{border-top:0}
-.rule-q{font-size:14px;line-height:1.4}.rule-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-.save-btn{width:100%;border:0;background:rgba(242,242,247,.82);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);color:#fff;border-radius:11px;padding:11px;font-weight:700;margin-top:14px}
-.ann{padding:11px 16px;border-bottom:.5px solid var(--line)}.ann:last-child{border-bottom:0}.ann-title{font-size:14px;line-height:1.45}
-.ann-meta{margin-top:4px;font-size:11.5px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}
-.jrow{padding:12px 16px;border-bottom:.5px solid var(--line)}.jrow:last-child{border-bottom:0}.jq{font-size:14px}
-.jm{margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.hit{font-size:12px;font-weight:700}
-.overview{overflow:hidden}.ov-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:.5px solid var(--line)}
-.ov-btn{border:0;background:rgba(120,120,128,.12);border-radius:9px;padding:6px 9px;font-size:12px}.ov-group{display:flex;gap:6px;align-items:center}
-.ov-frame{height:72vh;min-height:460px;background:#fff;overflow:auto;-webkit-overflow-scrolling:touch}
-.ov-canvas{width:100%;height:100%;overflow:auto}.ov-frame iframe{display:block;border:0;transform-origin:top left}
-.ov-help{padding:0 12px 10px;font-size:11.5px;color:var(--muted)}
-.setting-item{padding:14px 16px;border-bottom:.5px solid var(--line)}.setting-item:last-child{border-bottom:0}
-.setting-title{font-size:15px;font-weight:700}.setting-desc{margin-top:4px;font-size:12px;color:var(--muted);line-height:1.5}
-.setting-actions{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}.sbtn{border:0;background:rgba(118,118,128,.12);border-radius:12px;padding:9px 11px;font-size:13px}.sbtn.primary{background:var(--brand);color:#fff}.update-progress{display:none;margin-top:10px}.update-progress.show{display:block}.update-progress-top{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}.update-progress-bar{height:7px;border-radius:999px;background:rgba(118,118,128,.12);overflow:hidden}.update-progress-fill{height:100%;width:0;background:var(--brand);border-radius:inherit;transition:width .2s ease}
-textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px;outline:none;resize:vertical}
-.bottom{position:fixed;left:0;right:0;bottom:0;z-index:100;background:var(--nav);backdrop-filter:saturate(180%) blur(18px);
-  border-top:.5px solid var(--line);padding:7px 5px calc(7px + env(safe-area-inset-bottom));display:flex;gap:2px}
-.bottom button{flex:1;min-width:0;border:0;background:transparent;padding:5px 1px;color:var(--muted);font-size:10.5px}
-.bottom button .ic{display:block;font-size:18px;line-height:20px;margin-bottom:1px}.bottom button.on{color:var(--brand);font-weight:700}
-.actions{position:fixed;left:0;right:0;bottom:calc(60px + env(safe-area-inset-bottom));z-index:90;display:none;gap:8px;
-  padding:7px 12px;background:var(--nav);backdrop-filter:blur(15px);border-top:.5px solid var(--line)}
-.actions.show{display:flex}.actions button{flex:1;border:0;border-radius:11px;padding:10px 4px;background:rgba(120,120,128,.12);font-size:14px;font-weight:700}
-.actions button.primary{background:var(--brand);color:#fff}.actions button.on{background:rgba(255,149,0,.16);color:var(--wait)}
-.mask{position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.4);display:none;align-items:flex-end}.mask.show{display:flex}
-.sheet{width:100%;max-width:760px;margin:0 auto;background:var(--card);border-radius:22px 22px 0 0;max-height:90vh;overflow:auto;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
-.sheet h3{margin:18px 20px 12px;font-size:18px}.sheet-grab{width:38px;height:5px;background:rgba(120,120,128,.25);border-radius:3px;margin:8px auto}
-.toast{position:fixed;left:50%;bottom:118px;transform:translate(-50%,8px);z-index:200;background:rgba(0,0,0,.84);color:#fff;
-  padding:9px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;max-width:86vw;text-align:center}.toast.show{opacity:1;transform:translate(-50%,0)}
-.standard-cell{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;padding:12px 16px;border-top:.5px solid var(--line)}.standard-cell:first-of-type{border-top:0}.standard-label{font-size:12px;color:var(--muted);font-weight:700}.standard-value{min-width:0;font-size:14px;line-height:1.55;overflow-wrap:anywhere}.standard-value.summary{white-space:pre-wrap}.note{padding:0 16px 12px;color:var(--muted);font-size:12px}.danger{color:var(--bad)}
-@media(max-width:520px){.rule-meta{grid-template-columns:1fr}.bottom button{font-size:10px}.bottom button .ic{font-size:17px}}
-
-.data-table{table-layout:auto!important;min-width:100%;width:max-content!important}
-.data-table th,.data-table td{width:auto!important;min-width:92px}
-.stock-table.data-table th:nth-child(1),.stock-table.data-table td:nth-child(1),
-.stock-table.data-table th:nth-child(2),.stock-table.data-table td:nth-child(2),
-.stock-table.data-table th:nth-child(3),.stock-table.data-table td:nth-child(3){width:auto!important}
-.stock-table-wrap{overflow-x:auto!important;overflow-y:visible!important}
-.data-table th .cid{display:block;font-size:9px;line-height:1.05;opacity:.62;margin-bottom:2px}
-.data-table th{white-space:normal!important;line-height:1.2}
-.column-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:.5px solid var(--line)}
-.column-item:first-child{border-top:0}.column-item input{flex:0 0 auto}
-.column-main{min-width:0}.column-name{font-weight:700}.column-id{font-size:11px;color:var(--muted)}
-.v2-filter-card{margin:8px 0 10px}.v2-filter-card .card-hd{padding-bottom:8px}
-
+.dnav{
+  position:sticky;
+  top:0;
+  z-index:130;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:calc(8px + env(safe-area-inset-top)) 12px 8px;
+  background:rgba(242,242,247,.86);
+  backdrop-filter:saturate(180%) blur(22px);
+  -webkit-backdrop-filter:saturate(180%) blur(22px);
+  border-bottom:.5px solid var(--line);
+}
+.back{
+  border:0;
+  background:rgba(118,118,128,.12);
+  color:var(--brand);
+  border-radius:10px;
+  padding:7px 10px;
+  font-weight:700;
+}
+.dt{flex:1;min-width:0;text-align:center;font-size:15px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dbody{max-width:860px;margin:0 auto;padding:0 14px}
+.hero{padding:18px 2px 8px}
+.hero h1{margin:0;font-size:26px;line-height:1.2;overflow-wrap:anywhere}
+.meta{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.tag{
+  display:inline-flex;
+  align-items:center;
+  padding:3px 7px;
+  border-radius:8px;
+  background:rgba(118,118,128,.12);
+  font-size:10.5px;
+  color:var(--muted);
+}
+.detail-actions{display:flex;gap:8px;padding:10px 0 2px}
+.detail-actions .sbtn{flex:0 0 auto}
+.standard-cell{
+  display:grid;
+  grid-template-columns:120px minmax(0,1fr);
+  gap:12px;
+  padding:12px 16px;
+  border-top:.5px solid var(--line);
+}
+.standard-cell:first-of-type{border-top:0}
+.standard-label{font-size:11.5px;color:var(--muted);font-weight:700}
+.standard-label .cid{display:block;font-size:9px;opacity:.62;margin-bottom:2px}
+.standard-value{min-width:0;font-size:13.5px;line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}
+.comment-editor{padding:12px 16px 16px}
+.comment-editor textarea{
+  width:100%;
+  min-height:110px;
+  border:1px solid var(--line);
+  background:var(--bg);
+  border-radius:11px;
+  padding:9px;
+  outline:none;
+  resize:vertical;
+}
+.comment-editor .sbtn{margin-top:8px;width:100%}
+.saved-group-title{
+  padding:11px 4px 4px;
+  font-size:11px;
+  color:var(--muted);
+}
+.bottom{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:150;
+  display:flex;
+  gap:2px;
+  background:var(--nav);
+  backdrop-filter:saturate(180%) blur(18px);
+  -webkit-backdrop-filter:saturate(180%) blur(18px);
+  border-top:.5px solid var(--line);
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+.bottom button{
+  flex:1;
+  min-width:0;
+  border:0;
+  background:transparent;
+  color:var(--muted);
+  padding:4px 1px;
+  font-size:9.5px;
+}
+.bottom .ic{display:block;font-size:17px;line-height:19px;margin-bottom:1px}
+.bottom button.on{color:var(--brand);font-weight:800}
+.mask{
+  position:fixed;
+  inset:0;
+  z-index:200;
+  display:none;
+  align-items:flex-end;
+  background:rgba(0,0,0,.4);
+}
+.mask.show{display:flex}
+.sheet{
+  width:100%;
+  max-width:860px;
+  margin:0 auto;
+  max-height:88vh;
+  overflow:auto;
+  background:var(--card);
+  border-radius:22px 22px 0 0;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom));
+}
+.sheet-grab{width:38px;height:5px;border-radius:4px;background:rgba(118,118,128,.25);margin:8px auto}
+.sheet h3{margin:16px 20px 12px;font-size:18px}
+.note{padding:0 16px 10px;color:var(--muted);font-size:11.5px;line-height:1.6}
+.sheet-body{padding:0 16px 8px}
+.sheet-body input,.sheet-body textarea{
+  width:100%;
+  min-height:42px;
+  border:1px solid var(--line);
+  background:var(--bg);
+  border-radius:10px;
+  padding:8px 10px;
+  outline:none;
+}
+.sheet-body textarea{min-height:110px;resize:vertical}
+.sheet-actions{display:flex;gap:8px;padding:4px 16px 16px}
+.sheet-actions .sbtn{flex:1}
+.update-progress{display:none;margin-top:10px}
+.update-progress.show{display:block}
+.update-progress-top{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px}
+.update-progress-bar{height:7px;border-radius:999px;background:rgba(118,118,128,.12);overflow:hidden}
+.update-progress-fill{height:100%;width:0;background:var(--brand);border-radius:inherit;transition:width .2s ease}
+.toast{
+  position:fixed;
+  left:50%;
+  bottom:118px;
+  z-index:250;
+  transform:translate(-50%,8px);
+  max-width:88vw;
+  padding:9px 15px;
+  border-radius:999px;
+  background:rgba(0,0,0,.84);
+  color:#fff;
+  font-size:12px;
+  text-align:center;
+  opacity:0;
+  pointer-events:none;
+  transition:.2s;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:520px){
+  .filter-settings{grid-template-columns:1fr}
+  .standard-cell{grid-template-columns:96px minmax(0,1fr);gap:9px}
+  .data-table thead th,.data-table tbody td{min-width:96px}
+}
 </style>
-<!-- GPT dedicated build 2.0.1 · 最新8单元格标准；列表仅3列；固定表头与紧凑日期 -->
 </head>
 <body>
-<header class="top">
-  <div class="top-title" id="topTitle">股票判断机</div>
-  <div class="search"><input id="q" type="search" placeholder="搜索名称 / 代码" autocomplete="off"></div>
+<header class="top" id="topBar">
+  <div class="top-title" id="topTitle">表格</div>
+  <div class="search" id="searchBar">
+    <input id="searchInput" type="search" placeholder="搜索表格内容" autocomplete="off">
+  </div>
 </header>
 
 <main class="wrap">
   <section id="page-home" class="page on">
-    <div class="hero-count"><div class="count" id="countTitle">共 0 条</div><div class="mini-note" id="dataNote">正在加载…</div></div>
-    <div id="homeList"><div class="empty"><div class="spin"></div>正在加载…</div></div>
+    <div class="hero-count">
+      <div class="count" id="countTitle">共 0 行</div>
+      <div class="mini-note" id="dataNote">未加载</div>
+    </div>
+    <div id="homeList"></div>
   </section>
+
   <section id="page-types" class="page">
     <div class="section-title">类型</div>
-    <div class="tabbar" id="typeTabs"></div><div id="typesList"></div>
+    <div class="tabbar" id="typeTabs"></div>
+    <div id="typesList"></div>
   </section>
+
   <section id="page-conclusions" class="page">
     <div class="section-title">结论</div>
-    <div class="tabbar" id="conclusionTabs"></div><div id="conclusionList"></div>
+    <div class="tabbar" id="conclusionTabs"></div>
+    <div id="conclusionList"></div>
   </section>
+
   <section id="page-comments" class="page">
-    <div class="section-title">点评</div><div id="commentList"></div>
+    <div class="section-title">点评</div>
+    <div id="commentList"></div>
   </section>
+
   <section id="page-favorites" class="page">
-    <div class="section-title">收藏</div><div id="favList"></div>
+    <div class="section-title">收藏</div>
+    <div id="favList"></div>
   </section>
+
   <section id="page-settings" class="page">
     <div class="section-title">设置</div>
-    <div class="card display-settings-card">
-      <div class="card-hd"><span>显示设置</span><span class="sub">页面展示与筛选</span></div>
-      <div class="setting-item"><div class="setting-title">首页展示表头</div><div class="setting-desc">数据加载后在这里配置首页显示哪些表头。</div></div>
-      <div class="setting-item"><div class="setting-title">类型 / 结论默认表头</div><div class="setting-desc">在设置里选择，类型与结论页面不再显示顶部手动选择器。</div></div>
-    </div>
-    <div class="card">
-      <div class="card-hd"><span>数据</span></div>
-      <div class="setting-item"><div class="setting-title">数据源</div><div class="setting-desc">数据地址与激活码分开管理。</div><div class="setting-actions"><button class="sbtn primary" id="btnSource">配置数据源</button><button class="sbtn" id="btnReload">重新加载数据</button></div></div>
-      <div class="setting-item"><div class="setting-title">激活码</div><div class="setting-desc">用于解密公告数据。</div><div class="setting-actions"><button class="sbtn" id="btnKey">修改激活码</button></div></div>
-      <div class="setting-item"><div class="setting-title">数据备份</div><div class="setting-desc">完整备份当前数据、收藏、点评和手动修改。</div><div class="setting-actions"><button class="sbtn primary" id="btnExport">导出数据</button><button class="sbtn" id="btnRestore">从备份恢复</button></div></div>
-      <div class="setting-item"><div class="setting-title">清空数据</div><div class="setting-desc">清除本地数据、收藏、点评和归档；数据源地址与激活码保留。</div><div class="setting-actions"><button class="sbtn" id="btnClearData">清空数据</button></div></div>
-    </div>
-    <div class="card">
-      <div class="card-hd"><span>应用</span></div>
-      <div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="updateDesc">当前版本 2.0.1</div><div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div></div>
-      <div class="setting-item"><div class="setting-title">当前数据状态</div><div class="setting-desc" id="dataStatus">未加载</div></div>
-    </div>
   </section>
 </main>
 
 <div class="detail" id="detail">
-  <div class="dnav"><button class="back" id="btnBack">‹ 返回</button><div class="dt" id="dTitle"></div><div style="width:56px"></div></div>
-  <div class="dbody">
-    <div id="dHero"></div>
-    <div id="dBody"></div>
+  <div class="dnav">
+    <button class="back" id="detailBack">‹ 返回</button>
+    <div class="dt" id="detailTitle"></div>
+    <div style="width:54px"></div>
   </div>
-</div>
-
-<div class="actions" id="actions">
-  <button id="aFav">收藏</button><button id="aCmt">点评</button><button id="aCopy" class="primary">复制代码</button>
+  <div class="dbody">
+    <div id="detailHero"></div>
+    <div id="detailBody"></div>
+  </div>
 </div>
 
 <nav class="bottom" id="bottomNav">
@@ -210,531 +445,6 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
 <script src="core/row-manager.js"></script>
 <script src="core/filter-engine.js"></script>
 <script src="core/local-annotation.js"></script>
-<script>
-/* ===== 股票判断机 GPT · 2.0.1 · schema v3 runtime ===== */
-const DEF_URLS='https://stocks-txt-file.app.workbuddy.host/stocks.txt';
-const APP_VERSION='2.0.2';
-const APP_VERSION_CODE=2002;
-const UPDATE_URLS=[
-  'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
-  'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
-];
-const RELEASE_APK='https://github.com/baibiaowang/GPT/releases/download/v2.0.2/app.apk';
-const LS={
-  urls:'sj.urls.v4',
-  key:'sj.activation.v4',
-  layout:'table.layout.v3',
-  filters:'table.filters.v1',
-  legacyFav:'sj.fav.v3',
-  legacyCmt:'sj.cmt.v3',
-  migrated:'table.migrated.schema3.v1'
-};
-const IDB_DB='stockjudge-gpt',IDB_STORE='kv',IDB_CACHE='generic.table.cache.v3';
-const state={
-  table:null,cur:null,query:'',page:'home',detailPushed:false,
-  typeColumn:'',conclusionColumn:'',typeValue:'',conclusionValue:''
-};
-let ann=null;
-
-const $=id=>document.getElementById(id);
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function clean(v){return String(v==null?'':v).trim()}
-function pad3(n){return String(n).padStart(3,'0')}
-function hash(text){
-  let h=2166136261,s=String(text??'');
-  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}
-  return (h>>>0).toString(16).padStart(8,'0');
-}
-function scalar(v){
-  if(v==null)return '';
-  if(typeof v==='string'||typeof v==='number'||typeof v==='boolean')return String(v);
-  try{return JSON.stringify(v)}catch(e){return String(v)}
-}
-function toast(msg,ms=2200){
-  const e=$('toast');if(!e)return;
-  e.textContent=msg;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),ms);
-}
-function getUrls(){
-  const custom=String(localStorage.getItem(LS.urls)||'').split(/\s*\n\s*/).map(clean).filter(Boolean);
-  return custom.length?custom:[DEF_URLS];
-}
-function getKey(){
-  const k=String(localStorage.getItem(LS.key)||'').trim();
-  if(!/^[0-9a-fA-F]{64}$/.test(k))throw new Error('请先输入64位十六进制激活码');
-  return k;
-}
-function hexBytes(hex){
-  const s=clean(hex);const a=new Uint8Array(32);
-  for(let i=0;i<32;i++)a[i]=parseInt(s.slice(i*2,i*2+2),16);
-  return a;
-}
-function b64Bytes(b64){
-  const bin=atob(String(b64).replace(/[^A-Za-z0-9+/=]/g,''));
-  const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;
-}
-async function decryptSJ01(text){
-  const u=b64Bytes(text);
-  if(u.length<33)throw new Error('SJ01 密文过短');
-  if(String.fromCharCode(u[0],u[1],u[2],u[3])!=='SJ01')throw new Error('不是 SJ01 数据');
-  if(u[4]!==3)throw new Error('SJ01 版本不是 0x03');
-  const iv=u.slice(5,17),data=u.slice(17);
-  const key=await crypto.subtle.importKey('raw',hexBytes(getKey()),{name:'AES-GCM'},false,['decrypt']);
-  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,data);
-  const raw=new TextDecoder().decode(plain);
-  let obj;try{obj=JSON.parse(raw)}catch(e){throw new Error('解密成功，但明文不是 JSON')};
-  if(!obj||typeof obj!=='object')throw new Error('明文 JSON 不是对象');
-  if(!obj.meta||Number(obj.meta.schema)!==3)throw new Error('明文 JSON schema 必须为 3');
-  if(!Array.isArray(obj.records))throw new Error('schema v3 缺少 records');
-  return obj;
-}
-
-const IDB={
-  open(){
-    return new Promise((resolve,reject)=>{
-      const q=indexedDB.open(IDB_DB,1);
-      q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(IDB_STORE))q.result.createObjectStore(IDB_STORE)};
-      q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);
-    });
-  },
-  get(key){return this.open().then(db=>new Promise((resolve,reject)=>{
-    const t=db.transaction(IDB_STORE,'readonly');const q=t.objectStore(IDB_STORE).get(key);
-    q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);
-  }))},
-  set(key,value){return this.open().then(db=>new Promise((resolve,reject)=>{
-    const t=db.transaction(IDB_STORE,'readwrite');t.objectStore(IDB_STORE).put(value,key);
-    t.oncomplete=()=>resolve(true);t.onerror=()=>reject(t.error);
-  }))},
-  del(key){return this.open().then(db=>new Promise((resolve,reject)=>{
-    const t=db.transaction(IDB_STORE,'readwrite');t.objectStore(IDB_STORE).delete(key);
-    t.oncomplete=()=>resolve(true);t.onerror=()=>reject(t.error);
-  }))}
-};
-
-function loadPrefs(){
-  try{
-    const p=JSON.parse(localStorage.getItem(LS.filters)||'{}')||{};
-    const a=state.table?p[state.table.tableId+'::type']||{}:{};
-    const b=state.table?p[state.table.tableId+'::conclusion']||{}:{};
-    state.typeColumn=a.columnId||state.typeColumn||'';state.typeValue=a.valueId||'';
-    state.conclusionColumn=b.columnId||state.conclusionColumn||'';state.conclusionValue=b.valueId||'';
-  }catch(e){}
-}
-function saveFilter(kind,cid,vid){
-  let p={};try{p=JSON.parse(localStorage.getItem(LS.filters)||'{}')||{}}catch(e){}
-  p[(state.table?.tableId||'')+'::'+kind]={columnId:String(cid||''),valueId:String(vid||'')};
-  localStorage.setItem(LS.filters,JSON.stringify(p));
-}
-function columnRegistry(){
-  let p={};try{p=JSON.parse(localStorage.getItem('table.columnIds.v1')||'{}')||{}}catch(e){}
-  return p;
-}
-function saveColumnRegistry(p){try{localStorage.setItem('table.columnIds.v1',JSON.stringify(p))}catch(e){}}
-function defsFromSchema(payload){
-  const l=payload.layout&&typeof payload.layout==='object'?payload.layout:{};
-  const list=Array.isArray(l.list_columns)?l.list_columns:[];
-  const detail=Array.isArray(l.detail_columns)?l.detail_columns:[];
-  const all=[];const byKey=new Map();
-  for(const source of [list,detail]){
-    for(const d of source){
-      const key=clean(d?.key)||clean(d?.label);if(!key)continue;
-      if(!byKey.has(key)){
-        const item={key,label:clean(d?.label)||key,type:clean(d?.type)||'text',list:false,detail:false};
-        byKey.set(key,item);all.push(item);
-      }
-      const item=byKey.get(key);
-      if(source===list)item.list=true;if(source===detail)item.detail=true;
-      if(source===detail&&d?.type)item.type=clean(d.type);
-    }
-  }
-  if(!all.length&&Array.isArray(payload.records)&&payload.records[0]){
-    const first=payload.records[0];
-    const c=first.columns&&typeof first.columns==='object'?first.columns:first;
-    Object.keys(c||{}).filter(k=>!['judge','rowId','id','cells','columns'].includes(k)).forEach(k=>all.push({key:k,label:k,type:'text',list:true,detail:true}));
-  }
-  if(!all.length)throw new Error('schema v3 没有可识别表头');
-  return{defs:all,listKeys:new Set(list.map(x=>clean(x?.key)||clean(x?.label)).filter(Boolean))};
-}
-function recordValue(record,def){
-  const r=record&&typeof record==='object'?record:{},cols=r.columns&&typeof r.columns==='object'?r.columns:{};
-  for(const k of [def.key,def.label]){
-    if(k&&Object.prototype.hasOwnProperty.call(r,k)&&r[k]!=null)return scalar(r[k]);
-    if(k&&Object.prototype.hasOwnProperty.call(cols,k)&&cols[k]!=null)return scalar(cols[k]);
-  }
-  return '';
-}
-function makeStableColumns(tableId,defs){
-  const reg=columnRegistry();const map=reg[tableId]||{};
-  let max=Object.values(map).reduce((m,v)=>Math.max(m,Number(v)||0),0);
-  const cols=[];
-  for(const d of defs){
-    let n=Number(map[d.key]||0);
-    if(!n){n=++max;map[d.key]=n}
-    cols.push({columnId:pad3(n),key:d.key,label:d.label,type:d.type,visible:false,valueCatalog:[]});
-  }
-  reg[tableId]=map;saveColumnRegistry(reg);
-  cols.sort((a,b)=>Number(a.columnId)-Number(b.columnId));
-  return cols;
-}
-function stableRowId(record,values,columns){
-  const raw=clean(record?.rowId)||clean(record?.id);
-  if(raw)return raw;
-  const codeCol=columns.find(c=>/代码/.test(c.label)||/^code$/i.test(c.key));
-  const catCol=columns.find(c=>/分类|类型/.test(c.label)||/^category$/i.test(c.key));
-  const code=codeCol?recordValue(record,codeCol):'',cat=catCol?recordValue(record,catCol):'';
-  return 'R-'+hash(code&&cat?code+'|'+cat:values.join('\u241f'));
-}
-function buildTable(payload,url){
-  if(!payload?.meta||Number(payload.meta.schema)!==3)throw new Error('schema v3 校验失败');
-  if(!Array.isArray(payload.records))throw new Error('schema v3 records 缺失');
-  const {defs,listKeys}=defsFromSchema(payload);
-  const seed=clean(payload.meta.source)||url||defs.map(x=>x.key).join('|');
-  const tableId='table-'+hash(seed+'|'+defs.map(x=>x.key).join('|'));
-  const columns=makeStableColumns(tableId,defs);
-  const byKey=new Map(columns.map(c=>[c.key,c]));
-  columns.forEach(c=>{c.visible=listKeys.has(c.key)});
-  if(!columns.some(c=>c.visible))columns.slice(0,Math.min(3,columns.length)).forEach(c=>c.visible=true);
-  const rows=[];
-  for(const rec of payload.records){
-    const values=columns.map(c=>recordValue(rec,c));
-    if(values.every(v=>!clean(v)))continue;
-    rows.push({rowId:stableRowId(rec,values,columns),cells:columns.map((c,i)=>new CellModel({columnId:c.columnId,value:values[i],type:c.type}))});
-  }
-  if(!rows.length)throw new Error('schema v3 中没有有效 records');
-  const table=new TableModel({
-    tableId,
-    tableName:clean(payload.meta.table_name||payload.meta.title)||'表格',
-    columns,rows,
-    meta:Object.assign({},payload.meta,{source_url:url||'',schema:3}),
-    extensions:{layout:payload.layout||{},display:payload.display||{},judge_tables:payload.judge_tables||{},announcements:payload.announcements||{}}
-  });
-  new ColumnManager(table).refreshCatalog();
-  return table;
-}
-function cell(row,col){return(row?.cells||[]).find(c=>String(c.columnId)===String(col.columnId))||{value:'',valueId:''}}
-function cols(){return state.table?.columns||[]}
-function visibleCols(){
-  if(!state.table)return[];
-  let p={};try{p=JSON.parse(localStorage.getItem(LS.layout)||'{}')}catch(e){}
-  let ids=Array.isArray(p[state.table.tableId])?p[state.table.tableId]:[];
-  if(!ids.length)ids=state.table.columns.filter(c=>c.visible).map(c=>c.columnId);
-  if(!ids.length)ids=state.table.columns.slice(0,Math.min(3,state.table.columns.length)).map(c=>c.columnId);
-  return ids.map(id=>state.table.getColumn(id)).filter(Boolean);
-}
-function defaultFilterColumns(){
-  const cs=cols();if(!cs.length)return;
-  const find=re=>cs.find(c=>re.test(String(c.key)+' '+String(c.label)));
-  if(!state.typeColumn||!state.table.getColumn(state.typeColumn))state.typeColumn=(find(/类型|分类|类别|category/i)||cs[0]).columnId;
-  if(!state.conclusionColumn||!state.table.getColumn(state.conclusionColumn))state.conclusionColumn=(find(/结论|结果|状态|等级|conclusion/i)||cs[cs.length-1]).columnId;
-}
-function tableHtml(rows,columns=visibleCols()){
-  if(!rows.length)return'<div class="empty">暂无内容</div>';
-  const head=columns.map(c=>'<th><span class="cid">'+esc(c.columnId)+'</span>'+esc(c.label)+'</th>').join('');
-  const body=rows.map(r=>'<tr class="v2-row" data-row-id="'+esc(r.rowId)+'">'+columns.map(c=>'<td title="'+esc(cell(r,c).value)+'">'+esc(cell(r,c).value||'—')+'</td>').join('')+'</tr>').join('');
-  return'<div class="stock-table-wrap"><table class="stock-table data-table"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
-}
-function renderHome(){
-  const q=state.query.toLowerCase();
-  const rows=state.table?state.table.rows.filter(r=>!q||(r.cells||[]).some(c=>String(c.value??'').toLowerCase().includes(q))):[];
-  if($('topTitle'))$('topTitle').textContent=state.table?'共 '+rows.length+' 行':'表格';
-  if($('countTitle'))$('countTitle').textContent='';
-  if($('dataNote'))$('dataNote').textContent=state.table?(state.kind==='cache'?'缓存':'实时'):'未加载';
-  if($('homeList'))$('homeList').innerHTML=state.table?tableHtml(rows):'<div class="empty">请先加载数据</div>';
-}
-function filterPage(kind){
-  if(!state.table)return;
-  defaultFilterColumns();loadPrefs();
-  const cid=kind==='type'?state.typeColumn:state.conclusionColumn;
-  const tabsId=kind==='type'?'typeTabs':'conclusionTabs';
-  const listId=kind==='type'?'typesList':'conclusionList';
-  const tabs=$(tabsId),list=$(listId);
-  if(!tabs||!list)return;
-  const c=state.table.getColumn(cid),vals=c?.valueCatalog||[];
-  let vid=kind==='type'?state.typeValue:state.conclusionValue;
-  if(!vals.some(v=>v.valueId===vid))vid=vals[0]?.valueId||'';
-  if(kind==='type')state.typeValue=vid;else state.conclusionValue=vid;
-  saveFilter(kind,cid,vid);
-  tabs.innerHTML=vals.map(v=>'<button class="tab '+(v.valueId===vid?'on':'')+'" data-v2-filter="'+kind+'" data-value="'+esc(v.valueId)+'">'+esc(v.valueId)+' '+esc(v.label)+'<b>'+v.count+'</b></button>').join('');
-  const chosen=vals.find(v=>v.valueId===vid);
-  list.innerHTML=chosen?tableHtml(FilterEngine.byValueId(state.table,cid,vid)): '<div class="empty">该表头暂无非空取值</div>';
-}
-function renderTypes(){filterPage('type')}
-function renderConclusions(){filterPage('conclusion')}
-function renderSaved(which){
-  if(!state.table){$(which==='favorites'?'favList':'commentList').innerHTML='<div class="empty">尚未加载数据</div>';return}
-  const xs=(which==='favorites'?ann.favorites(state.table.tableId):ann.comments(state.table.tableId)).map(x=>x.snapshot).filter(Boolean);
-  $(which==='favorites'?'favList':'commentList').innerHTML=xs.length?tableHtml(xs):'<div class="empty">'+(which==='favorites'?'还没有收藏':'暂无点评')+'</div>';
-}
-function renderSettings(){
-  const sec=$('page-settings');if(!sec)return;
-  sec.innerHTML='<div class="section-title">设置</div>'+
-    '<div class="card display-settings-card">'+
-      '<div class="card-hd"><span>显示设置</span><span class="sub">页面展示与筛选</span></div>'+
-      '<div class="setting-item">'+
-        '<div class="setting-title">首页展示表头</div>'+
-        '<div class="setting-desc">每个表头使用固定 columnId 编号；勾选后决定首页显示哪些表头。</div>'+
-        '<div id="v2Cols"></div>'+
-        '<div class="setting-actions"><button class="sbtn primary" id="v2SaveCols">保存首页显示</button></div>'+
-      '</div>'+
-      '<div class="setting-item">'+
-        '<div class="setting-title">类型 / 结论默认表头</div>'+
-        '<div class="setting-desc">类型与结论页面只显示取值标签，不在页面顶部重复显示手动选择器。</div>'+
-        '<div class="setting-actions"><label style="flex:1;min-width:145px;font-size:11px;color:var(--muted)">类型<select id="v2TS" style="width:100%;margin-top:3px;min-height:36px;padding:5px 8px;font-size:12px"></select></label><label style="flex:1;min-width:145px;font-size:11px;color:var(--muted)">结论<select id="v2CS" style="width:100%;margin-top:3px;min-height:36px;padding:5px 8px;font-size:12px"></select></label></div>'+
-      '</div>'+
-    '</div>'+
-    '<div class="card">'+
-      '<div class="card-hd"><span>数据</span></div>'+
-      '<div class="setting-item"><div class="setting-title">数据源</div><div class="setting-desc">直接下载 SJ01 加密 stocks.txt，App 使用你输入的激活码解密，再直接解析 schema v3 JSON。</div><div class="setting-actions"><button class="sbtn primary" id="v2Reload">重新加载</button><button class="sbtn" id="v2Source">配置地址</button><button class="sbtn" id="v2Key">输入激活码</button></div></div>'+
-      '<div class="setting-item"><div class="setting-title">备份</div><div class="setting-desc">保存当前表格、展示列、筛选选择、收藏和点评。</div><div class="setting-actions"><button class="sbtn primary" id="v2Export">导出</button><button class="sbtn" id="v2Restore">恢复</button><button class="sbtn" id="v2Clear">清空</button></div></div>'+
-    '</div>'+
-    '<div class="card">'+
-      '<div class="card-hd"><span>应用</span></div>'+
-      '<div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="v2UpdateDesc">当前版本 '+APP_VERSION+'（'+APP_VERSION_CODE+'）</div><div class="setting-actions"><button class="sbtn primary" id="v2Update">检查更新</button></div></div>'+
-      '<div class="setting-item"><div class="setting-title">数据状态</div><div class="setting-desc" id="v2Status">'+(state.table?(state.table.rows.length+' 行 · '+cols().length+' 个表头'):'尚未加载')+'</div></div>'+
-    '</div>';
-  if(!state.table){
-    $('v2Cols').innerHTML='<div class="empty" style="padding:18px 8px">尚未加载数据</div>';
-    $('v2TS').innerHTML='<option>加载数据后设置</option>';$('v2CS').innerHTML='<option>加载数据后设置</option>';
-    $('v2Reload').onclick=()=>loadData(false);
-    $('v2Source').onclick=sourceSheet;$('v2Key').onclick=keySheet;
-    $('v2Export').onclick=exportBackup;$('v2Restore').onclick=restoreBackup;$('v2Clear').onclick=clearData;$('v2Update').onclick=checkUpdate;
-    return;
-  }
-  const vis=new Set(visibleCols().map(c=>c.columnId));
-  $('v2Cols').innerHTML=cols().map(c=>'<label class="column-item"><input type="checkbox" data-v2-col="'+esc(c.columnId)+'" '+(vis.has(c.columnId)?'checked':'')+'><span class="column-main"><span class="column-name">'+esc(c.columnId)+' '+esc(c.label)+'</span><br><span class="column-id">'+c.valueCatalog.length+' 种实际取值</span></span></label>').join('');
-  defaultFilterColumns();loadPrefs();
-  $('v2TS').innerHTML=cols().map(c=>'<option value="'+esc(c.columnId)+'">'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
-  $('v2CS').innerHTML=cols().map(c=>'<option value="'+esc(c.columnId)+'">'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
-  $('v2TS').value=state.typeColumn;$('v2CS').value=state.conclusionColumn;
-  $('v2SaveCols').onclick=function(){
-    const ids=[...document.querySelectorAll('[data-v2-col]:checked')].map(x=>x.dataset.v2Col);
-    if(!ids.length){toast('至少选择一个表头');return}
-    let p={};try{p=JSON.parse(localStorage.getItem(LS.layout)||'{}')}catch(e){}
-    p[state.table.tableId]=ids;localStorage.setItem(LS.layout,JSON.stringify(p));renderHome();toast('首页展示列已保存');
-  };
-  $('v2TS').onchange=function(){state.typeColumn=this.value;state.typeValue='';saveFilter('type',this.value,'');renderTypes()};
-  $('v2CS').onchange=function(){state.conclusionColumn=this.value;state.conclusionValue='';saveFilter('conclusion',this.value,'');renderConclusions()};
-  $('v2Reload').onclick=()=>loadData(false);
-  $('v2Source').onclick=sourceSheet;
-  $('v2Key').onclick=keySheet;
-  $('v2Export').onclick=exportBackup;
-  $('v2Restore').onclick=restoreBackup;
-  $('v2Clear').onclick=clearData;
-  $('v2Update').onclick=checkUpdate;
-}
-function renderAll(){
-  renderHome();renderTypes();renderConclusions();renderSaved('comments');renderSaved('favorites');renderSettings();
-}
-function pageTitle(page){
-  if(page==='home')return state.table?'共 '+state.table.rows.length+' 行':'表格';
-  return ({types:'类型',conclusions:'结论',comments:'点评',favorites:'收藏',settings:'设置'})[page]||'表格';
-}
-function pageSwitch(page){
-  if($('detail')?.classList.contains('show'))closeDetail();
-  state.page=page;
-  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id==='page-'+page));
-  document.querySelectorAll('.bottom button').forEach(b=>b.classList.toggle('on',b.dataset.page===page));
-  if($('topTitle'))$('topTitle').textContent=pageTitle(page);
-  window.scrollTo(0,0);
-}
-function detailExtensions(row){
-  const ex=state.table?.extensions||{};if(!ex)return'';
-  const codeCol=cols().find(c=>/代码/.test(c.label)||/^code$/i.test(c.key));
-  const catCol=cols().find(c=>/分类|类型/.test(c.label)||/^category$/i.test(c.key));
-  const code=codeCol?clean(cell(row,codeCol).value):'',cat=catCol?clean(cell(row,catCol).value):'';
-  let h='';
-  const anns=code&&ex.announcements&&ex.announcements[code];
-  if(Array.isArray(anns)&&anns.length)h+='<div class="card"><div class="card-hd"><span>公告列表</span><span class="sub">'+anns.length+' 条</span></div>'+anns.map(a=>'<div class="ann">'+(a.url?'<a href="'+esc(a.url)+'" target="_blank" rel="noopener">':'')+'<div class="ann-title">'+esc(a.title||'未命名公告')+'</div><div class="ann-meta">'+esc(a.date||'')+(a.column?'<span class="tag type">'+esc(a.column)+'</span>':'')+'</div>'+(a.url?'</a>':'')+'</div>').join('')+'</div>';
-  const jt=cat&&ex.judge_tables&&ex.judge_tables[cat];
-  if(jt&&Array.isArray(jt.rows)&&jt.rows.length)h+='<div class="card"><div class="card-hd"><span>'+esc(jt.title||cat)+'</span><span class="sub">'+jt.rows.length+' 条</span></div>'+jt.rows.map(r=>'<div class="jrow"><div class="jq">'+esc(r?.[0]||'')+'</div><div class="jm"><span class="tag">'+esc(r?.[1]||'')+'</span><span class="hit">'+esc(r?.[2]||'')+'</span></div></div>').join('')+'</div>';
-  return h;
-}
-function copyText(text){
-  if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text);
-  const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy')}catch(e){}ta.remove();return ok?Promise.resolve():Promise.reject();
-}
-function openDetail(row){
-  if(!row||!state.table)return;
-  state.cur=row;
-  const first=state.table.columns[0]?cell(row,state.table.columns[0]).value:'当前行';
-  $('dTitle').textContent='行详情';
-  $('dHero').innerHTML='<div class="hero"><h1>'+esc(first||'当前行')+'</h1><div class="meta"><span class="tag">rowId '+esc(row.rowId)+'</span><span class="tag">'+esc(state.table.tableName)+'</span></div><div style="display:flex;gap:8px;padding:9px 0"><button id="v20Fav" class="sbtn '+(ann.isFavorite(state.table,row)?'primary':'')+'">'+(ann.isFavorite(state.table,row)?'已收藏':'收藏')+'</button><button id="v20Copy" class="sbtn primary">复制整行</button></div></div>';
-  $('dBody').innerHTML='<div class="card"><div class="card-hd"><span>完整行数据</span><span class="sub">'+cols().length+' 个表头</span></div>'+cols().map(c=>'<div class="standard-cell"><div class="standard-label"><span class="cid">'+esc(c.columnId)+'</span>'+esc(c.label)+'</div><div class="standard-value '+(c.type==='longtext'?'summary':'')+'">'+esc(cell(row,c).value||'—')+'</div></div>').join('')+'</div>'+detailExtensions(row)+
-    '<div class="card"><div style="padding:14px 16px;font-weight:800">我的点评</div><div style="padding:0 16px 16px"><textarea id="v20Comment" placeholder="写下点评…">'+esc((ann.comment(state.table,row.rowId)||{}).comment||'')+'</textarea><button id="v20SaveComment" class="sbtn primary" style="width:100%;margin-top:8px">保存点评</button></div></div>';
-  $('detail').classList.add('show');$('actions').classList.add('show');
-  if(!state.detailPushed){history.pushState({detail:true,row:row.rowId},'','?row='+encodeURIComponent(row.rowId));state.detailPushed=true}
-  $('v20Fav').onclick=()=>{ann.favorite(state.table,row);renderAll();openDetail(row);toast(ann.isFavorite(state.table,row)?'已收藏':'已取消收藏')};
-  $('v20Copy').onclick=()=>copyText(cols().map(c=>c.columnId+' '+c.label+': '+cell(row,c).value).join('\n')).then(()=>toast('整行已复制')).catch(()=>toast('复制失败'));
-  $('v20SaveComment').onclick=()=>{ann.setComment(state.table,row,$('v20Comment').value);renderAll();openDetail(row);toast('点评已保存')};
-}
-function closeDetail(){
-  $('detail').classList.remove('show');$('actions').classList.remove('show');state.cur=null;state.detailPushed=false;
-  const u=new URL(location.href);u.search='';history.replaceState({root:true},'',u.pathname+u.hash);
-}
-function sourceSheet(){
-  openSheet('数据源','<div class="note">每行一个地址。留空恢复默认数据源。<br>'+esc(DEF_URLS)+'</div><div style="padding:0 16px 8px"><textarea id="t20Urls" placeholder="'+esc(DEF_URLS)+'">'+esc(localStorage.getItem(LS.urls)||'')+'</textarea></div><div style="padding:0 16px 16px;display:flex;gap:8px"><button class="sbtn" id="t20Cancel">取消</button><button class="sbtn primary" id="t20Save">保存并加载</button></div>',()=>{
-    $('t20Cancel').onclick=closeSheet;
-    $('t20Save').onclick=()=>{const v=$('t20Urls').value.trim();if(v)localStorage.setItem(LS.urls,v);else localStorage.removeItem(LS.urls);closeSheet();loadData(false)};
-  });
-}
-function keySheet(){
-  openSheet('激活码','<div class="note">SJ01 使用 AES-256-GCM。请输入你自己的 64 位十六进制激活码，App 不内置。</div><div style="padding:0 16px 8px"><input id="t20KeyInput" type="text" value="'+esc(localStorage.getItem(LS.key)||'')+'" placeholder="64位十六进制激活码" style="width:100%;height:42px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 10px;outline:none"></div><div style="padding:0 16px 16px"><button class="sbtn primary" id="t20KeySave" style="width:100%">保存并加载</button></div>',()=>{
-    $('t20KeySave').onclick=()=>{const v=$('t20KeyInput').value.trim();if(!/^[0-9a-fA-F]{64}$/.test(v)){toast('激活码必须是64位十六进制');return}localStorage.setItem(LS.key,v);closeSheet();loadData(false)};
-  });
-}
-function exportBackup(){
-  if(!state.table){toast('暂无表格可备份');return}
-  const p={kind:'stock-judge-table-backup',version:3,exported_at:new Date().toISOString(),table:state.table.toJSON(),layout:(()=>{try{return JSON.parse(localStorage.getItem(LS.layout)||'{}')}catch(e){return{}}})(),filters:(()=>{try{return JSON.parse(localStorage.getItem(LS.filters)||'{}')}catch(e){return{}}})(),favorites:ann.favorites(state.table.tableId),comments:ann.comments(state.table.tableId)};
-  const text=JSON.stringify(p,null,2),name='stock-judge-table-backup-'+new Date().toISOString().slice(0,10)+'.json';
-  if(window.AndroidNative?.saveTextFile){AndroidNative.saveTextFile(name,text);toast('备份已导出');return}
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('备份已导出');
-}
-function applyBackup(p){
-  if(!p?.table)throw new Error('备份中没有表格');
-  state.table=new TableModel(p.table);new ColumnManager(state.table).refreshCatalog();state.kind='local';
-  localStorage.setItem(LS.layout,JSON.stringify(p.layout||{}));
-  localStorage.setItem(LS.filters,JSON.stringify(p.filters||{}));
-  const fid=Object.fromEntries((p.favorites||[]).map(x=>[String(x.tableId)+'::'+String(x.rowId),x]));
-  const cid=Object.fromEntries((p.comments||[]).map(x=>[String(x.tableId)+'::'+String(x.rowId),x]));
-  localStorage.setItem(ann.favKey,JSON.stringify(fid));localStorage.setItem(ann.commentKey,JSON.stringify(cid));
-  renderAll();pageSwitch('home');toast('备份已恢复');
-}
-function restoreBackup(){
-  if(window.AndroidNative?.openBackupPicker){AndroidNative.openBackupPicker();return}
-  const i=document.createElement('input');i.type='file';i.accept='.json,application/json';
-  i.onchange=()=>{const f=i.files?.[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{applyBackup(JSON.parse(rd.result))}catch(e){toast('恢复失败：'+e.message,2800)}};rd.readAsText(f)};i.click();
-}
-window.restoreBackupText=function(t){try{applyBackup(JSON.parse(t))}catch(e){toast('恢复失败：'+e.message,2800)}};
-async function clearData(){
-  if(!confirm('确定清空本地表格、收藏和点评吗？数据源地址与激活码保留。'))return;
-  try{await IDB.del(IDB_CACHE)}catch(e){}
-  for(const k of [LS.layout,LS.filters,ann.favKey,ann.commentKey,LS.legacyFav,LS.legacyCmt,LS.migrated])localStorage.removeItem(k);
-  try{await IDB.del('savedArchives.v1')}catch(e){}
-  state.table=null;state.cur=null;renderAll();pageSwitch('settings');toast('本地数据已清空');
-}
-async function t20MigrateLegacy(){
-  if(!state.table||localStorage.getItem(LS.migrated)==='1')return;
-  let oldFav=[];try{oldFav=JSON.parse(localStorage.getItem(LS.legacyFav)||'[]')}catch(e){}
-  let oldCmt={};try{oldCmt=JSON.parse(localStorage.getItem(LS.legacyCmt)||'{}')}catch(e){}
-  let archives={};try{const x=await IDB.get('savedArchives.v1');if(x&&typeof x==='object')archives=x}catch(e){}
-  try{const x=JSON.parse(localStorage.getItem('sj.archivedRecords.v1')||'{}');archives=Object.assign({},archives,x)}catch(e){}
-  const code=cols().find(c=>/代码/.test(c.label)||/^code$/i.test(c.key));
-  const cat=cols().find(c=>/分类|类型/.test(c.label)||/^category$/i.test(c.key));
-  const live=new Map();
-  state.table.rows.forEach(r=>{const a=code?clean(cell(r,code).value):'',b=cat?clean(cell(r,cat).value):'';if(a)live.set(a+'|'+b,r)});
-  const keys=new Set([...(Array.isArray(oldFav)?oldFav:[]),...Object.keys(oldCmt||{}),...Object.keys(archives||{})]);
-  for(const k of keys){
-    const row=live.get(k);
-    if(row){
-      if(oldFav.includes(k)&&!ann.isFavorite(state.table,row))ann.favorite(state.table,row);
-      if(oldCmt[k]&&!ann.comment(state.table,row.rowId))ann.setComment(state.table,row,oldCmt[k]);
-      continue;
-    }
-    const a=archives[k],rec=a?.record;
-    if(!rec)continue;
-    const values=cols().map(c=>recordValue(rec,c));
-    if(values.every(v=>!clean(v)))continue;
-    const snap={rowId:stableRowId(rec,values,cols()),cells:cols().map((c,i)=>new CellModel({columnId:c.columnId,value:values[i],type:c.type}))};
-    if(oldFav.includes(k)&&!ann.isFavorite(state.table,snap))ann.favorite(state.table,snap);
-    if(oldCmt[k]&&!ann.comment(state.table,snap.rowId))ann.setComment(state.table,snap,oldCmt[k]);
-  }
-  localStorage.setItem(LS.migrated,'1');
-}
-async function loadFromSource(url){
-  if(window.AndroidNative?.fetchDataSource&&window.AndroidNative?.readDataSourceChunk){
-    await new Promise((resolve,reject)=>{
-      window.__sjNativeDataWaiter=(ok,msg)=>{window.__sjNativeDataWaiter=null;ok?resolve():reject(new Error(msg||'原生网络请求失败'))};
-      try{AndroidNative.fetchDataSource(url)}catch(e){window.__sjNativeDataWaiter=null;reject(e)}
-    });
-    let text='',offset=0;const chunk=196608;
-    for(;;){const part=AndroidNative.readDataSourceChunk(offset,chunk);if(!part)break;text+=part;offset+=part.length;if(part.length<chunk)break}
-    if(!text)throw new Error('数据文件为空');
-    return decryptSJ01(text);
-  }
-  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return decryptSJ01(await r.text());
-}
-window.__sjNativeDataSourceResult=(ok,msg)=>{const fn=window.__sjNativeDataWaiter;if(typeof fn==='function')fn(!!ok,String(msg||''))};
-async function loadData(silent=false){
-  const key=String(localStorage.getItem(LS.key)||'').trim();
-  if(!/^[0-9a-fA-F]{64}$/.test(key)){pageSwitch('settings');if($('dataStatus'))$('dataStatus').textContent='请先输入64位十六进制激活码';return}
-  ann=ann||new LocalAnnotation(localStorage);
-  let cached=null;try{const raw=await IDB.get(IDB_CACHE);if(raw?.tableId){cached=new TableModel(raw);new ColumnManager(cached).refreshCatalog();state.table=cached;state.kind='cache';await t20MigrateLegacy();renderAll()}}catch(e){}
-  const urls=getUrls();let last='';
-  for(const url of urls){
-    try{
-      const payload=await loadFromSource(url);
-      const table=buildTable(payload,url);
-      state.table=table;state.kind='remote';state.cur=null;state.typeColumn='';state.conclusionColumn='';state.typeValue='';state.conclusionValue='';
-      await IDB.set(IDB_CACHE,table.toJSON());await t20MigrateLegacy();renderAll();pageSwitch('home');
-      if(silent)toast('数据已加载 · SJ01 / schema v3');
-      return;
-    }catch(e){last=url.replace(/^https?:\/\//,'').slice(0,55)+' → '+e.message}
-  }
-  if(cached){pageSwitch('home');toast('联网更新失败，继续显示缓存',2600);return}
-  pageSwitch('settings');if($('dataStatus'))$('dataStatus').textContent='数据加载失败：'+last;toast('数据加载失败：'+last,3200);
-}
-async function loadUpdateManifest(url){
-  if(window.AndroidNative?.fetchUpdateManifest&&window.AndroidNative?.readUpdateChunk){
-    await new Promise((resolve,reject)=>{
-      window.__sjNativeUpdateWaiter=(ok,msg)=>{window.__sjNativeUpdateWaiter=null;ok?resolve():reject(new Error(msg||'更新清单读取失败'))};
-      try{AndroidNative.fetchUpdateManifest(url)}catch(e){window.__sjNativeUpdateWaiter=null;reject(e)}
-    });
-    let text='',offset=0;const chunk=65536;
-    for(;;){const part=AndroidNative.readUpdateChunk(offset,chunk);if(!part)break;text+=part;offset+=part.length;if(part.length<chunk)break}
-    if(!text)throw new Error('更新清单为空');return JSON.parse(text);
-  }
-  const r=await fetch(url+'?t='+Date.now(),{cache:'no-store',headers:{Accept:'application/json'}});if(!r.ok)throw new Error('HTTP '+r.status);return r.json();
-}
-window.__sjNativeUpdateResult=(ok,msg)=>{const fn=window.__sjNativeUpdateWaiter;if(typeof fn==='function')fn(!!ok,String(msg||''))};
-window.__sjApkDownloadProgress=(pct,status,msg)=>{if($('updateProgress'))$('updateProgress').classList.add('show');if($('updateProgressText'))$('updateProgressText').textContent=msg||'正在下载…';if($('updateProgressPct'))$('updateProgressPct').textContent=Math.round(Number(pct)||0)+'%';if($('updateProgressFill'))$('updateProgressFill').style.width=(Math.max(0,Math.min(100,Number(pct)||0)))+'%'};
-window.__sjApkDownloadComplete=()=>{if($('updateDesc'))$('updateDesc').textContent='APK 已下载完成，正在打开安装界面。';toast('下载完成，正在安装',2400)};
-window.__sjApkDownloadFailed=msg=>{if($('updateDesc'))$('updateDesc').textContent=String(msg||'APK 下载失败');toast(String(msg||'APK 下载失败'),3000)};
-async function checkUpdate(){
-  if($('updateDesc'))$('updateDesc').textContent='正在检查最新版本…';
-  const errs=[];
-  for(const url of UPDATE_URLS){
-    try{
-      const p=await loadUpdateManifest(url),remote=Number(p.versionCode||0);
-      if(!remote)throw new Error('更新清单缺少 versionCode');
-      if(remote>APP_VERSION_CODE){
-        if($('updateDesc'))$('updateDesc').textContent='发现新版本 '+(p.version||remote);
-        if(confirm('发现新版本 '+(p.version||remote)+'，现在下载并安装？')){
-          const apk=p.apk_url||RELEASE_APK;
-          if(window.AndroidNative?.downloadApk){if($('updateProgress'))$('updateProgress').classList.add('show');AndroidNative.downloadApk(apk,'stock-judge-'+(p.version||remote)+'.apk')}
-          else window.open(apk,'_blank');
-        }
-        return;
-      }
-      if($('updateDesc'))$('updateDesc').textContent='当前已是最新版本 '+APP_VERSION+'（'+APP_VERSION_CODE+'） · '+(p.published_at||'');
-      toast('当前已是最新版本',2200);return;
-    }catch(e){errs.push(url.replace(/^https?:\/\//,'').slice(0,50)+' → '+e.message)}
-  }
-  if($('updateDesc'))$('updateDesc').textContent='检查更新失败：'+errs.join('；');toast('检查更新失败',3000);
-}
-
-document.querySelectorAll('.bottom button').forEach(b=>b.onclick=()=>pageSwitch(b.dataset.page));
-$('q')?.addEventListener('input',e=>{state.query=e.target.value||'';renderHome()});
-$('btnBack')?.addEventListener('click',closeDetail);
-$('mask')?.addEventListener('click',e=>{if(e.target===$('mask'))closeSheet()});
-$('aFav')?.addEventListener('click',()=>{if(!state.cur||!state.table)return;ann.favorite(state.table,state.cur);renderAll();openDetail(state.cur)});
-$('aCmt')?.addEventListener('click',()=>{$('v20Comment')?.focus()});
-window.addEventListener('popstate',()=>{if($('mask')?.classList.contains('show')){closeSheet();return}if($('detail')?.classList.contains('show'))closeDetail()});
-document.addEventListener('click',e=>{
-  const row=e.target.closest('.v2-row');
-  if(row){const r=state.table?.getRow(row.dataset.rowId);if(r)openDetail(r);return}
-  const tab=e.target.closest('[data-v2-filter]');
-  if(tab){const k=tab.dataset.v2Filter,v=tab.dataset.value;if(k==='type')state.typeValue=v;else state.conclusionValue=v;saveFilter(k,k==='type'?state.typeColumn:state.conclusionColumn,v);filterPage(k)}
-});
-window.addEventListener('resize',()=>{const top=document.querySelector('.top');if(top)document.documentElement.style.setProperty('--stock-sticky-top',Math.ceil(top.getBoundingClientRect().height)+'px')});
-function closeSheet(){$('mask')?.classList.remove('show');$('sheet').innerHTML=''}
-function openSheet(title,html,bind){$('sheet').innerHTML='<div class="sheet-grab"></div><h3>'+esc(title)+'</h3>'+html;$('mask').classList.add('show');bind&&bind()}
-async function boot(){
-  ann=ann||new LocalAnnotation(localStorage);
-  const hasKey=/^[0-9a-fA-F]{64}$/.test(String(localStorage.getItem(LS.key)||'').trim());
-  if(!hasKey){renderAll();pageSwitch('settings');if($('dataStatus'))$('dataStatus').textContent='请先输入64位十六进制激活码';return}
-  await loadData(true);
-}
-history.replaceState({root:true},'','');
-boot();
-</script>
+<script src="core/app-runtime.js"></script>
 </body>
 </html>
