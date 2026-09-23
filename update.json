@@ -1,17 +1,17 @@
 {
-  "version": "2.1.7",
-  "versionCode": 2107,
-  "published_at": "2026-09-23T04:37:07Z",
+  "version": "2.1.8",
+  "versionCode": 2108,
+  "published_at": "2026-09-23T04:59:14Z",
   "repo": "baibiaowang/GPT",
-  "apk_size": 3196108,
-  "sha256": "fcfcde38c31dd6a4cd2c20879b18a2bb271bbaf32ccb3c8cdb4d9dfb54e39d96",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.7/app.apk",
+  "apk_size": 3196348,
+  "sha256": "90e1e2d61e47c4c1f9ec27f542101790aa55c1fee588a9d6f34a1f87d988720b",
+  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.8/app.apk",
   "apk_urls": [
-    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.7/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v2.1.7/app.apk",
-    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.7/app.apk",
-    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.7/app.apk",
-    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.7/app.apk"
+    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.8/app.apk",
+    "https://github.com/baibiaowang/GPT/releases/download/v2.1.8/app.apk",
+    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.8/app.apk",
+    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.8/app.apk",
+    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.8/app.apk"
   ],
-  "notes": "2.1.7：修复设置页函数名错配，并加强 APK 下载完整性校验与更新链路。"
+  "notes": "2.1.8：修复设置页函数名错配，并加强 APK 下载完整性校验与更新链路。"
 }
