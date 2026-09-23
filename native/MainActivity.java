@@ -547,89 +547,6 @@ public class MainActivity extends BridgeActivity {
      * 公司概况（跨域 iframe）专用双指缩放：原生层识别 ScaleGesture，
      * 前端根据双指焦点是否位于 .ov-frame 决定是否调整 iframe 比例。
      */
-    private void installPinchZoom() {
-        final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
-        if (wv == null) {
-            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                @Override public void run() { installPinchZoom(); }
-            }, 250L);
-            return;
-        }
-        wv.getSettings().setSupportZoom(false);
-        wv.getSettings().setBuiltInZoomControls(false);
-
-        final float density = getResources().getDisplayMetrics().density;
-        final ScaleGestureDetector detector = new ScaleGestureDetector(this,
-            new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                private float pendingScale = 1f;
-                private long lastDispatch = 0L;
-
-                @Override public boolean onScaleBegin(ScaleGestureDetector d) {
-                    pendingScale = 1f;
-                    lastDispatch = 0L;
-                    return true;
-                }
-
-                @Override public boolean onScale(ScaleGestureDetector d) {
-                    pendingScale *= d.getScaleFactor();
-                    final long now = SystemClock.uptimeMillis();
-                    if (now - lastDispatch >= 35L) {
-                        final float factor = pendingScale;
-                        pendingScale = 1f;
-                        lastDispatch = now;
-                        dispatchOverviewScale(wv, factor, d.getFocusX() / density, d.getFocusY() / density);
-                    }
-                    return true;
-                }
-
-                @Override public void onScaleEnd(ScaleGestureDetector d) {
-                    if (Math.abs(pendingScale - 1f) > 0.001f) {
-                        final float factor = pendingScale;
-                        pendingScale = 1f;
-                        dispatchOverviewScale(wv, factor, d.getFocusX() / density, d.getFocusY() / density);
-                    }
-                }
-            });
-
-        wv.setOnTouchListener(new android.view.View.OnTouchListener() {
-            @Override public boolean onTouch(android.view.View v, MotionEvent event) {
-                detector.onTouchEvent(event);
-                return detector.isInProgress();
-            }
-        });
-    }
-
-    private void dispatchOverviewScale(WebView wv, float factor, float x, float y) {
-        if (factor <= 0f) return;
-        final String js = "window.__sjPinchScale && window.__sjPinchScale(" +
-            Float.toString(factor) + "," + Float.toString(x) + "," + Float.toString(y) + ");";
-        try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
-    }
-
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        handle(intent);
-    }
-
-    private void handle(Intent intent) {
-        if (intent == null) return;
-        if (!Intent.ACTION_VIEW.equals(intent.getAction())) return;
-        final Uri uri = intent.getData();
-        if (uri == null) return;
-
-        new Thread(new Runnable() {
-            @Override public void run() {
-                final String path = copyToPrivate(uri);
-                if (path == null) return;
-                new Handler(Looper.getMainLooper()).post(new Runnable() {
-                    @Override public void run() { injectWhenReady(path, 0); }
-                });
-            }
-        }).start();
-    }
-
     /**
      * ★ 2026-09-20 修：原实现只要 getWebView() 非 null 就注入。
      *   冷启动时 WebView 对象已经存在、但页面还没加载完，注入的变量会被
@@ -639,34 +556,6 @@ public class MainActivity extends BridgeActivity {
      *   排查时极易误判成「intent-filter 没生效」。
      *   现在先问 document.readyState，只有 complete 才注入，否则每 500ms 重试。
      */
-    private void injectWhenReady(final String path, final int attempt) {
-        if (attempt >= MAX_ATTEMPTS) return;
-        final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
-        if (wv == null) { retry(path, attempt); return; }
-        try {
-            wv.evaluateJavascript("document.readyState", new ValueCallback<String>() {
-                @Override public void onReceiveValue(String v) {
-                    if (v != null && v.indexOf("complete") >= 0) {
-                        try {
-                            wv.evaluateJavascript(
-                                "window.__SJ_INCOMING_PATH__=" + jsStr(path) + ";", null);
-                        } catch (Exception ignored) { }
-                    } else {
-                        retry(path, attempt);
-                    }
-                }
-            });
-        } catch (Exception e) {
-            retry(path, attempt);
-        }
-    }
-
-    private void retry(final String path, final int attempt) {
-        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-            @Override public void run() { injectWhenReady(path, attempt + 1); }
-        }, RETRY_MS);
-    }
-
     /**
      * ★ 2026-09-20 新增：转义成 JS 双引号字符串字面量。
      *   原实现直接把路径拼进 `"...\" + path + "\"..."` ——
@@ -702,30 +591,4 @@ public class MainActivity extends BridgeActivity {
     }
 
     /** 把外部 URI 的内容复制到 app 私有目录，返回绝对路径；失败返回 null */
-    private String copyToPrivate(Uri uri) {
-        InputStream in = null;
-        FileOutputStream fos = null;
-        try {
-            in = getContentResolver().openInputStream(uri);
-            if (in == null) return null;
-
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            byte[] buf = new byte[16384];
-            int n;
-            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-            byte[] data = bos.toByteArray();
-            if (data.length < MIN_BYTES) return null;
-
-            File out = new File(getFilesDir(), INCOMING_FILE);
-            fos = new FileOutputStream(out);
-            fos.write(data);
-            fos.flush();
-            return out.getAbsolutePath();
-        } catch (Exception e) {
-            return null;
-        } finally {
-            try { if (in != null) in.close(); } catch (Exception ignored) { }
-            try { if (fos != null) fos.close(); } catch (Exception ignored) { }
-        }
-    }
 }
