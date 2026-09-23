@@ -210,6 +210,7 @@ public class MainActivity extends BridgeActivity {
             conn.setReadTimeout(30000);
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Accept", "text/plain,*/*");
+            conn.setRequestProperty("Accept-Encoding", "identity");
             conn.setRequestProperty("Cache-Control", "no-cache");
             int code = conn.getResponseCode();
             if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
