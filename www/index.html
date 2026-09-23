@@ -160,40 +160,22 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);background:var(
   </section>
   <section id="page-settings" class="page">
     <div class="section-title">设置</div>
+    <div class="card display-settings-card">
+      <div class="card-hd"><span>显示设置</span><span class="sub">页面展示与筛选</span></div>
+      <div class="setting-item"><div class="setting-title">首页展示表头</div><div class="setting-desc">数据加载后在这里配置首页显示哪些表头。</div></div>
+      <div class="setting-item"><div class="setting-title">类型 / 结论默认表头</div><div class="setting-desc">在设置里选择，类型与结论页面不再显示顶部手动选择器。</div></div>
+    </div>
     <div class="card">
-      <div class="setting-item">
-        <div class="setting-title">数据源</div>
-        <div class="setting-desc">数据地址与激活码分开管理。每行一个地址，按顺序尝试。</div>
-        <div class="setting-actions"><button class="sbtn primary" id="btnSource">配置数据源</button><button class="sbtn" id="btnReload">重新加载数据</button></div>
-      </div>
-      <div class="setting-item">
-        <div class="setting-title">激活码</div>
-        <div class="setting-desc">用于解密公告数据。不会写入数据文件。</div>
-        <div class="setting-actions"><button class="sbtn" id="btnKey">修改激活码</button></div>
-      </div>
-      <div class="setting-item">
-        <div class="setting-title">数据备份</div>
-        <div class="setting-desc">完整备份当前数据、收藏、点评和手动修改。导出到“下载 / 股票判断机”，恢复备份默认也从这里打开。</div>
-        <div class="setting-actions"><button class="sbtn primary" id="btnExport">导出数据</button><button class="sbtn" id="btnRestore">从备份恢复</button></div><div class="setting-desc" style="margin-top:8px">导出与恢复统一使用“下载 / 股票判断机”，不用再到处找文件。</div>
-      </div>
-      <div class="setting-item">
-        <div class="setting-title">清空数据</div>
-        <div class="setting-desc">清除当前数据缓存、本地收藏、点评、手动修改和本地归档；不会删除数据源地址和激活码。</div>
-        <div class="setting-actions"><button class="sbtn" id="btnClearData">清空数据</button></div>
-      </div>
-      <div class="setting-item">
-        <div class="setting-title">应用更新</div>
-        <div class="setting-desc" id="updateDesc">当前版本 2.0.1。股票列表只显示股票名称、判断分类、公告时间三个字段，表头固定；收藏/点评过的股票会完整保存在本地。</div>
-        <div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div>
-        <div class="update-progress" id="updateProgress">
-          <div class="update-progress-top"><span id="updateProgressText">准备下载…</span><span id="updateProgressPct">0%</span></div>
-          <div class="update-progress-bar"><div class="update-progress-fill" id="updateProgressFill"></div></div>
-        </div>
-      </div>
-      <div class="setting-item">
-        <div class="setting-title">当前数据状态</div>
-        <div class="setting-desc" id="dataStatus">未加载</div>
-      </div>
+      <div class="card-hd"><span>数据</span></div>
+      <div class="setting-item"><div class="setting-title">数据源</div><div class="setting-desc">数据地址与激活码分开管理。</div><div class="setting-actions"><button class="sbtn primary" id="btnSource">配置数据源</button><button class="sbtn" id="btnReload">重新加载数据</button></div></div>
+      <div class="setting-item"><div class="setting-title">激活码</div><div class="setting-desc">用于解密公告数据。</div><div class="setting-actions"><button class="sbtn" id="btnKey">修改激活码</button></div></div>
+      <div class="setting-item"><div class="setting-title">数据备份</div><div class="setting-desc">完整备份当前数据、收藏、点评和手动修改。</div><div class="setting-actions"><button class="sbtn primary" id="btnExport">导出数据</button><button class="sbtn" id="btnRestore">从备份恢复</button></div></div>
+      <div class="setting-item"><div class="setting-title">清空数据</div><div class="setting-desc">清除本地数据、收藏、点评和归档；数据源地址与激活码保留。</div><div class="setting-actions"><button class="sbtn" id="btnClearData">清空数据</button></div></div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><span>应用</span></div>
+      <div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="updateDesc">当前版本 2.0.1</div><div class="setting-actions"><button class="sbtn primary" id="btnUpdate">检查更新</button></div></div>
+      <div class="setting-item"><div class="setting-title">当前数据状态</div><div class="setting-desc" id="dataStatus">未加载</div></div>
     </div>
   </section>
 </main>
@@ -462,27 +444,18 @@ function filterPage(kind){
   if(!state.table)return;
   defaultFilterColumns();loadPrefs();
   const cid=kind==='type'?state.typeColumn:state.conclusionColumn;
-  const selectId=kind==='type'?'v2TypeSelect':'v2ConclusionSelect';
   const tabsId=kind==='type'?'typeTabs':'conclusionTabs';
   const listId=kind==='type'?'typesList':'conclusionList';
-  const anchor=$(tabsId);
-  if(anchor&&!$(selectId)){
-    const card=document.createElement('div');card.className='card v2-filter-card';
-    card.innerHTML='<div class="card-hd"><span>筛选表头</span><span class="sub">'+(kind==='type'?'类型':'结论')+'</span></div><div style="padding:10px 12px"><select id="'+selectId+'"></select></div>';
-    anchor.parentNode.insertBefore(card,anchor);
-  }
-  const sel=$(selectId);
-  sel.innerHTML=cols().map(c=>'<option value="'+esc(c.columnId)+'">'+esc(c.columnId)+' '+esc(c.label)+'</option>').join('');
-  sel.value=cid;
-  sel.onchange=function(){if(kind==='type'){state.typeColumn=this.value;state.typeValue=''}else{state.conclusionColumn=this.value;state.conclusionValue=''}saveFilter(kind,this.value,'');filterPage(kind)};
+  const tabs=$(tabsId),list=$(listId);
+  if(!tabs||!list)return;
   const c=state.table.getColumn(cid),vals=c?.valueCatalog||[];
   let vid=kind==='type'?state.typeValue:state.conclusionValue;
   if(!vals.some(v=>v.valueId===vid))vid=vals[0]?.valueId||'';
   if(kind==='type')state.typeValue=vid;else state.conclusionValue=vid;
   saveFilter(kind,cid,vid);
-  anchor.innerHTML=vals.map(v=>'<button class="tab '+(v.valueId===vid?'on':'')+'" data-v2-filter="'+kind+'" data-value="'+esc(v.valueId)+'">'+esc(v.valueId)+' '+esc(v.label)+'<b>'+v.count+'</b></button>').join('');
+  tabs.innerHTML=vals.map(v=>'<button class="tab '+(v.valueId===vid?'on':'')+'" data-v2-filter="'+kind+'" data-value="'+esc(v.valueId)+'">'+esc(v.valueId)+' '+esc(v.label)+'<b>'+v.count+'</b></button>').join('');
   const chosen=vals.find(v=>v.valueId===vid);
-  $(listId).innerHTML=chosen?tableHtml(FilterEngine.byValueId(state.table,cid,vid)): '<div class="empty">该表头暂无非空取值</div>';
+  list.innerHTML=chosen?tableHtml(FilterEngine.byValueId(state.table,cid,vid)): '<div class="empty">该表头暂无非空取值</div>';
 }
 function renderTypes(){filterPage('type')}
 function renderConclusions(){filterPage('conclusion')}
@@ -493,15 +466,32 @@ function renderSaved(which){
 }
 function renderSettings(){
   const sec=$('page-settings');if(!sec)return;
-  sec.innerHTML='<div class="section-title">设置</div><div class="card">'+
-    '<div class="setting-item"><div class="setting-title">首页展示表头</div><div class="setting-desc">表头编号由数据结构稳定分配为 001、002、003……；每个表头的实际取值动态编号为 V001、V002……。</div><div id="v2Cols"></div><div class="setting-actions"><button class="sbtn primary" id="v2SaveCols">保存展示表头</button></div></div>'+
-    '<div class="setting-item"><div class="setting-title">类型 / 结论</div><div class="setting-desc">选择任意表头，再按该表头下实际存在的取值动态筛选。</div><div class="setting-actions"><label style="flex:1;min-width:150px;font-size:12px;color:var(--muted)">类型<select id="v2TS" style="width:100%;margin-top:4px"></select></label><label style="flex:1;min-width:150px;font-size:12px;color:var(--muted)">结论<select id="v2CS" style="width:100%;margin-top:4px"></select></label></div></div>'+
-    '<div class="setting-item"><div class="setting-title">数据源</div><div class="setting-desc">直接下载 SJ01 加密 stocks.txt，App 使用你输入的激活码解密，再直接解析 schema v3 JSON；不需要手工转换数据。</div><div class="setting-actions"><button class="sbtn primary" id="v2Reload">重新加载</button><button class="sbtn" id="v2Source">配置地址</button><button class="sbtn" id="v2Key">输入激活码</button></div></div>'+
-    '<div class="setting-item"><div class="setting-title">备份</div><div class="setting-desc">保存当前表格、展示列、筛选选择、收藏和点评。</div><div class="setting-actions"><button class="sbtn primary" id="v2Export">导出</button><button class="sbtn" id="v2Restore">恢复</button><button class="sbtn" id="v2Clear">清空</button></div></div>'+
-    '<div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="v2UpdateDesc">当前版本 '+APP_VERSION+'（'+APP_VERSION_CODE+'）</div><div class="setting-actions"><button class="sbtn primary" id="v2Update">检查更新</button></div></div>'+
-    '<div class="setting-item"><div class="setting-title">数据状态</div><div class="setting-desc" id="v2Status">'+(state.table?(state.table.rows.length+' 行 · '+cols().length+' 个表头'):'尚未加载')+'</div></div>'+
+  sec.innerHTML='<div class="section-title">设置</div>'+
+    '<div class="card display-settings-card">'+
+      '<div class="card-hd"><span>显示设置</span><span class="sub">页面展示与筛选</span></div>'+
+      '<div class="setting-item">'+
+        '<div class="setting-title">首页展示表头</div>'+
+        '<div class="setting-desc">每个表头使用固定 columnId 编号；勾选后决定首页显示哪些表头。</div>'+
+        '<div id="v2Cols"></div>'+
+        '<div class="setting-actions"><button class="sbtn primary" id="v2SaveCols">保存首页显示</button></div>'+
+      '</div>'+
+      '<div class="setting-item">'+
+        '<div class="setting-title">类型 / 结论默认表头</div>'+
+        '<div class="setting-desc">类型与结论页面只显示取值标签，不在页面顶部重复显示手动选择器。</div>'+
+        '<div class="setting-actions"><label style="flex:1;min-width:145px;font-size:11px;color:var(--muted)">类型<select id="v2TS" style="width:100%;margin-top:3px;min-height:36px;padding:5px 8px;font-size:12px"></select></label><label style="flex:1;min-width:145px;font-size:11px;color:var(--muted)">结论<select id="v2CS" style="width:100%;margin-top:3px;min-height:36px;padding:5px 8px;font-size:12px"></select></label></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="card-hd"><span>数据</span></div>'+
+      '<div class="setting-item"><div class="setting-title">数据源</div><div class="setting-desc">直接下载 SJ01 加密 stocks.txt，App 使用你输入的激活码解密，再直接解析 schema v3 JSON。</div><div class="setting-actions"><button class="sbtn primary" id="v2Reload">重新加载</button><button class="sbtn" id="v2Source">配置地址</button><button class="sbtn" id="v2Key">输入激活码</button></div></div>'+
+      '<div class="setting-item"><div class="setting-title">备份</div><div class="setting-desc">保存当前表格、展示列、筛选选择、收藏和点评。</div><div class="setting-actions"><button class="sbtn primary" id="v2Export">导出</button><button class="sbtn" id="v2Restore">恢复</button><button class="sbtn" id="v2Clear">清空</button></div></div>'+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="card-hd"><span>应用</span></div>'+
+      '<div class="setting-item"><div class="setting-title">应用更新</div><div class="setting-desc" id="v2UpdateDesc">当前版本 '+APP_VERSION+'（'+APP_VERSION_CODE+'）</div><div class="setting-actions"><button class="sbtn primary" id="v2Update">检查更新</button></div></div>'+
+      '<div class="setting-item"><div class="setting-title">数据状态</div><div class="setting-desc" id="v2Status">'+(state.table?(state.table.rows.length+' 行 · '+cols().length+' 个表头'):'尚未加载')+'</div></div>'+
     '</div>';
-  if(!state.table){$('v2Cols').innerHTML='<div class="empty">尚未加载数据</div>';return}
+  if(!state.table){$('v2Cols').innerHTML='<div class="empty" style="padding:18px 8px">尚未加载数据</div>';return}
   const vis=new Set(visibleCols().map(c=>c.columnId));
   $('v2Cols').innerHTML=cols().map(c=>'<label class="column-item"><input type="checkbox" data-v2-col="'+esc(c.columnId)+'" '+(vis.has(c.columnId)?'checked':'')+'><span class="column-main"><span class="column-name">'+esc(c.columnId)+' '+esc(c.label)+'</span><br><span class="column-id">'+c.valueCatalog.length+' 种实际取值</span></span></label>').join('');
   defaultFilterColumns();loadPrefs();
