@@ -223,6 +223,7 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
+    /**
      * APK 更新不再使用 Android 系统下载服务。
      *
      * 原 系统下载服务 对 GitHub Release/跨域重定向链并不稳定，设备端
