@@ -1,1 +1,32 @@
-(function(g){class ColumnManager{constructor(table){this.table=table}get(id){return this.table.getColumn(id)}values(id){const c=this.get(id);return c&&c.valueCatalog||[]}refreshCatalog(){this.table.columns.forEach(c=>{const m=new Map;this.table.rows.forEach(r=>{const x=r.cells.find(y=>y.columnId===c.columnId);if(x&&String(x.value).trim()!==''){const k=String(x.value);if(!m.has(k))m.set(k,{label:k,count:0});m.get(k).count++}});let i=1;c.valueCatalog=[...m.values()].map(v=>({valueId:'V'+String(i++).padStart(3,'0'),label:v.label,count:v.count}))})}}g.ColumnManager=ColumnManager;})(window);
+(function(g){
+class ColumnManager{
+  constructor(table){this.table=table}
+  get(id){return this.table.getColumn(id)}
+  values(id){const c=this.get(id);return c&&Array.isArray(c.valueCatalog)?c.valueCatalog:[]}
+  refreshCatalog(){
+    const storage=(typeof localStorage!=='undefined')?localStorage:null;
+    let registry={};
+    try{registry=JSON.parse(storage?.getItem('table.valueCatalog.v1')||'{}')||{}}catch(e){registry={}}
+    const tableKey=String(this.table.tableId||'default-table');
+    if(!registry[tableKey])registry[tableKey]={};
+    this.table.columns.forEach(c=>{
+      const colKey=String(c.columnId);const map=registry[tableKey][colKey]||{};
+      let max=Object.values(map).reduce((m,v)=>Math.max(m,Number(String(v).replace(/^V/i,''))||0),0);
+      const counts=new Map();
+      this.table.rows.forEach(r=>{
+        const cell=(r.cells||[]).find(x=>String(x.columnId)===String(c.columnId));
+        if(!cell)return;
+        const label=String(cell.value??'');if(!label.trim())return;
+        counts.set(label,(counts.get(label)||0)+1);
+        if(!map[label])map[label]='V'+String(++max).padStart(3,'0');
+        cell.valueId=map[label];
+      });
+      registry[tableKey][colKey]=map;
+      c.valueCatalog=[...counts.entries()].map(([label,count])=>({valueId:String(map[label]),label,count}));
+    });
+    try{storage?.setItem('table.valueCatalog.v1',JSON.stringify(registry))}catch(e){}
+    return this.table;
+  }
+}
+g.ColumnManager=ColumnManager;
+})(window);
