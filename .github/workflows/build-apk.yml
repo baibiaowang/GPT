@@ -76,6 +76,30 @@ jobs:
           echo "SIGNING_KEYSTORE_PATH=$(pwd)/signing.p12" >> "$GITHUB_ENV"
           echo "[signing] keystore restored ($(wc -c < signing.p12) bytes)"
 
+      - name: Verify live SJ01 data envelope
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://stocks-txt-file.app.workbuddy.host/stocks.txt'
+          curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 -H 'Accept-Encoding: identity' "$URL" -o live-stocks.txt
+          test -s live-stocks.txt
+          python - <<'PY'
+          import base64, pathlib
+          raw=pathlib.Path('live-stocks.txt').read_text(encoding='utf-8-sig').strip()
+          raw=''.join(raw.split())
+          raw=raw.replace('-','+').replace('_','/')
+          raw += '='*((4-len(raw)%4)%4)
+          data=base64.b64decode(raw, validate=False)
+          if len(data)<33:
+              raise SystemExit('live stocks.txt is not a valid SJ01 payload: too short')
+          header=data[:4].decode('ascii','replace')
+          version=data[4]
+          if header!='SJ01' or version!=3:
+              raise SystemExit(f'live stocks.txt header mismatch: header={header!r}, version={version}')
+          print(f'live SJ01 envelope OK: bytes={len(data)}, header={header}, version=0x{version:02x}')
+          PY
+          rm -f live-stocks.txt
+
       - name: Prepare web assets
         run: node native/inject.mjs
 
