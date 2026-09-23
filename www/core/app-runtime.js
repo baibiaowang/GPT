@@ -319,6 +319,17 @@ function getVisibleColumns(table=state.table){
   const fallback=ids.length?ids:table.columns.slice(0,Math.min(3,table.columns.length)).map(column=>column.columnId);
   return fallback.map(id=>table.getColumn(id)).filter(Boolean);
 }
+function displayValue(value,mode='list'){
+  const text=String(value??'');
+  if(mode==='list' && /^\\d{4}-\\d{2}-\\d{2}$/.test(text))return text.slice(5);
+  return text;
+}
+function displayColor(table,value,column){
+  if(column?.type!=='status')return '';
+  const colors=table?.extensions?.display?.status_color;
+  const candidate=colors&&colors[String(value)];
+  return /^#[0-9A-Fa-f]{3,8}$/.test(String(candidate||''))?String(candidate):'';
+}
 
 function selectDefaultFilterColumns(){
   const columns=getColumns();
@@ -333,7 +344,12 @@ function rowTableHtml(rows,columns=getVisibleColumns(),table=state.table,mode='n
   const body=rows.map(row=>{
     const key=table?.tableId?esc(table.tableId):'';
     return '<tr class="data-row" data-row-id="'+esc(row.rowId)+'" data-table-id="'+key+'" data-mode="'+esc(mode)+'">'+
-      columns.map(column=>'<td title="'+esc(getCell(row,column).value)+'">'+esc(getCell(row,column).value||'—')+'</td>').join('')+
+      columns.map(column=>{
+        const raw=getCell(row,column).value;
+        const color=displayColor(table,raw,column);
+        const style=color?' style="color:'+esc(color)+';font-weight:800"':'';
+        return '<td title="'+esc(raw)+'"'+style+'>'+esc(displayValue(raw,'list')||'—')+'</td>';
+      }).join('')+
     '</tr>';
   }).join('');
   return '<div class="table-scroll"><table class="data-table"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
@@ -944,8 +960,8 @@ function wireEvents(){
       if(row.dataset.mode==='saved'){
         if(renderExternalRow(tableId,rowId))return;
       }
-      const table=state.table?.tableId===tableId?state.table:state.table;
-      const found=table?.getRow(rowId);
+      const table=state.table;
+      const found=table?.tableId===tableId?table.getRow(rowId):null;
       if(found&&table)openDetail(found,table);
       return;
     }
