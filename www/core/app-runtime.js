@@ -293,7 +293,7 @@ function buildTable(payload,url){
     rows,
     meta:Object.assign({},payload.meta,{source_url:url||'',schema:3}),
     extensions:Object.fromEntries(
-      Object.entries(payload||{}).filter(([key])=>!['meta','layout','display','records'].includes(key))
+      Object.entries(payload||{}).filter(([key])=>!['meta','records'].includes(key))
     )
   });
 
