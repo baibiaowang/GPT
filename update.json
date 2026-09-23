@@ -3,13 +3,13 @@
   "versionCode": 2104,
   "published_at": "2026-09-23T03:28:34Z",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.4/app.apk",
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v2.1.4/app.apk",
   "apk_urls": [
+    "https://github.com/baibiaowang/GPT/releases/download/v2.1.4/app.apk",
     "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/2.1.4/app.apk",
     "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.4/app.apk",
     "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.4/app.apk",
-    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.4/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v2.1.4/app.apk"
+    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/2.1.4/app.apk"
   ],
-  "notes": "2.1.4：修复旧版本更新器首跳 APK 地址 404；APK 主下载改用独立镜像分支，并增加多源回退；发布流程先校验镜像成功，再发布更新清单。"
+  "notes": "2.1.4：修复旧版 1.6.x 首跳下载。兼容旧版更新器时，apk_url 使用已发布的 GitHub Release；新版本继续保留镜像回退。"
 }
