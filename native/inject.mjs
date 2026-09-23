@@ -30,7 +30,7 @@ for(const marker of legacyMarkers){
   }
 }
 const runtime=fs.readFileSync(path.join(OUT,'core','app-runtime.js'),'utf8');
-if(!/version:\s*['"]2\.1\.0['"]/.test(runtime)||!/versionCode:\s*2101/.test(runtime)){
+if(!/version:\s*['"]2\.1\.1['"]/.test(runtime)||!/versionCode:\s*2101/.test(runtime)){
   console.error('::error::runtime version is not 2.1.1 / 2101');
   process.exit(1);
 }
