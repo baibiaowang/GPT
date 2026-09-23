@@ -22,33 +22,6 @@ if (m.indexOf('uses-permission android:name="' + INSTALL_PERMISSION + '"') < 0) 
     m.slice(appIdx);
 }
 
-if (m.indexOf(MARK) < 0) {
-  const re = /android:name="(?:[A-Za-z0-9_.]*\.)?MainActivity"/;
-  const mt = re.exec(m);
-  if (!mt) {
-    console.error('[patch-manifest] cannot find android:name=".MainActivity"');
-    process.exit(1);
-  }
-  const idx = m.indexOf('</activity>', mt.index);
-  if (idx < 0) {
-    console.error('[patch-manifest] cannot find </activity> after MainActivity');
-    process.exit(1);
-  }
-
-  const inject = [
-    '',
-    '            <!-- ' + MARK + ': 允许从文件管理器 / 浏览器用本应用打开 txt -->',
-    '            <intent-filter>',
-    '                <action android:name="android.intent.action.VIEW" />',
-    '                <category android:name="android.intent.category.DEFAULT" />',
-    '                <category android:name="android.intent.category.BROWSABLE" />',
-    '                <data android:mimeType="text/plain" />',
-    '            </intent-filter>',
-    '        ',
-  ].join('\n');
-
-  m = m.slice(0, idx) + inject + m.slice(idx);
-}
 
 const xmlDir = 'android/app/src/main/res/xml';
 fs.mkdirSync(xmlDir, {recursive: true});
