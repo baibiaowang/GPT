@@ -258,7 +258,7 @@ jobs:
               "versionCode": code,
               "published_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               "repo": repo,
-              "apk_url": f"https://raw.githubusercontent.com/{repo}@apk/releases/{version}/app.apk",
+              "apk_url": f"https://raw.githubusercontent.com/{repo}/apk/releases/{version}/app.apk",
               "apk_urls": [
                   f"https://github.com/{repo}/releases/download/v{version}/app.apk",
                   f"https://cdn.jsdelivr.net/gh/{repo}@apk/releases/{version}/app.apk",
