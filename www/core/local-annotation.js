@@ -4,8 +4,8 @@
 class LocalAnnotation{
   constructor(storage){
     this.storage=storage||localStorage;
-    this.favKey='table.annotations.favorites.v2';
-    this.commentKey='table.annotations.comments.v2';
+    this.favKey='table.annotations.favorites.v1';
+    this.commentKey='table.annotations.comments.v1';
   }
 
   load(key,fallback){
