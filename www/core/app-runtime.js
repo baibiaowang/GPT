@@ -714,7 +714,7 @@ function restoreBackup(){
     const file=input.files?.[0];
     if(!file)return;
     const reader=new FileReader();
-    reader.onload=()=>{
+    reader.onload=async()=>{
       try{await applyBackup(JSON.parse(reader.result))}
       catch(error){toast('恢复失败：'+error.message,2800)}
     };
