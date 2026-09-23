@@ -292,7 +292,7 @@ jobs:
           APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
           CURRENT_DIGEST=$("${BT}apksigner" verify --print-certs "$APK_SRC" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
           test -n "$CURRENT_DIGEST"
-          for PREVIOUS_VERSION in 2.1.6 1.6.4; do
+          for PREVIOUS_VERSION in 2.1.7 2.1.6 1.6.4; do
             curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
               "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${PREVIOUS_VERSION}/app.apk" \
               -o "/tmp/previous-${PREVIOUS_VERSION}.apk"
@@ -402,13 +402,44 @@ jobs:
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update.json
-          if git diff --cached --quiet; then
-            echo "update.json already current"
-          else
+
+          # update.json 写回 main 时可能与非构建提交并发。
+          # 每次推送前重新同步 main；远端若在推送期间前进则重试。
+          # 若 main 已出现更新版本，禁止旧构建覆盖新版本清单。
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            LATEST_MAIN="${git rev-parse origin/main}"
+            LATEST_VERSION="${git show "$LATEST_MAIN:www/core/app-runtime.js" | sed -n "s/.*version:'\\([^'\\]*\\)'.*/\\1/p" | head -1}"
+            LATEST_CODE="${git show "$LATEST_MAIN:www/core/app-runtime.js" | sed -n 's/.*versionCode:\\([0-9]*\\).*/\\1/p' | head -1}"
+            if [ "$LATEST_VERSION" != "$APP_VERSION_NAME" ] || [ "$LATEST_CODE" != "$APP_VERSION_CODE" ]; then
+              echo "::error::main 已出现更新版本，拒绝覆盖更新清单。"
+              exit 1
+            fi
+
+            git reset --hard "$LATEST_MAIN"
+            cp "$GITHUB_WORKSPACE/update.json" update.json.tmp
+            mv update.json.tmp update.json
+            git add update.json
+
+            if git diff --cached --quiet; then
+              echo "update.json already current"
+              break
+            fi
+
             git commit -m "发布更新清单 ${APP_VERSION_NAME}"
-            git push origin HEAD:main
-          fi
+            if git push origin HEAD:main; then
+              echo "update.json published on attempt $attempt"
+              break
+            fi
+
+            echo "main 在推送期间发生变化，第 ${D}attempt 次重试。"
+            git reset --hard "$LATEST_MAIN"
+            if [ "$attempt" = "5" ]; then
+              echo "::error::连续 5 次更新清单推送冲突，停止发布。"
+              exit 1
+            fi
+            sleep 1
+          done
       - name: Verify published update manifest
         shell: bash
         run: |
