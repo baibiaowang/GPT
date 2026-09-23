@@ -1089,16 +1089,34 @@ async function t20MigrateLegacy(){
   let fav=[];try{fav=JSON.parse(localStorage.getItem('sj.fav.v3')||'[]')}catch(e){}
   let cm={};try{cm=JSON.parse(localStorage.getItem('sj.cmt.v3')||'{}')}catch(e){}
   let archives={};try{archives=JSON.parse(localStorage.getItem('sj.archivedRecords.v1')||'{}')}catch(e){}
+  try{
+    const oldIdb=await IDB.get('savedArchives.v1');
+    if(oldIdb&&typeof oldIdb==='object')archives=Object.assign({},oldIdb,archives);
+  }catch(e){}
   const codeCol=state.table.columns.find(c=>/代码/.test(c.label)||/^code$/i.test(c.key));
   const catCol=state.table.columns.find(c=>/分类|类型/.test(c.label)||/^category$/i.test(c.key));
   const live=new Map();
-  state.table.rows.forEach(r=>{const code=codeCol?t20Clean(v2Cell(r,codeCol.columnId).value):'';const cat=catCol?t20Clean(v2Cell(r,catCol.columnId).value):'';if(code)live.set(code+'|'+cat,r)});
+  state.table.rows.forEach(r=>{
+    const code=codeCol?t20Clean(v2Cell(r,codeCol.columnId).value):'';
+    const cat=catCol?t20Clean(v2Cell(r,catCol.columnId).value):'';
+    if(code)live.set(code+'|'+cat,r);
+  });
   const keys=new Set([...(Array.isArray(fav)?fav:[]),...Object.keys(cm||{}),...Object.keys(archives||{})]);
   for(const k of keys){
     const row=live.get(k);
-    if(row){if(Array.isArray(fav)&&fav.includes(k))gAnn.favorite(state.table,row);if(cm[k])gAnn.setComment(state.table,row,cm[k]);continue}
+    if(row){
+      if(Array.isArray(fav)&&fav.includes(k)&&!gAnn.isFavorite(state.table,row))gAnn.favorite(state.table,row);
+      if(cm[k]&&!gAnn.comment(state.table,row.rowId))gAnn.setComment(state.table,row,cm[k]);
+      continue;
+    }
     const a=archives[k],rec=a&&a.record;
-    if(rec){const snap=t20LegacyRecordToRow(rec);if(snap){if(Array.isArray(fav)&&fav.includes(k))gAnn.favorite(state.table,snap);if(cm[k])gAnn.setComment(state.table,snap,cm[k])}}
+    if(rec){
+      const snap=t20LegacyRecordToRow(rec);
+      if(snap){
+        if(Array.isArray(fav)&&fav.includes(k)&&!gAnn.isFavorite(state.table,snap))gAnn.favorite(state.table,snap);
+        if(cm[k]&&!gAnn.comment(state.table,snap.rowId))gAnn.setComment(state.table,snap,cm[k]);
+      }
+    }
   }
   localStorage.setItem('table.migrated.2.0.1','1');
 }
