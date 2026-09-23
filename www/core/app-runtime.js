@@ -2,8 +2,8 @@
 'use strict';
 
 const APP={
-  version:'2.1.7',
-  versionCode:2107,
+  version:'2.1.8',
+  versionCode:2108,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
