@@ -2,14 +2,16 @@
 'use strict';
 
 const APP={
-  version:'2.1.2',
-  versionCode:2102,
+  version:'2.1.3',
+  versionCode:2103,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
-    'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
+    'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
+    'https://fastly.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
+    'https://gcore.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
   ],
-  releaseApk:'https://github.com/baibiaowang/GPT/releases/download/v2.1.2/app.apk'
+  releaseApk:'https://github.com/baibiaowang/GPT/releases/download/v2.1.3/app.apk'
 };
 
 const LS={
@@ -876,53 +878,119 @@ g.__tableApkDownloadProgress=(percent,status,message)=>{
 };
 
 g.__tableApkDownloadComplete=()=>{
+  const waiter=g.__tableApkDownloadWaiter;
+  g.__tableApkDownloadWaiter=null;
+  if(typeof waiter==='function'){
+    waiter(true,'');
+    return;
+  }
   if($('updateDesc'))$('updateDesc').textContent='APK 已下载完成，正在打开安装界面。';
   toast('下载完成，正在安装',2400);
 };
 
 g.__tableApkDownloadFailed=message=>{
   const text=String(message||'APK 下载失败');
+  const waiter=g.__tableApkDownloadWaiter;
+  g.__tableApkDownloadWaiter=null;
+  if(typeof waiter==='function'){
+    waiter(false,text);
+    return;
+  }
   if($('updateDesc'))$('updateDesc').textContent=text;
   toast(text,3000);
 };
+
+function bustApkUrl(url,versionCode){
+  const text=String(url||'').trim();
+  if(!text)return'';
+  const joiner=text.includes('?')?'&':'?';
+  return text+joiner+'v='+encodeURIComponent(String(versionCode||''));
+}
+
+async function downloadApkWithFallback(urls,remoteName,remoteCode){
+  const list=[...new Set((Array.isArray(urls)?urls:[]).map(url=>bustApkUrl(url,remoteCode)).filter(Boolean))];
+  if(!list.length)throw new Error('更新清单缺少 APK 下载地址');
+
+  if(!g.AndroidNative?.downloadApk){
+    window.open(list[0],'_blank');
+    return;
+  }
+
+  if($('updateProgress'))$('updateProgress').classList.add('show');
+  let lastError='APK 下载失败';
+  for(const apk of list){
+    try{
+      await new Promise((resolve,reject)=>{
+        g.__tableApkDownloadWaiter=(ok,message)=>{
+          g.__tableApkDownloadWaiter=null;
+          ok?resolve():reject(new Error(message||'APK 下载失败'));
+        };
+        try{
+          AndroidNative.downloadApk(apk,'table-converter-'+remoteName+'.apk');
+        }catch(error){
+          g.__tableApkDownloadWaiter=null;
+          reject(error);
+        }
+      });
+      return;
+    }catch(error){
+      lastError=String(error?.message||error||lastError);
+    }
+  }
+  throw new Error(lastError);
+}
 
 async function checkUpdate(){
   const desc=$('updateDesc');
   if(desc)desc.textContent='正在检查最新版本…';
   const errors=[];
+  const manifests=[];
 
   for(const source of APP.updateSources){
     try{
       const manifest=await fetchUpdateManifest(source);
       const remoteCode=Number(manifest?.versionCode||0);
       if(!remoteCode)throw new Error('更新清单缺少 versionCode');
-
-      if(remoteCode>APP.versionCode){
-        const remoteName=String(manifest?.version||remoteCode);
-        if(desc)desc.textContent='发现新版本 '+remoteName;
-        if(!confirm('发现新版本 '+remoteName+'，现在下载并安装？'))return;
-
-        const apk=String(manifest?.apk_url||APP.releaseApk);
-        if(g.AndroidNative?.downloadApk){
-          if($('updateProgress'))$('updateProgress').classList.add('show');
-          AndroidNative.downloadApk(apk,'table-converter-'+remoteName+'.apk');
-        }else{
-          window.open(apk,'_blank');
-        }
-        return;
-      }
-
-      if(desc)desc.textContent='当前已是最新版本 '+APP.version+'（'+APP.versionCode+'） · '+String(manifest?.published_at||'');
-      toast('当前已是最新版本',2200);
-      return;
+      manifests.push({source,manifest,remoteCode});
     }catch(error){
       errors.push(source.replace(/^https?:\/\//,'').slice(0,50)+' → '+error.message);
     }
   }
 
-  const message='检查更新失败：'+errors.join('；');
-  if(desc)desc.textContent=message;
-  toast('检查更新失败',3000);
+  if(!manifests.length){
+    const message='检查更新失败：'+errors.join('；');
+    if(desc)desc.textContent=message;
+    toast('检查更新失败',3000);
+    return;
+  }
+
+  manifests.sort((a,b)=>b.remoteCode-a.remoteCode);
+  const best=manifests[0];
+  const manifest=best.manifest;
+  const remoteCode=best.remoteCode;
+
+  if(remoteCode>APP.versionCode){
+    const remoteName=String(manifest?.version||remoteCode);
+    if(desc)desc.textContent='发现新版本 '+remoteName;
+    if(!confirm('发现新版本 '+remoteName+'，现在下载并安装？'))return;
+
+    const urls=[];
+    if(Array.isArray(manifest?.apk_urls))urls.push(...manifest.apk_urls);
+    if(manifest?.apk_url)urls.push(manifest.apk_url);
+    urls.push(APP.releaseApk);
+
+    try{
+      await downloadApkWithFallback(urls,remoteName,remoteCode);
+    }catch(error){
+      const message='APK 下载失败：'+String(error?.message||error);
+      if(desc)desc.textContent=message;
+      toast(message,3200);
+    }
+    return;
+  }
+
+  if(desc)desc.textContent='当前已是最新版本 '+APP.version+'（'+APP.versionCode+'） · '+String(manifest?.published_at||'');
+  toast('当前已是最新版本',2200);
 }
 
 function copyText(text){
