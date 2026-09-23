@@ -13,16 +13,16 @@ const APP={
 };
 
 const LS={
-  urls:'table.source.urls.v1',
-  key:'table.source.activation.v1',
+  urls:'sj.urls.v4',
+  key:'sj.activation.v4',
   layout:'table.layout.v3',
   filters:'table.filters.v1'
 };
 
 const IDB={
-  db:'table-converter-gpt',
+  db:'stockjudge-gpt',
   store:'kv',
-  cacheKey:'table.remote.cache.v1'
+  cacheKey:'generic.table.cache.v3'
 };
 
 const state={
@@ -179,12 +179,12 @@ function saveFilter(kind,columnId,valueId){
 
 function readCatalogRegistry(){
   let registry={};
-  try{registry=JSON.parse(localStorage.getItem('table.column.ids.v1')||'{}')||{}}catch(e){}
+  try{registry=JSON.parse(localStorage.getItem('table.columnIds.v1')||'{}')||{}}catch(e){}
   return registry;
 }
 
 function writeCatalogRegistry(registry){
-  try{localStorage.setItem('table.column.ids.v1',JSON.stringify(registry))}catch(e){}
+  try{localStorage.setItem('table.columnIds.v1',JSON.stringify(registry))}catch(e){}
 }
 
 function schemaColumns(payload){
@@ -292,10 +292,9 @@ function buildTable(payload,url){
     columns,
     rows,
     meta:Object.assign({},payload.meta,{source_url:url||'',schema:3}),
-    extensions:{
-      layout:payload.layout||{},
-      display:payload.display||{}
-    }
+    extensions:Object.fromEntries(
+      Object.entries(payload||{}).filter(([key])=>!['meta','layout','display','records'].includes(key))
+    )
   });
 
   new ColumnManager(table).refreshCatalog();
@@ -717,7 +716,7 @@ async function clearData(){
   try{await idbDelete(IDB.cacheKey)}catch(e){}
   localStorage.removeItem(LS.layout);
   localStorage.removeItem(LS.filters);
-  localStorage.removeItem('table.column.ids.v1');
+  localStorage.removeItem('table.columnIds.v1');
   localStorage.removeItem('table.valueCatalog.v1');
   try{annotations.clear()}catch(e){}
   state.table=null;
