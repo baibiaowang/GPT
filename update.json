@@ -1,8 +1,8 @@
 {
-  "version": "2.1.0",
-  "versionCode": 2100,
+  "version": "2.1.1",
+  "versionCode": 2101,
   "published_at": "2026-09-23",
   "repo": "baibiaowang/GPT",
-  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v2.1.0/app.apk",
-  "notes": "2.1.0：完成通用表格运行时重构；移除旧 v2/v20 股票专用界面与筛选代码；收藏与点评保存完整行快照；类型/结论默认表头统一在设置中配置。"
+  "apk_url": "https://github.com/baibiaowang/GPT/releases/download/v2.1.1/app.apk",
+  "notes": "2.1.1：修正多行 Base64 的 SJ01 数据读取；严格校验六类标准 schema v3 的顶层结构；保留 records 非布局字段（如 judge）。"
 }
