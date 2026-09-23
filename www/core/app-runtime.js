@@ -403,7 +403,7 @@ function stableRowIdentity(table,row){
    * 通用表若没有任何可识别稳定主键，只能退回整行 hash。
    * 对这类数据，生产端应提供 records[].rowId/id，才能保证内容变化后仍稳定。
    */
-  return 'row:'+hash(values.join('\\u241f'));
+  return 'row:'+hash(values.join('\u241f'));
 }
 
 function makeRowId(record,table,values){
@@ -449,7 +449,7 @@ function buildTable(payload,url){
     if(values.every(value=>!clean(value)))continue;
     let rowId=makeRowId(record,{columns},values);
     if(seenIds.has(rowId)){
-      const collisionSeed=values.map(value=>String(value??'')).join('\\u241f');
+      const collisionSeed=values.map(value=>String(value??'')).join('\u241f');
       rowId=rowId+'-'+hash(collisionSeed);
     }
     seenIds.add(rowId);
