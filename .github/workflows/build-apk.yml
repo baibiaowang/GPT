@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: gpt-build-apk-v215
+  group: gpt-build-apk-v216
   cancel-in-progress: true
 
 
@@ -40,8 +40,8 @@ jobs:
       - name: Set release version
         run: |
           set -euo pipefail
-          CODE=2105
-          NAME="2.1.5"
+          CODE=2106
+          NAME="2.1.6"
           echo "APP_VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "version -> code=$CODE name=$NAME"
@@ -203,18 +203,18 @@ jobs:
           CURRENT_DIGEST=$("${BT}apksigner" verify --print-certs "$APK_SRC" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
           test -n "$CURRENT_DIGEST"
           curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
-            "https://github.com/${GITHUB_REPOSITORY}/releases/download/v2.1.4/app.apk" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/v2.1.5/app.apk" \
             -o /tmp/previous-app.apk
           PREVIOUS_DIGEST=$("${BT}apksigner" verify --print-certs /tmp/previous-app.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
           test -n "$PREVIOUS_DIGEST"
           echo "Current APK cert:  $CURRENT_DIGEST"
-          echo "v2.1.4 APK cert:   $PREVIOUS_DIGEST"
+          echo "v2.1.5 APK cert:   $PREVIOUS_DIGEST"
           test "$CURRENT_DIGEST" = "$PREVIOUS_DIGEST"
           echo "Release signing continuity verified."
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stock-judge-gpt-v2.1.5-apk
+          name: stock-judge-gpt-v2.1.6-apk
           path: dist/app.apk
           if-no-files-found: error
           retention-days: 30
@@ -283,7 +283,7 @@ jobs:
                   f"https://gcore.jsdelivr.net/gh/{repo}@apk/releases/{version}/app.apk",
                   f"https://github.com/{repo}/releases/download/v{version}/app.apk",
               ],
-              "notes": "2.1.5：APK 更新改为应用内 HTTP 下载，手动处理 HTTPS 重定向、临时文件与安装。",
+              "notes": "2.1.6：修复部分 Android 安装器拿不到 content:// APK 读取授权导致下载完成却无法覆盖安装的问题。",
           }
 
           with open("update.json", "w", encoding="utf-8") as f:
