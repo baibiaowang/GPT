@@ -1,12 +1,1 @@
-export class FilterEngine {
-  static byColumn(rows, columnId, value) {
-    return rows.filter(row => {
-      const cell = row.cells.find(c => c.columnId === columnId);
-      return cell?.value === value;
-    });
-  }
-
-  static values(rows, columnId) {
-    return [...new Set(rows.map(row => row.cells.find(c => c.columnId === columnId)?.value).filter(Boolean))];
-  }
-}
+(function(g){class FilterEngine{static uniqueValues(table,columnId){const c=table.getColumn(columnId);return c&&c.valueCatalog||[]}static byValue(table,columnId,value){return table.rows.filter(r=>String((r.cells.find(c=>c.columnId===columnId)||{}).value)===String(value))}}g.FilterEngine=FilterEngine;})(window);
