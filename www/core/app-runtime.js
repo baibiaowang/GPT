@@ -2,14 +2,14 @@
 'use strict';
 
 const APP={
-  version:'2.1.0',
-  versionCode:2100,
+  version:'2.1.1',
+  versionCode:2101,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
     'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
   ],
-  releaseApk:'https://github.com/baibiaowang/GPT/releases/download/v2.1.0/app.apk'
+  releaseApk:'https://github.com/baibiaowang/GPT/releases/download/v2.1.1/app.apk'
 };
 
 const LS={
