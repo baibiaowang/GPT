@@ -78,7 +78,13 @@ function hexBytes(hex){
 }
 
 function b64Bytes(value){
-  const binary=atob(String(value).replace(/[^A-Za-z0-9+/=]/g,''));
+  let text=String(value??'').replace(/^\\uFEFF/,'').trim();
+  text=text.replace(/-/g,'+').replace(/_/g,'/');
+  const match=text.match(/[A-Za-z0-9+/=]{40,}/g);
+  if(match?.length)text=match.sort((a,b)=>b.length-a.length)[0];
+  text=text.replace(/[^A-Za-z0-9+/=]/g,'');
+  while(text.length%4)text+='=';
+  const binary=atob(text);
   const out=new Uint8Array(binary.length);
   for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);
   return out;
