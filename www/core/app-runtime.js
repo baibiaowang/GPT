@@ -78,10 +78,15 @@ function hexBytes(hex){
 }
 
 function b64Bytes(value){
-  let text=String(value??'').replace(/^\\uFEFF/,'').trim();
+  let text=String(value??'').replace(/^\uFEFF/,'').trim();
+  text=text.replace(/^data:[^,]*,/i,'');
+  text=text.replace(/^['"]|['"]$/g,'');
+  if(text.slice(0,4)==='SJ01'){
+    const raw=new TextEncoder().encode(text);
+    return raw;
+  }
   text=text.replace(/-/g,'+').replace(/_/g,'/');
-  const match=text.match(/[A-Za-z0-9+/=]{40,}/g);
-  if(match?.length)text=match.sort((a,b)=>b.length-a.length)[0];
+  text=text.replace(/\s+/g,'');
   text=text.replace(/[^A-Za-z0-9+/=]/g,'');
   while(text.length%4)text+='=';
   const binary=atob(text);
@@ -116,6 +121,12 @@ async function decryptSJ01(encoded){
   try{payload=JSON.parse(text)}catch(e){throw new Error('解密成功，但明文不是 JSON')}
   if(!payload||typeof payload!=='object')throw new Error('明文 JSON 不是对象');
   if(Number(payload.meta?.schema)!==3)throw new Error('明文 JSON schema 必须为 3');
+  if(!payload.layout||!Array.isArray(payload.layout.list_columns)||!Array.isArray(payload.layout.detail_columns)){
+    throw new Error('schema v3 缺少完整 layout.list_columns / detail_columns');
+  }
+  if(!payload.display||typeof payload.display!=='object')throw new Error('schema v3 缺少 display');
+  if(!payload.judge_tables||typeof payload.judge_tables!=='object')throw new Error('schema v3 缺少 judge_tables');
+  if(!payload.announcements||typeof payload.announcements!=='object')throw new Error('schema v3 缺少 announcements');
   if(!Array.isArray(payload.records))throw new Error('schema v3 缺少 records');
   return payload;
 }
@@ -280,7 +291,10 @@ function buildTable(payload,url){
         columnId:column.columnId,
         value:values[index],
         type:column.type
-      }))
+      })),
+      recordData:Object.fromEntries(
+        Object.entries(record||{}).filter(([key])=>!columns.some(column=>column.key===key))
+      )
     });
   }
 
