@@ -275,6 +275,75 @@ button{cursor:pointer}
   resize:vertical;
 }
 .comment-editor .sbtn{margin-top:8px;width:100%}
+.status-stats{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin:0 0 10px;
+}
+.status-stat{
+  min-width:0;
+  background:var(--card);
+  border-radius:14px;
+  padding:11px 10px;
+  box-shadow:var(--shadow);
+  text-align:center;
+  border:1px solid var(--line);
+}
+.status-stat-n{
+  display:block;
+  font-size:22px;
+  line-height:1.1;
+  font-weight:850;
+}
+.status-stat-l{
+  display:block;
+  margin-top:4px;
+  font-size:11px;
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.setting-readonly{
+  min-height:37px;
+  margin-top:3px;
+  padding:6px 9px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--bg);
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:1px;
+}
+.setting-readonly span{
+  font-size:10px;
+  color:var(--muted);
+}
+.setting-readonly strong{
+  font-size:12px;
+  line-height:1.2;
+}
+.setting-readonly small{
+  font-size:9px;
+  color:var(--muted);
+}
+.url-link{
+  display:inline-flex;
+  align-items:center;
+  max-width:100%;
+  color:var(--brand);
+  text-decoration:none;
+  font-weight:800;
+  white-space:nowrap;
+}
+.url-link:active,.url-link:hover{text-decoration:underline}
+.data-table tbody .url-link{
+  padding:5px 8px;
+  border-radius:9px;
+  background:var(--brand-soft);
+}
 .saved-group-title{
   padding:11px 4px 4px;
   font-size:11px;
