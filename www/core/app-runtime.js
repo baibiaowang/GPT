@@ -36,6 +36,7 @@ const state={
   conclusionColumn:'',
   typeValue:'',
   conclusionValue:'',
+  kind:'',
   savedEntries:new Map()
 };
 
@@ -311,7 +312,9 @@ function getColumns(table=state.table){
 
 function getVisibleColumns(table=state.table){
   if(!table)return[];
-  const saved=loadDisplayPrefs();
+  let prefs={};
+  try{prefs=JSON.parse(localStorage.getItem(LS.layout)||'{}')||{}}catch(e){}
+  const saved=Array.isArray(prefs[table.tableId])?prefs[table.tableId]:[];
   const ids=saved.length?saved:table.columns.filter(column=>column.visible).map(column=>column.columnId);
   const fallback=ids.length?ids:table.columns.slice(0,Math.min(3,table.columns.length)).map(column=>column.columnId);
   return fallback.map(id=>table.getColumn(id)).filter(Boolean);
@@ -371,7 +374,9 @@ function renderTypes(){renderFilter('type')}
 function renderConclusions(){renderFilter('conclusion')}
 
 function entryColumns(entry){
-  return Array.isArray(entry?.columns)?entry.columns:[];
+  if(Array.isArray(entry?.columns))return entry.columns;
+  if(Array.isArray(entry?.snapshot?.columns))return entry.snapshot.columns;
+  return [];
 }
 
 function entryTable(entry){
@@ -393,9 +398,7 @@ function renderSaved(kind){
   const target=$(kind==='favorites'?'favList':'commentList');
   if(!target)return;
 
-  const entries=state.table?
-    (kind==='favorites'?annotations.favorites(state.table.tableId):annotations.comments(state.table.tableId)):
-    (kind==='favorites'?annotations.allFavorites():annotations.allComments());
+  const entries=kind==='favorites'?annotations.allFavorites():annotations.allComments();
 
   state.savedEntries.clear();
   for(const entry of entries)state.savedEntries.set(String(entry.tableId)+'::'+String(entry.rowId),entry);
