@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: bridge-rss-v4
+  group: bridge-rss-v3
   cancel-in-progress: true
 
 env:
@@ -46,7 +46,7 @@ jobs:
           const app=fs.readFileSync('app.js','utf8');
           const version=String(pkg.version||'').trim();
           const versionCode=Number(pkg.versionCode||0);
-          if(!/^4\.\d+\.\d+$/.test(version))throw new Error('RSS package version must be 4.x.y');
+          if(!/^3\.\d+\.\d+$/.test(version))throw new Error('RSS package version must be 4.x.y');
           if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('RSS package versionCode invalid');
           if(cap.appId!=='com.baibiaowang.stockjudge')throw new Error('RSS applicationId mismatch');
           if(!app.includes("APP_VERSION='"+version+"'")||!app.includes('APP_VERSION_CODE='+versionCode))throw new Error('RSS app.js version constants incorrect');
