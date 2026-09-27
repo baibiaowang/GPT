@@ -114,7 +114,7 @@ jobs:
           node --check app.js
           cmp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java
           git diff --check
-          ! grep -RInE '3\\.0\\.2|3002|var\\(--brand\\)|agu-ann-feed\\.app\\.workbuddy\\.host' --exclude-dir=.git .
+          ! grep -RInE '3\\.0\\.2|3002|var\\(--brand\\)|agu-ann-feed\\.app\\.workbuddy\\.host' --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.gradle .
 
       - name: Configure fixed release signing
         working-directory: rss-source
