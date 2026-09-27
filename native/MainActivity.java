@@ -256,7 +256,7 @@ public class MainActivity extends BridgeActivity {
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(30000);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "ZizhiRSS-Updater/4.0.0");
+                conn.setRequestProperty("User-Agent", "ZizhiRSS-Updater/3.0.12");
                 conn.setRequestProperty("Accept", "application/json,text/plain,application/rss+xml,application/atom+xml,application/feed+json,*/*");
                 conn.setRequestProperty("Accept-Encoding", "identity");
                 conn.setRequestProperty("Cache-Control", "no-cache");
