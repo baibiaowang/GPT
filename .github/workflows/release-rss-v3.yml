@@ -38,9 +38,9 @@ jobs:
           const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
           const cap=JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
           const app=fs.readFileSync('app.js','utf8');
-          if(pkg.version!=='3.0.1')throw new Error('RSS package version != 3.0.1');
+          if(pkg.version!=='3.0.2')throw new Error('RSS package version != 3.0.2');
           if(cap.appId!=='com.baibiaowang.stockjudge')throw new Error('RSS applicationId must remain com.baibiaowang.stockjudge');
-          if(!app.includes("APP_VERSION='3.0.1'")||!app.includes('APP_VERSION_CODE=3001'))throw new Error('RSS 3.0 constants incorrect');
+          if(!app.includes("APP_VERSION='3.0.2'")||!app.includes('APP_VERSION_CODE=3002'))throw new Error('RSS 3.0 constants incorrect');
           NODE
 
       - name: Setup Node
@@ -167,22 +167,22 @@ jobs:
             git checkout --orphan apk
             git rm -rf . >/dev/null 2>&1 || true
           fi
-          mkdir -p releases/3.0.1
-          cp "$GITHUB_WORKSPACE/rss-source/dist/app.apk" releases/3.0.1/app.apk
+          mkdir -p releases/3.0.2
+          cp "$GITHUB_WORKSPACE/rss-source/dist/app.apk" releases/3.0.2/app.apk
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add releases/3.0.1/app.apk
-          if ! git diff --cached --quiet; then git commit -m '发布自制RSS 3.0.1 升级 APK'; git push origin HEAD:apk; fi
+          git add releases/3.0.2/app.apk
+          if ! git diff --cached --quiet; then git commit -m '发布自制RSS 3.0.2 升级 APK'; git push origin HEAD:apk; fi
 
-      - name: Create or refresh GPT Release v3.0.1
+      - name: Create or refresh GPT Release v3.0.2
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view v3.0.1 >/dev/null 2>&1; then
-            gh release upload v3.0.1 rss-source/dist/app.apk --clobber
+          if gh release view v3.0.2 >/dev/null 2>&1; then
+            gh release upload v3.0.2 rss-source/dist/app.apk --clobber
           else
-            gh release create v3.0.1 rss-source/dist/app.apk --title '自制RSS 3.0.1' --notes '自制RSS 3.0：由旧股票判断机正式切换为 RSS 阅读模式。'
+            gh release create v3.0.2 rss-source/dist/app.apk --title '自制RSS 3.0.2' --notes '自制RSS 3.0：由旧股票判断机正式切换为 RSS 阅读模式。'
           fi
 
       - name: Generate compatible update.json
@@ -194,17 +194,17 @@ jobs:
           from datetime import datetime,timezone
           p='dist/app.apk';repo=os.environ['GITHUB_REPOSITORY']
           data={
-            'version':'3.0.1','versionCode':3001,
+            'version':'3.0.2','versionCode':3002,
             'published_at':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
             'repo':'baibiaowang/GPT','apk_size':os.path.getsize(p),
             'sha256':hashlib.sha256(open(p,'rb').read()).hexdigest(),
-            'apk_url':f'https://raw.githubusercontent.com/{repo}/apk/releases/3.0.1/app.apk',
+            'apk_url':f'https://raw.githubusercontent.com/{repo}/apk/releases/3.0.2/app.apk',
             'apk_urls':[
-              f'https://raw.githubusercontent.com/{repo}/apk/releases/3.0.1/app.apk',
-              f'https://github.com/{repo}/releases/download/v3.0.1/app.apk',
-              f'https://cdn.jsdelivr.net/gh/{repo}@apk/releases/3.0.1/app.apk',
-              f'https://fastly.jsdelivr.net/gh/{repo}@apk/releases/3.0.1/app.apk',
-              f'https://gcore.jsdelivr.net/gh/{repo}@apk/releases/3.0.1/app.apk'],
+              f'https://raw.githubusercontent.com/{repo}/apk/releases/3.0.2/app.apk',
+              f'https://github.com/{repo}/releases/download/v3.0.2/app.apk',
+              f'https://cdn.jsdelivr.net/gh/{repo}@apk/releases/3.0.2/app.apk',
+              f'https://fastly.jsdelivr.net/gh/{repo}@apk/releases/3.0.2/app.apk',
+              f'https://gcore.jsdelivr.net/gh/{repo}@apk/releases/3.0.2/app.apk'],
             'notes':'自制RSS 3.0：旧股票判断机正式切换为 RSS 模式。'}
           json.dump(data,open('gpt-update.json','w',encoding='utf-8'),ensure_ascii=False,indent=2);open('gpt-update.json','a',encoding='utf-8').write('\n')
           PY
@@ -230,15 +230,15 @@ jobs:
           python - <<'PY'
           import json
           m=json.load(open('/tmp/live-update.json',encoding='utf-8'))
-          assert m['version']=='3.0.1'
-          assert int(m['versionCode'])==3001
+          assert m['version']=='3.0.2'
+          assert int(m['versionCode'])==3002
           assert m['repo']=='baibiaowang/GPT'
           assert len(m['sha256'])==64
           assert '/GPT/' in m['apk_url']
           print('Old 2.1.x compatible update manifest verified.')
           PY
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
-# Retry after Android launcher icon resource script syntax fix.
+# Retry after Android launcher icon and UTF-8 RSS chunk reading fixes.
 
 # Retry after RSS native bridge compile fix.
 
