@@ -1,0 +1,238 @@
+name: Bridge RSS 3.0 Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-rss-v3.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bridge-rss-v3
+  cancel-in-progress: true
+
+env:
+  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GPT bridge repository
+        uses: actions/checkout@v4
+
+      - name: Checkout RSS 3.0 source
+        run: git clone --depth 1 https://github.com/baibiaowang/RSS.git rss-source
+
+      - name: Validate RSS 3.0 identity
+        working-directory: rss-source
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+          const cap=JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
+          const app=fs.readFileSync('app.js','utf8');
+          if(pkg.version!=='3.0.0')throw new Error('RSS package version != 3.0.0');
+          if(cap.appId!=='com.baibiaowang.stockjudge')throw new Error('RSS applicationId must remain com.baibiaowang.stockjudge');
+          if(!app.includes("APP_VERSION='3.0.0'")||!app.includes('APP_VERSION_CODE=3000'))throw new Error('RSS 3.0 constants incorrect');
+          NODE
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Restore old signing material
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          missing=''
+          [ -z "${ANDROID_KEYSTORE_BASE64:-}" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
+          [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -z "${ANDROID_KEY_ALIAS:-}" ] && missing="$missing ANDROID_KEY_ALIAS"
+          [ -z "${ANDROID_KEY_PASSWORD:-}" ] && missing="$missing ANDROID_KEY_PASSWORD"
+          if [ -n "$missing" ]; then echo "::error::旧股票判断机签名 secrets 不完整:$missing"; exit 1; fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > signing.p12
+          echo "SIGNING_KEYSTORE_PATH=$PWD/signing.p12" >> "$GITHUB_ENV"
+
+      - name: Install RSS dependencies
+        working-directory: rss-source
+        run: npm install --no-audit --no-fund
+
+      - name: Prepare mobile web
+        working-directory: rss-source
+        run: node native/inject.mjs
+
+      - name: Add Android
+        working-directory: rss-source
+        run: npx cap add android
+
+      - name: Inject RSS native bridge
+        working-directory: rss-source
+        run: |
+          set -euo pipefail
+          mkdir -p android/app/src/main/java/com/baibiaowang/stockjudge
+          cp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java
+          node native/patch-manifest.mjs
+          node native/patch-version.mjs
+
+      - name: Configure fixed release signing
+        working-directory: rss-source
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const p='android/app/build.gradle';
+          let s=fs.readFileSync(p,'utf8');
+          if(!/signingConfigs\s*\{/.test(s)){
+            s=s.replace(/buildTypes\s*\{/,`signingConfigs {
+              release {
+                storeFile file(System.getenv('SIGNING_KEYSTORE_PATH'))
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+              }
+            }
+
+            buildTypes {`);
+          }
+          if(!/signingConfig\s+signingConfigs\.release/.test(s)){
+            s=s.replace(/buildTypes\s*\{\s*release\s*\{/,'buildTypes { release { signingConfig signingConfigs.release');
+          }
+          fs.writeFileSync(p,s);
+          NODE
+
+      - name: Sync
+        working-directory: rss-source
+        run: npx cap sync android
+
+      - name: Build release APK
+        working-directory: rss-source/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Verify signature and APK
+        working-directory: rss-source
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -f "$APK"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK"
+          CURRENT_DIGEST=$("$BT/apksigner" verify --print-certs "$APK" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+          test -n "$CURRENT_DIGEST"
+          echo "3.0 signing cert: $CURRENT_DIGEST"
+          for VERSION in 2.1.13 2.1.7 2.1.6; do
+            URL="https://github.com/baibiaowang/GPT/releases/download/v${VERSION}/app.apk"
+            if curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 "$URL" -o "/tmp/gpt-${VERSION}.apk"; then
+              OLD_DIGEST=$("$BT/apksigner" verify --print-certs "/tmp/gpt-${VERSION}.apk" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+              echo "v${VERSION} signing cert: $OLD_DIGEST"
+              test "$CURRENT_DIGEST" = "$OLD_DIGEST"
+            else
+              echo "v${VERSION} APK unavailable; skip comparison"
+            fi
+          done
+          mkdir -p dist
+          cp "$APK" dist/app.apk
+          sha256sum dist/app.apk | tee dist/app.sha256
+
+      - name: Publish 3.0 APK mirror on GPT
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: rss-source
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gpt-apk-mirror
+          git clone --depth 1 "https://x-access-token:$GH_TOKEN@github.com/${GITHUB_REPOSITORY}.git" /tmp/gpt-apk-mirror
+          cd /tmp/gpt-apk-mirror
+          if git ls-remote --exit-code origin refs/heads/apk >/dev/null 2>&1; then
+            git fetch origin refs/heads/apk:refs/remotes/origin/apk
+            git checkout -B apk refs/remotes/origin/apk
+          else
+            git checkout --orphan apk
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+          mkdir -p releases/3.0.0
+          cp "$GITHUB_WORKSPACE/rss-source/dist/app.apk" releases/3.0.0/app.apk
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add releases/3.0.0/app.apk
+          if ! git diff --cached --quiet; then git commit -m '发布自制RSS 3.0.0 升级 APK'; git push origin HEAD:apk; fi
+
+      - name: Create or refresh GPT Release v3.0.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v3.0.0 >/dev/null 2>&1; then
+            gh release upload v3.0.0 rss-source/dist/app.apk --clobber
+          else
+            gh release create v3.0.0 rss-source/dist/app.apk --title '自制RSS 3.0.0' --notes '自制RSS 3.0：由旧股票判断机正式切换为 RSS 阅读模式。'
+          fi
+
+      - name: Generate compatible update.json
+        working-directory: rss-source
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os
+          from datetime import datetime,timezone
+          p='dist/app.apk';repo=os.environ['GITHUB_REPOSITORY']
+          data={
+            'version':'3.0.0','versionCode':3000,
+            'published_at':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'repo':'baibiaowang/GPT','apk_size':os.path.getsize(p),
+            'sha256':hashlib.sha256(open(p,'rb').read()).hexdigest(),
+            'apk_url':f'https://raw.githubusercontent.com/{repo}/apk/releases/3.0.0/app.apk',
+            'apk_urls':[
+              f'https://raw.githubusercontent.com/{repo}/apk/releases/3.0.0/app.apk',
+              f'https://github.com/{repo}/releases/download/v3.0.0/app.apk',
+              f'https://cdn.jsdelivr.net/gh/{repo}@apk/releases/3.0.0/app.apk',
+              f'https://fastly.jsdelivr.net/gh/{repo}@apk/releases/3.0.0/app.apk',
+              f'https://gcore.jsdelivr.net/gh/{repo}@apk/releases/3.0.0/app.apk'],
+            'notes':'自制RSS 3.0：旧股票判断机正式切换为 RSS 模式。'}
+          json.dump(data,open('gpt-update.json','w',encoding='utf-8'),ensure_ascii=False,indent=2);open('gpt-update.json','a',encoding='utf-8').write('\n')
+          PY
+
+      - name: Publish GPT update.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          git reset --hard origin/main
+          cp rss-source/gpt-update.json update.json
+          git add update.json
+          git diff --cached --quiet || git commit -m '发布自制RSS 3.0 升级清单'
+          git push origin HEAD:main
+
+      - name: Verify old-app update chain
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 "https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json?nocache=$(date +%s)" -o /tmp/live-update.json
+          python - <<'PY'
+          import json
+          m=json.load(open('/tmp/live-update.json',encoding='utf-8'))
+          assert m['version']=='3.0.0'
+          assert int(m['versionCode'])==3000
+          assert m['repo']=='baibiaowang/GPT'
+          assert len(m['sha256'])==64
+          assert '/GPT/' in m['apk_url']
+          print('Old 2.1.x compatible update manifest verified.')
+          PY
