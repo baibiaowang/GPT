@@ -1,17 +1,17 @@
 {
-  "version": "3.0.0",
-  "versionCode": 3000,
-  "published_at": "2026-09-27T11:56:32Z",
+  "version": "3.0.1",
+  "versionCode": 3001,
+  "published_at": "2026-09-27T12:47:40Z",
   "repo": "baibiaowang/GPT",
-  "apk_size": 3191903,
-  "sha256": "8b42e003dd49e1c267e0f700f3eab74cc92b2ce82ec7c6a2f381d27b1e6416b4",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.0/app.apk",
+  "apk_size": 3194107,
+  "sha256": "738dcd5e61b9f4f86ac0b48d34305d8599901a780bafbe9cdb4387d1abd2c603",
+  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.1/app.apk",
   "apk_urls": [
-    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.0/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v3.0.0/app.apk",
-    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/3.0.0/app.apk",
-    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/3.0.0/app.apk",
-    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/3.0.0/app.apk"
+    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.1/app.apk",
+    "https://github.com/baibiaowang/GPT/releases/download/v3.0.1/app.apk",
+    "https://cdn.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/3.0.1/app.apk",
+    "https://fastly.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/3.0.1/app.apk",
+    "https://gcore.jsdelivr.net/gh/baibiaowang/GPT@apk/releases/3.0.1/app.apk"
   ],
   "notes": "自制RSS 3.0：旧股票判断机正式切换为 RSS 模式。"
 }
