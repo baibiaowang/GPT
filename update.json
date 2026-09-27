@@ -1,15 +1,15 @@
 {
-  "version": "3.0.8",
-  "versionCode": 3008,
-  "published_at": "2026-09-27T15:11:42Z",
+  "version": "3.0.9",
+  "versionCode": 3009,
+  "published_at": "2026-09-27T15:23:19Z",
   "repo": "baibiaowang/GPT",
-  "apk_size": 3198339,
-  "source_commit": "f347aad1374e5b1f988092937040e8b5bac2752a",
-  "sha256": "cd6e15de9aad79797ea0e3a156bca0b3d8cb436e2cdc75a98d289a5a06b3dfc2",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.8/app.apk",
+  "apk_size": 3198879,
+  "source_commit": "75cce2bc4336433b4e87eac9aecae3a8f7b55b1b",
+  "sha256": "153c04f4777038132bb0ea5a5fbe2c1e9b598d8d626d697bcb727b6cc5137b16",
+  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.9/app.apk",
   "apk_urls": [
-    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.8/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v3.0.8/zizhi-rss-3.0.8.apk"
+    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.9/app.apk",
+    "https://github.com/baibiaowang/GPT/releases/download/v3.0.9/zizhi-rss-3.0.9.apk"
   ],
-  "notes": "自制RSS 3.0.8：旧股票判断机正式切换为 RSS 模式。"
+  "notes": "自制RSS 3.0.9：旧股票判断机正式切换为 RSS 模式。"
 }
