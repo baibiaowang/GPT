@@ -1,34 +1,32 @@
-# 自制RSS Android 构建
+# 自制 RSS 阅读器 4.0
 
-## 版本身份
-- App 名称：自制RSS
-- versionName：3.0.8
-- versionCode：3008
-- applicationId：com.baibiaowang.stockjudge
+## 身份
+- versionName：4.0.0
+- versionCode：4000
+- applicationId：com.baibiaowang.stockjudge（仅用于覆盖升级已有安装包）
+- 数字签名继续使用现有 release signing
 
-## Android 工程
+## 数据
+- IndexedDB：zizhi-rss-reader
+- stores：sources、articles
+- article 主键：guid
+- 已读、收藏、点评全部绑定 guid
+- 不读取旧 stock-rss-reader 数据
 
-正式 Android 工程位于仓库的 `android/` 目录。构建前会同步 `mobile-web` 到 Capacitor 工程，并把 `native/MainActivity.java` 和图标/Manifest 补丁应用到工程。
+## Feed
+- 标准 RSS 2.0 /feed
+- 支持 agu-ann-feed token、category、begin、end
+- pubDate 作为更新时间
+- guid 作为唯一去重键
+- 行情为空时正常显示“未取到”
 
-## 原生能力
+## Android
+- 原生 HTTPS 抓取避免 WebView CORS
+- Feed 与更新清单采用本地临时文件 + Base64 分块读取
+- APK 自动跟随 HTTPS 重定向
+- APK 大小与 SHA-256 双重校验
+- FileProvider 调起系统安装
+- 系统返回键按页面层级处理
 
-- RSS/Atom/JSON Feed 原生 HTTPS 读取，避免 WebView CORS 限制。
-- RSS 内容采用 Base64 字节分块回传，JavaScript 按 UTF-8 字节偏移读取，避免中文截断。
-- 原文 URL 调起系统浏览器。
-- APK 更新下载支持 HTTPS 重定向、缓存破除、文件大小校验、SHA-256 校验和 FileProvider 安装。
-- Android 系统返回键按 WebView 页面层级处理。
-
-## 正式发布链
-
-正式发布由 `baibiaowang/GPT/.github/workflows/release-rss-v3.yml` 完成。流程使用本仓库当前源码和旧版兼容签名，在发布前后都进行验证：
-
-1. 校验 package.json、app.js、Android 工程的版本身份。
-2. 构建 release APK，并检查签名证书与旧版升级链一致。
-3. 计算 APK 文件大小和 SHA-256。
-4. 发布到 GPT 的版本化 `apk/releases/<version>/app.apk`。
-5. 创建版本化 GitHub Release 资产 `zizhi-rss-<version>.apk`。
-6. 从 Raw 和 Release 两个实际下载地址重新下载 APK，核对大小和 SHA-256。
-7. 只有验证通过后才生成并发布兼容 `update.json`。
-8. 最后再从公开 `update.json` 下载 APK，进行一次最终大小/SHA-256 校验。
-
-因此，更新清单不会再把一个版本号对应到不同 APK 字节的可变地址。
+## 发布
+.github/workflows/release-rss.yml 自动构建、签名、发布 Release、发布 apk 镜像并生成 update.json。
