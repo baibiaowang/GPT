@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: bridge-rss-v3
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -38,9 +38,14 @@ jobs:
           const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
           const cap=JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
           const app=fs.readFileSync('app.js','utf8');
-          if(pkg.version!=='3.0.2')throw new Error('RSS package version != 3.0.2');
+          const version=String(pkg.version||'').trim();
+          const versionCode=Number(pkg.versionCode||0);
+          if(!/^3\.\d+\.\d+$/.test(version))throw new Error('RSS package version must be 3.x.y');
+          if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('RSS package versionCode invalid');
           if(cap.appId!=='com.baibiaowang.stockjudge')throw new Error('RSS applicationId must remain com.baibiaowang.stockjudge');
-          if(!app.includes("APP_VERSION='3.0.2'")||!app.includes('APP_VERSION_CODE=3002'))throw new Error('RSS 3.0 constants incorrect');
+          if(!app.includes(`APP_VERSION='${version}'`)||!app.includes(`APP_VERSION_CODE=${versionCode}`))throw new Error(`RSS app.js version constants incorrect for ${version}/${versionCode}`);
+          fs.appendFileSync(process.env.GITHUB_ENV,`RSS_VERSION=${version}\nRSS_VERSION_CODE=${versionCode}\n`);
+          console.log(`RSS release target: ${version} / ${versionCode}`);
           NODE
 
       - name: Setup Node
@@ -178,45 +183,75 @@ jobs:
             git checkout --orphan apk
             git rm -rf . >/dev/null 2>&1 || true
           fi
-          mkdir -p releases/3.0.2
-          cp "$GITHUB_WORKSPACE/rss-source/dist/app.apk" releases/3.0.2/app.apk
+          mkdir -p "releases/${RSS_VERSION}"
+          cp "$GITHUB_WORKSPACE/rss-source/dist/app.apk" "releases/${RSS_VERSION}/app.apk"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add releases/3.0.2/app.apk
-          if ! git diff --cached --quiet; then git commit -m '发布自制RSS 3.0.2 升级 APK'; git push origin HEAD:apk; fi
+          git add "releases/${RSS_VERSION}/app.apk"
+          if ! git diff --cached --quiet; then git commit -m "发布自制RSS ${RSS_VERSION} 升级 APK"; git push origin HEAD:apk; fi
 
-      - name: Create or refresh GPT Release v3.0.2
+      - name: Create or refresh GPT Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view v3.0.2 >/dev/null 2>&1; then
-            gh release upload v3.0.2 rss-source/dist/app.apk --clobber
+          ASSET="rss-source/dist/zizhi-rss-${RSS_VERSION}.apk"
+          cp rss-source/dist/app.apk "$ASSET"
+          TAG="v${RSS_VERSION}"
+          TITLE="自制RSS ${RSS_VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" --clobber
           else
-            gh release create v3.0.2 rss-source/dist/app.apk --title '自制RSS 3.0.2' --notes '自制RSS 3.0：由旧股票判断机正式切换为 RSS 阅读模式。'
+            gh release create "$TAG" "$ASSET" --title "$TITLE" --notes "自制RSS：由旧股票判断机正式切换为 RSS 阅读模式。"
           fi
+
+      - name: Verify published APK URLs
+        working-directory: rss-source
+        run: |
+          set -euo pipefail
+          PRIMARY_RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/apk/releases/${RSS_VERSION}/app.apk"
+          PRIMARY_RELEASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${RSS_VERSION}/zizhi-rss-${RSS_VERSION}.apk"
+          for URL in "$PRIMARY_RAW" "$PRIMARY_RELEASE"; do
+            ok=0
+            for attempt in 1 2 3 4 5 6 7 8; do
+              rm -f /tmp/verify-rss.apk
+              VERIFY_URL="${URL}$(printf '%s' "$URL" | grep -q '?' && printf '&' || printf '?')_verify=${GITHUB_RUN_ID}-${attempt}"
+              if curl -fsSL --connect-timeout 15 --max-time 120 "$VERIFY_URL" -o /tmp/verify-rss.apk; then
+                ACTUAL_SIZE=$(stat -c%s /tmp/verify-rss.apk)
+                ACTUAL_SHA=$(sha256sum /tmp/verify-rss.apk | awk '{print $1}')
+                if [ "$ACTUAL_SIZE" = "$RSS_APK_SIZE" ] && [ "$ACTUAL_SHA" = "$RSS_APK_SHA256" ]; then
+                  echo "verified: $URL"
+                  ok=1
+                  break
+                fi
+                echo "attempt $attempt mismatch: size=$ACTUAL_SIZE sha=$ACTUAL_SHA"
+              else
+                echo "attempt $attempt download failed: $URL"
+              fi
+              sleep 4
+            done
+            test "$ok" -eq 1
+          done
 
       - name: Generate compatible update.json
         working-directory: rss-source
         run: |
           set -euo pipefail
           python - <<'PY'
-          import hashlib,json,os
+          import json,os
           from datetime import datetime,timezone
-          p='dist/app.apk';repo=os.environ['GITHUB_REPOSITORY']
+          version=os.environ['RSS_VERSION'];code=int(os.environ['RSS_VERSION_CODE'])
+          repo=os.environ['GITHUB_REPOSITORY']
           data={
-            'version':'3.0.2','versionCode':3002,
+            'version':version,'versionCode':code,
             'published_at':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-            'repo':'baibiaowang/GPT','apk_size':os.path.getsize(p),
-            'sha256':hashlib.sha256(open(p,'rb').read()).hexdigest(),
-            'apk_url':f'https://raw.githubusercontent.com/{repo}/apk/releases/3.0.2/app.apk',
+            'repo':'baibiaowang/GPT','apk_size':int(os.environ['RSS_APK_SIZE']),
+            'sha256':os.environ['RSS_APK_SHA256'],
+            'apk_url':f'https://raw.githubusercontent.com/{repo}/apk/releases/{version}/app.apk',
             'apk_urls':[
-              f'https://raw.githubusercontent.com/{repo}/apk/releases/3.0.2/app.apk',
-              f'https://github.com/{repo}/releases/download/v3.0.2/app.apk',
-              f'https://cdn.jsdelivr.net/gh/{repo}@apk/releases/3.0.2/app.apk',
-              f'https://fastly.jsdelivr.net/gh/{repo}@apk/releases/3.0.2/app.apk',
-              f'https://gcore.jsdelivr.net/gh/{repo}@apk/releases/3.0.2/app.apk'],
-            'notes':'自制RSS 3.0：旧股票判断机正式切换为 RSS 模式。'}
+              f'https://raw.githubusercontent.com/{repo}/apk/releases/{version}/app.apk',
+              f'https://github.com/{repo}/releases/download/v{version}/zizhi-rss-{version}.apk'],
+            'notes':f'自制RSS {version}：旧股票判断机正式切换为 RSS 模式。'}
           json.dump(data,open('gpt-update.json','w',encoding='utf-8'),ensure_ascii=False,indent=2);open('gpt-update.json','a',encoding='utf-8').write('\n')
           PY
 
@@ -234,19 +269,25 @@ jobs:
           git diff --cached --quiet || git commit -m '发布自制RSS 3.0 升级清单'
           git push origin HEAD:main
 
-      - name: Verify old-app update chain
+      - name: Verify published update chain
         run: |
           set -euo pipefail
-          curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 "https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json?nocache=$(date +%s)" -o /tmp/live-update.json
+          curl -fsSL --retry 5 --connect-timeout 15 --max-time 60 "https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json?nocache=$(date +%s)" -o /tmp/live-update.json
           python - <<'PY'
-          import json
+          import hashlib,json,os,urllib.request
           m=json.load(open('/tmp/live-update.json',encoding='utf-8'))
-          assert m['version']=='3.0.2'
-          assert int(m['versionCode'])==3002
+          assert m['version']==os.environ['RSS_VERSION']
+          assert int(m['versionCode'])==int(os.environ['RSS_VERSION_CODE'])
           assert m['repo']=='baibiaowang/GPT'
-          assert len(m['sha256'])==64
-          assert '/GPT/' in m['apk_url']
-          print('Old 2.1.x compatible update manifest verified.')
+          assert m['sha256']==os.environ['RSS_APK_SHA256']
+          assert int(m['apk_size'])==int(os.environ['RSS_APK_SIZE'])
+          assert len(m['sha256'])==64 and '/GPT/' in m['apk_url']
+          req=urllib.request.Request(m['apk_url']+'?final_verify='+os.environ['GITHUB_RUN_ID'],headers={'User-Agent':'GPT-release-verifier/1.0'})
+          with urllib.request.urlopen(req,timeout=120) as r:
+              data=r.read()
+          assert len(data)==int(m['apk_size'])
+          assert hashlib.sha256(data).hexdigest()==m['sha256']
+          print('Old 2.1.x compatible manifest + APK verified.')
           PY
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
 # Retry after Android resource deduplication in committed RSS project.
