@@ -89,6 +89,10 @@ jobs:
         working-directory: rss-source
         run: npm install --no-audit --no-fund
 
+      - name: RSS pre-build self-check
+        working-directory: rss-source
+        run: node scripts/self-check.mjs
+
       - name: Prepare mobile web
         working-directory: rss-source
         run: node native/inject.mjs
