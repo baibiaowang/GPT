@@ -216,22 +216,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          ASSET="dist/zizhi-rss-${RSS_VERSION}.apk"
+          ASSET="dist/zizhi-rss-$RSS_VERSION.apk"
           cp dist/app.apk "$ASSET"
-          TAG="v${RSS_VERSION}"
-          TITLE="自制RSS ${RSS_VERSION}"
+          TAG="v$RSS_VERSION"
+          TITLE="自制RSS $RSS_VERSION"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            rm -f "/tmp/zizhi-rss-${RSS_VERSION}.apk"
-            gh release download "$TAG" --pattern "zizhi-rss-${RSS_VERSION}.apk" --dir /tmp --clobber
-            EXISTING_RELEASE_SHA=$(sha256sum "/tmp/zizhi-rss-${RSS_VERSION}.apk" | awk '{print $1}')
-            if [ "$EXISTING_RELEASE_SHA" != "$RSS_APK_SHA256" ]; then
-              echo "::error::GitHub Release $TAG 已存在但 APK SHA-256 不同，拒绝覆盖。"
-              exit 1
+            if gh release download "$TAG" --pattern "zizhi-rss-$RSS_VERSION.apk" --dir /tmp --clobber; then
+              EXISTING_RELEASE_SHA=$(sha256sum "/tmp/zizhi-rss-$RSS_VERSION.apk" | awk '{print $1}')
+              if [ "$EXISTING_RELEASE_SHA" != "$RSS_APK_SHA256" ]; then
+                echo "::error::GitHub Release $TAG 已存在但 APK SHA-256 不同，拒绝覆盖。"
+                exit 1
+              fi
+              echo "GitHub Release $TAG 已存在且 APK 字节一致，跳过覆盖（幂等发布）。"
+            else
+              gh release upload "$TAG" "$ASSET"
             fi
-            echo "GitHub Release $TAG 已存在且 APK 字节一致，跳过覆盖（幂等发布）。"
           else
-            gh release create "$TAG" "$ASSET" --title "$TITLE" --notes "自制RSS：由旧股票判断机正式切换为 RSS 阅读模式。\n\nRSS source commit: ${RSS_SOURCE_COMMIT}"
+            gh release create "$TAG" "$ASSET" --title "$TITLE" --notes "自制RSS：GPT 单仓库正式发布。\n\nGPT source commit: $RSS_SOURCE_COMMIT"
           fi
+
       - name: Verify published APK URLs
         run: |
           set -euo pipefail
@@ -289,12 +292,29 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git fetch origin main
-          git reset --hard origin/main
-          cp gpt-update.json update.json
-          git add update.json
-          git diff --cached --quiet || git commit -m '发布自制RSS 3.0 升级清单'
-          git push origin HEAD:main
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            MAIN_SHA=$(git rev-parse origin/main)
+            MAIN_APP=$(git show "$MAIN_SHA:app.js")
+            MAIN_VERSION=$(printf '%s\n' "$MAIN_APP" | python -c "import re,sys; s=sys.stdin.read(); m=re.search(r\"APP_VERSION='([^']+)'\",s); print(m.group(1) if m else '')")
+            MAIN_CODE=$(printf '%s\n' "$MAIN_APP" | python -c "import re,sys; s=sys.stdin.read(); m=re.search(r'APP_VERSION_CODE=(\\d+)',s); print(m.group(1) if m else '')")
+            if [ "$MAIN_VERSION" != "$RSS_VERSION" ] || [ "$MAIN_CODE" != "$RSS_VERSION_CODE" ]; then
+              echo "::error::main 已出现不同版本，拒绝旧构建覆盖 update.json。"
+              exit 1
+            fi
+            git reset --hard "$MAIN_SHA"
+            cp gpt-update.json update.json
+            git add update.json
+            git diff --cached --quiet || git commit -m "发布自制RSS $RSS_VERSION 升级清单"
+            if git push origin HEAD:main; then
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "::error::连续 5 次发布 update.json 失败。"
+              exit 1
+            fi
+            sleep 2
+          done
 
       - name: Verify published update chain
         run: |
