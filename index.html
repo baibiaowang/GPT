@@ -1,33 +1,33 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#e63b3b" />
-  <meta name="description" content="自制RSS阅读器 4.0 · agu-ann-feed 专用版" />
-  <link rel="manifest" href="manifest.json?v=4.0.0" />
-  <link rel="apple-touch-icon" href="assets/rss-icon.svg" />
-  <link rel="icon" href="assets/rss-icon.svg" type="image/svg+xml" />
-  <title>自制RSS</title>
-  <link rel="stylesheet" href="styles.css?v=4.0.0" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#e63b3b">
+<meta name="description" content="自制 RSS 阅读器 · agu-ann-feed 专用版">
+<link rel="manifest" href="manifest.json?v=4.0.0">
+<link rel="icon" href="assets/rss-icon.svg" type="image/svg+xml">
+<title>自制 RSS</title>
+<link rel="stylesheet" href="styles.css?v=4.0.0">
 </head>
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div><div class="eyebrow">AGU ANN FEED</div><h1 id="pageTitle">订阅</h1></div>
-      <div class="topbar-actions"><button class="icon-button" id="refreshButton" aria-label="刷新订阅" title="刷新订阅"><span class="icon icon-refresh"></span></button></div>
-    </header>
-    <main id="app" class="main-content"></main>
-    <nav class="bottom-nav" aria-label="主导航">
-      <button class="nav-item active" data-page="subscriptions"><span class="nav-icon">◎</span><span>订阅</span></button>
-      <button class="nav-item" data-page="favorites"><span class="nav-icon">★</span><span>收藏</span></button>
-      <button class="nav-item" data-page="notes"><span class="nav-icon">✎</span><span>点评</span></button>
-      <button class="nav-item" data-page="settings"><span class="nav-icon">⚙</span><span>设置</span></button>
-    </nav>
-  </div>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <div id="modalRoot"></div>
-  <input id="importFile" type="file" accept="application/json,.json" hidden />
-  <script src="app.js?v=4.0.0"></script>
+<div class="app-shell">
+<header class="topbar">
+  <div><div class="eyebrow">AGU ANN FEED</div><h1 id="pageTitle">首页</h1></div>
+  <button class="icon-button" id="refreshButton" aria-label="刷新订阅" title="刷新订阅"><span class="icon-refresh">↻</span></button>
+</header>
+<main id="app" class="main-content"></main>
+<nav class="bottom-nav" aria-label="主导航">
+  <button class="nav-item active" data-page="home"><span class="nav-icon">⌂</span><span>首页</span></button>
+  <button class="nav-item" data-page="categories"><span class="nav-icon">▦</span><span>分类</span></button>
+  <button class="nav-item" data-page="favorites"><span class="nav-icon">★</span><span>收藏</span></button>
+  <button class="nav-item" data-page="search"><span class="nav-icon">⌕</span><span>搜索</span></button>
+  <button class="nav-item" data-page="settings"><span class="nav-icon">⚙</span><span>设置</span></button>
+</nav>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="modalRoot"></div>
+<input id="importFile" type="file" accept="application/json,.json" hidden>
+<script src="app.js?v=4.0.0"></script>
 </body>
 </html>
