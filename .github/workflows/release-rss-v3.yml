@@ -27,7 +27,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Checkout RSS 3.0 source
-        run: git clone --depth 1 https://github.com/baibiaowang/RSS.git rss-source
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/baibiaowang/RSS.git rss-source
+          cd rss-source
+          echo "RSS_SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Validate RSS 3.0 identity
         working-directory: rss-source
@@ -44,6 +48,9 @@ jobs:
           if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('RSS package versionCode invalid');
           if(cap.appId!=='com.baibiaowang.stockjudge')throw new Error('RSS applicationId must remain com.baibiaowang.stockjudge');
           if(!app.includes(`APP_VERSION='${version}'`)||!app.includes(`APP_VERSION_CODE=${versionCode}`))throw new Error(`RSS app.js version constants incorrect for ${version}/${versionCode}`);
+          if(!fs.existsSync('android/app/build.gradle'))throw new Error('Committed RSS Android project missing');
+          const gradle=fs.readFileSync('android/app/build.gradle','utf8');
+          if(!gradle.includes(`versionCode ${versionCode}`)||!gradle.includes(`versionName "${version}"`))throw new Error(`Android project version constants incorrect for ${version}/${versionCode}`);
           fs.appendFileSync(process.env.GITHUB_ENV,`RSS_VERSION=${version}\nRSS_VERSION_CODE=${versionCode}\n`);
           console.log(`RSS release target: ${version} / ${versionCode}`);
           NODE
@@ -114,7 +121,7 @@ jobs:
           node --check app.js
           cmp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java
           git diff --check
-          ! grep -RInE '3\\.0\\.2|3002|var\\(--brand\\)|agu-ann-feed\\.app\\.workbuddy\\.host' --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.gradle .
+          ! grep -RInE 'agu-ann-feed\\.app\\.workbuddy\\.host' --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.gradle .
 
       - name: Configure fixed release signing
         working-directory: rss-source
@@ -201,6 +208,10 @@ jobs:
             git checkout --orphan apk
             git rm -rf . >/dev/null 2>&1 || true
           fi
+          if git cat-file -e "HEAD:releases/${RSS_VERSION}/app.apk" 2>/dev/null; then
+            echo "::error::版本 ${RSS_VERSION} 的 APK 已存在，禁止覆盖同版本发布。请递增 version/versionCode."
+            exit 1
+          fi
           mkdir -p "releases/${RSS_VERSION}"
           cp "$GITHUB_WORKSPACE/rss-source/dist/app.apk" "releases/${RSS_VERSION}/app.apk"
           git config user.name 'github-actions[bot]'
@@ -218,11 +229,10 @@ jobs:
           TAG="v${RSS_VERSION}"
           TITLE="自制RSS ${RSS_VERSION}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$ASSET" --clobber
-          else
-            gh release create "$TAG" "$ASSET" --title "$TITLE" --notes "自制RSS：由旧股票判断机正式切换为 RSS 阅读模式。"
+            echo "::error::GitHub Release $TAG 已存在，禁止覆盖同版本发布。请递增 version/versionCode."
+            exit 1
           fi
-
+          gh release create "$TAG" "$ASSET" --title "$TITLE" --notes "自制RSS：由旧股票判断机正式切换为 RSS 阅读模式。\n\nRSS source commit: ${RSS_SOURCE_COMMIT}"
       - name: Verify published APK URLs
         working-directory: rss-source
         run: |
@@ -265,6 +275,7 @@ jobs:
             'version':version,'versionCode':code,
             'published_at':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
             'repo':'baibiaowang/GPT','apk_size':int(os.environ['RSS_APK_SIZE']),
+            'source_commit':os.environ['RSS_SOURCE_COMMIT'],
             'sha256':os.environ['RSS_APK_SHA256'],
             'apk_url':f'https://raw.githubusercontent.com/{repo}/apk/releases/{version}/app.apk',
             'apk_urls':[
@@ -300,6 +311,7 @@ jobs:
           assert m['repo']=='baibiaowang/GPT'
           assert m['sha256']==os.environ['RSS_APK_SHA256']
           assert int(m['apk_size'])==int(os.environ['RSS_APK_SIZE'])
+          assert m['source_commit']==os.environ['RSS_SOURCE_COMMIT']
           assert len(m['sha256'])==64 and '/GPT/' in m['apk_url']
           req=urllib.request.Request(m['apk_url']+'?final_verify='+os.environ['GITHUB_RUN_ID'],headers={'User-Agent':'GPT-release-verifier/1.0'})
           with urllib.request.urlopen(req,timeout=120) as r:
@@ -313,7 +325,7 @@ jobs:
 # Release trigger 3: rebuild after idempotent Manifest patch correction.
 # Release trigger 4: rebuild after source-scan scope correction and Android callback fixes.
 # Release trigger 5: rebuild 3.0.4 with extended CDN propagation verification.
-# Release trigger 6: fix build SHA/size environment propagation.
+# Release trigger 7: immutable versioned APK publication and strict source-to-manifest binding.
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
 # Retry after Android resource deduplication in committed RSS project.
 
