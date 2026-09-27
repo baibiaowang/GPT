@@ -237,3 +237,5 @@ jobs:
           print('Old 2.1.x compatible update manifest verified.')
           PY
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for 2.x upgrades.
+
+# Retry after RSS native bridge compile fix.
