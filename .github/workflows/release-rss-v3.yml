@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: bridge-rss-v3
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -341,7 +341,7 @@ jobs:
 # Release trigger 3: rebuild after idempotent Manifest patch correction.
 # Release trigger 4: rebuild after source-scan scope correction and Android callback fixes.
 # Release trigger 5: rebuild 3.0.4 with extended CDN propagation verification.
-# Release trigger 7: immutable versioned APK publication and strict source-to-manifest binding.
+# Release trigger 8: cancel stale bridge runs before rebuilding latest RSS source.
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
 # Retry after Android resource deduplication in committed RSS project.
 
