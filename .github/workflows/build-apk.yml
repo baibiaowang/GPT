@@ -349,6 +349,7 @@ jobs:
           test "${code}" = "200"
 
       - name: Publish update manifest
+        if: ${{ fromJSON(env.APP_VERSION_CODE) < 3000 }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -443,6 +444,7 @@ jobs:
             sleep 1
           done
       - name: Verify published update manifest
+        if: ${{ fromJSON(env.APP_VERSION_CODE) < 3000 }}
         shell: bash
         run: |
           set -euo pipefail
