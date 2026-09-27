@@ -1,7 +1,9 @@
 {
-  "appId":"com.baibiaowang.stockjudge",
-  "appName":"股票判断机",
-  "webDir":"dist/www",
-  "server":{"androidScheme":"https"},
-  "android":{"allowMixedContent":false}
+  "appId": "com.baibiaowang.stockjudge",
+  "appName": "自制RSS",
+  "webDir": "mobile-web",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false
+  }
 }

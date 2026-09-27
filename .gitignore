@@ -1,0 +1,21 @@
+# Node / generated web bundle
+node_modules/
+mobile-web/
+
+# Android / Gradle build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+
+# Local signing / release artifacts
+*.keystore
+*.jks
+*.p12
+signing.p12
+*.apk
+*.aab
+*.part
+
+# Local generated distribution folders
+dist/
