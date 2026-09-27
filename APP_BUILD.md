@@ -11,7 +11,7 @@
 - stores：sources、articles
 - article 主键：guid
 - 已读、收藏、点评全部绑定 guid
-- 不读取旧 stock-rss-reader 数据
+- 不读取旧版业务数据库数据
 
 ## Feed
 - 标准 RSS 2.0 /feed
