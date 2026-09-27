@@ -213,11 +213,16 @@ jobs:
             git rm -rf . >/dev/null 2>&1 || true
           fi
           if git cat-file -e "HEAD:releases/${RSS_VERSION}/app.apk" 2>/dev/null; then
-            echo "::error::版本 ${RSS_VERSION} 的 APK 已存在，禁止覆盖同版本发布。请递增 version/versionCode."
-            exit 1
+            EXISTING_SHA=$(git show "HEAD:releases/${RSS_VERSION}/app.apk" | sha256sum | awk '{print $1}')
+            if [ "$EXISTING_SHA" != "$RSS_APK_SHA256" ]; then
+              echo "::error::版本 ${RSS_VERSION} 已存在但 SHA-256 不同，拒绝覆盖。"
+              exit 1
+            fi
+            echo "版本 ${RSS_VERSION} APK 已存在且字节一致，跳过覆盖（幂等发布）。"
+          else
+            mkdir -p "releases/${RSS_VERSION}"
+            cp "$GITHUB_WORKSPACE/rss-source/dist/app.apk" "releases/${RSS_VERSION}/app.apk"
           fi
-          mkdir -p "releases/${RSS_VERSION}"
-          cp "$GITHUB_WORKSPACE/rss-source/dist/app.apk" "releases/${RSS_VERSION}/app.apk"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add "releases/${RSS_VERSION}/app.apk"
@@ -233,10 +238,17 @@ jobs:
           TAG="v${RSS_VERSION}"
           TITLE="自制RSS ${RSS_VERSION}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::error::GitHub Release $TAG 已存在，禁止覆盖同版本发布。请递增 version/versionCode."
-            exit 1
+            rm -f "/tmp/zizhi-rss-${RSS_VERSION}.apk"
+            gh release download "$TAG" --pattern "zizhi-rss-${RSS_VERSION}.apk" --dir /tmp --clobber
+            EXISTING_RELEASE_SHA=$(sha256sum "/tmp/zizhi-rss-${RSS_VERSION}.apk" | awk '{print $1}')
+            if [ "$EXISTING_RELEASE_SHA" != "$RSS_APK_SHA256" ]; then
+              echo "::error::GitHub Release $TAG 已存在但 APK SHA-256 不同，拒绝覆盖。"
+              exit 1
+            fi
+            echo "GitHub Release $TAG 已存在且 APK 字节一致，跳过覆盖（幂等发布）。"
+          else
+            gh release create "$TAG" "$ASSET" --title "$TITLE" --notes "自制RSS：由旧股票判断机正式切换为 RSS 阅读模式。\n\nRSS source commit: ${RSS_SOURCE_COMMIT}"
           fi
-          gh release create "$TAG" "$ASSET" --title "$TITLE" --notes "自制RSS：由旧股票判断机正式切换为 RSS 阅读模式。\n\nRSS source commit: ${RSS_SOURCE_COMMIT}"
       - name: Verify published APK URLs
         working-directory: rss-source
         run: |
