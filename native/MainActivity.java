@@ -146,8 +146,8 @@ public class MainActivity extends BridgeActivity {
                         deletePrivateFile(FEED_PART);
                         deletePrivateFile(UPDATE_FILE);
                         deletePrivateFile(UPDATE_PART);
-                        deleteCacheFile("stock-judge-update.apk");
-                        deleteCacheFile("stock-judge-update.apk.part");
+                        deleteCacheFile("zizhi-rss-update.apk");
+                        deleteCacheFile("zizhi-rss-update.apk.part");
                     }
                 }, "zizhi-rss-clear-local-files").start();
             }
@@ -208,7 +208,7 @@ public class MainActivity extends BridgeActivity {
             if (filename == null || filename.trim().isEmpty()) return;
             File file = new File(getFilesDir(), filename);
             if (file.exists()) file.delete();
-            if ("stock-judge-update.apk".equals(filename) || "stock-judge-update.apk.part".equals(filename)) {
+            if ("zizhi-rss-update.apk".equals(filename) || "zizhi-rss-update.apk.part".equals(filename)) {
                 File cacheFile = new File(getCacheDir(), filename);
                 if (cacheFile.exists()) cacheFile.delete();
             }
@@ -256,7 +256,7 @@ public class MainActivity extends BridgeActivity {
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(30000);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "ZizhiRSS-Updater/3.0.11");
+                conn.setRequestProperty("User-Agent", "ZizhiRSS-Updater/4.0.0");
                 conn.setRequestProperty("Accept", "application/json,text/plain,application/rss+xml,application/atom+xml,application/feed+json,*/*");
                 conn.setRequestProperty("Accept-Encoding", "identity");
                 conn.setRequestProperty("Cache-Control", "no-cache");
@@ -396,12 +396,12 @@ public class MainActivity extends BridgeActivity {
         }
 
         String safeNameValue = (filename == null || filename.trim().isEmpty())
-            ? "stock-judge-update.apk" : filename.trim();
+            ? "zizhi-rss-update.apk" : filename.trim();
         if (!safeNameValue.toLowerCase().endsWith(".apk")) safeNameValue += ".apk";
         final String safeName = safeNameValue.replaceAll("[\\\\/:*?\"<>|]+", "_");
 
-        final File partFile = new File(getCacheDir(), "stock-judge-update.apk.part");
-        final File apkFile = new File(getCacheDir(), "stock-judge-update.apk");
+        final File partFile = new File(getCacheDir(), "zizhi-rss-update.apk.part");
+        final File apkFile = new File(getCacheDir(), "zizhi-rss-update.apk");
         final String expectedDigest = expectedSha256 == null ? "" : expectedSha256.trim();
         if (!isTrustedUpdateUrl(rawUrl)) {
             notifyJsDownloadFailed("更新地址与官方发布路径不匹配");
@@ -896,10 +896,10 @@ public class MainActivity extends BridgeActivity {
             String host = u.getHost();
             String path = u.getPath();
             if ("raw.githubusercontent.com".equalsIgnoreCase(host)) {
-                return path.matches("/baibiaowang/GPT/apk/releases/3\\.\\d+\\.\\d+/app\\.apk");
+                return path.matches("/baibiaowang/GPT/apk/releases/4\\.\\d+\\.\\d+/app\\.apk");
             }
             if ("github.com".equalsIgnoreCase(host)) {
-                return path.matches("/baibiaowang/GPT/releases/download/v3\\.\\d+\\.\\d+/zizhi-rss-3\\.\\d+\\.\\d+\\.apk");
+                return path.matches("/baibiaowang/GPT/releases/download/v4\\.\\d+\\.\\d+/zizhi-rss-4\\.\\d+\\.\\d+\\.apk");
             }
             return false;
         } catch (Exception ignored) {
