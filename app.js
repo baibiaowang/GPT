@@ -2,7 +2,7 @@
  * 专用于 agu-ann-feed，同时兼容标准 RSS 2.0。
  * 本文件是全新客户端核心：本地状态只按 guid 绑定，旧股票判断机数据不参与迁移。
  */
-const APP_VERSION='4.0.0', APP_VERSION_CODE=4000;
+const APP_VERSION='3.0.12', APP_VERSION_CODE=3012;
 const DEFAULT_BASE='https://agu-ann-feed.app.workbuddy.host';
 const UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -98,13 +98,15 @@ function decodeBase64Utf8(s){
   return new TextDecoder('utf-8').decode(bytes);
 }
 async function readNativeFile(chunkFn){
-  let offset=0, out='';
+  let offset=0,out='',decoder=new TextDecoder('utf-8');
   for(let i=0;i<2048;i++){
     const b=window.AndroidNative?.[chunkFn]?.(offset,131072)||'';
     if(!b)break;
-    const part=decodeBase64Utf8(b); out+=part; offset+=part.length;
-    if(part.length<131072)break;
+    const bin=atob(String(b)),bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+    out+=decoder.decode(bytes,{stream:true}); offset+=bytes.length;
+    if(bytes.length<131072)break;
   }
+  out+=decoder.decode();
   return out;
 }
 function waitNativeResult(name,trigger,timeout=45000){
