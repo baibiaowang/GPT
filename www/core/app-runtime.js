@@ -2,8 +2,8 @@
 'use strict';
 
 const APP={
-  version:'2.1.13',
-  versionCode:2113,
+  version:'2.1.14',
+  versionCode:2114,
   defaultSource:'https://stocks-txt-file.app.workbuddy.host/stocks.txt',
   updateSources:[
     'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -1257,34 +1257,46 @@ function validateUpdateManifest(manifest,source){
 }
 
 async function fetchUpdateManifest(url){
-  if(g.AndroidNative?.fetchUpdateManifest&&g.AndroidNative?.readUpdateChunk){
-    await new Promise((resolve,reject)=>{
-      g.__tableNativeUpdateWaiter=(ok,message)=>{
-        g.__tableNativeUpdateWaiter=null;
-        ok?resolve():reject(new Error(message||'更新清单读取失败'));
-      };
-      try{AndroidNative.fetchUpdateManifest(bustUrl(url,'t',Date.now()))}
-      catch(error){g.__tableNativeUpdateWaiter=null;reject(error)}
-    });
-    let text='',offset=0;
-    const chunk=65536;
-    for(;;){
-      const part=AndroidNative.readUpdateChunk(offset,chunk);
-      if(!part)break;
-      text+=part;
-      offset+=part.length;
-      if(part.length<chunk)break;
-    }
-    if(!text)throw new Error('更新清单为空');
-    return JSON.parse(text);
-  }
+  const webFetch=async()=>{
+    const endpoint=bustUrl(url,'t',Date.now());
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+    try{
+      const response=await fetch(endpoint,{cache:'no-store',headers:{Accept:'application/json,text/plain,*/*'},signal:controller.signal});
+      if(!response.ok)throw new Error('HTTP '+response.status);
+      const raw=await response.text();
+      if(!raw.trim())throw new Error('更新清单为空');
+      return JSON.parse(raw.replace(/^\uFEFF/,'').trim());
+    }finally{clearTimeout(timer)}
+  };
 
-  const response=await fetch(bustUrl(url,'t',Date.now()),{
-    cache:'no-store',
-    headers:{Accept:'application/json'}
-  });
-  if(!response.ok)throw new Error('HTTP '+response.status);
-  return response.json();
+  let nativeError=null;
+  if(g.AndroidNative?.fetchUpdateManifest&&g.AndroidNative?.readUpdateChunk){
+    try{
+      await new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>{g.__tableNativeUpdateWaiter=null;reject(new Error('原生读取更新清单超时'))},15000);
+        g.__tableNativeUpdateWaiter=(ok,message)=>{
+          clearTimeout(timer);g.__tableNativeUpdateWaiter=null;
+          ok?resolve():reject(new Error(message||'更新清单读取失败'));
+        };
+        try{AndroidNative.fetchUpdateManifest(bustUrl(url,'t',Date.now()))}
+        catch(error){clearTimeout(timer);g.__tableNativeUpdateWaiter=null;reject(error)}
+      });
+      let text='',offset=0;
+      const chunk=65536;
+      for(;;){
+        const part=AndroidNative.readUpdateChunk(offset,chunk);
+        if(!part)break;
+        text+=part;offset+=part.length;
+        if(part.length<chunk)break;
+      }
+      if(!text)throw new Error('更新清单为空');
+      return JSON.parse(text.replace(/^\uFEFF/,'').trim());
+    }catch(error){nativeError=error}
+  }
+  try{return await webFetch()}
+  catch(webError){
+    throw new Error((nativeError?('原生：'+String(nativeError.message||nativeError)+'；'):'')+'Web：'+String(webError.message||webError));
+  }
 }
 
 
