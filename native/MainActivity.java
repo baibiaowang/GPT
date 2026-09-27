@@ -329,7 +329,7 @@ public class MainActivity extends BridgeActivity {
     private static Charset resolveResponseCharset(final String contentType) {
         if (contentType == null) return StandardCharsets.UTF_8;
         try {
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)\\\\bcharset\\\\s*=\\\\s*([^;]+)").matcher(contentType);
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)\\bcharset\\s*=\\s*([^;]+)").matcher(contentType);
             if (m.find()) {
                 String name = m.group(1).trim().replace("\\\"", "").replace("'", "");
                 if (!name.isEmpty()) return Charset.forName(name);
