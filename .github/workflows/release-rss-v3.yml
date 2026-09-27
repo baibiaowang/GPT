@@ -173,6 +173,16 @@ jobs:
           done
           mkdir -p dist
           cp "$APK" dist/app.apk
+          RSS_APK_SHA256=$(sha256sum dist/app.apk | awk '{print $1}')
+          RSS_APK_SIZE=$(stat -c%s dist/app.apk)
+          test "${#RSS_APK_SHA256}" -eq 64
+          test "$RSS_APK_SIZE" -gt 1048576
+          echo "APK size: $RSS_APK_SIZE"
+          echo "APK sha256: $RSS_APK_SHA256"
+          {
+            echo "RSS_APK_SHA256=$RSS_APK_SHA256"
+            echo "RSS_APK_SIZE=$RSS_APK_SIZE"
+          } >> "$GITHUB_ENV"
           sha256sum dist/app.apk | tee dist/app.sha256
 
       - name: Publish 3.0 APK mirror on GPT
@@ -303,6 +313,7 @@ jobs:
 # Release trigger 3: rebuild after idempotent Manifest patch correction.
 # Release trigger 4: rebuild after source-scan scope correction and Android callback fixes.
 # Release trigger 5: rebuild 3.0.4 with extended CDN propagation verification.
+# Release trigger 6: fix build SHA/size environment propagation.
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
 # Retry after Android resource deduplication in committed RSS project.
 
