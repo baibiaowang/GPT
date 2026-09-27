@@ -2,7 +2,7 @@
  * 专用于 agu-ann-feed，同时兼容标准 RSS 2.0。
  * 本文件是全新客户端核心：本地状态只按 guid 绑定，旧股票判断机数据不参与迁移。
  */
-const APP_VERSION='3.0.12', APP_VERSION_CODE=3012;
+const APP_VERSION='3.0.13', APP_VERSION_CODE=3013;
 const DEFAULT_BASE='https://agu-ann-feed.app.workbuddy.host';
 const UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -11,10 +11,10 @@ const UPDATE_MANIFEST_URLS=[
 ];
 const DB_NAME='zizhi-rss-reader', DB_VERSION=1;
 const STORE_SOURCES='sources', STORE_ARTICLES='articles', BACKUP_VERSION=1;
-const navTitles={home:'首页',categories:'分类',favorites:'收藏',search:'搜索',settings:'设置'};
+const navTitles={home:'首页',categories:'分类',notes:'点评',favorites:'收藏',settings:'设置'};
 const app=document.getElementById('app'), modalRoot=document.getElementById('modalRoot'), toastEl=document.getElementById('toast');
 const importFileEl=document.getElementById('importFile');
-const state={page:'home',search:'',category:'',sources:[],articles:[],detailGuid:null,detailHistory:false,loading:false};
+const state={page:'home',search:'',category:'',date:'',sources:[],articles:[],detailGuid:null,detailHistory:false,loading:false};
 const now=()=>new Date().toISOString();
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const textOf=h=>{const d=document.createElement('div');d.innerHTML=String(h||'');return d.textContent||d.innerText||''};
@@ -36,7 +36,8 @@ function openDb(){
 async function storeGetAll(name){const d=await openDb();return new Promise((res,rej)=>{const r=d.transaction(name,'readonly').objectStore(name).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
 async function storePut(name,val){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction(name,'readwrite');t.objectStore(name).put(val);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
 async function storeDel(name,key){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction(name,'readwrite');t.objectStore(name).delete(key);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
-async function clearStores(){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction([STORE_SOURCES,STORE_ARTICLES],'readwrite');t.objectStore(STORE_SOURCES).clear();t.objectStore(STORE_ARTICLES).clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+async async function clearStores(){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction([STORE_SOURCES,STORE_ARTICLES],'readwrite');t.objectStore(STORE_SOURCES).clear();t.objectStore(STORE_ARTICLES).clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+async function clearArticles(){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction(STORE_ARTICLES,'readwrite');t.objectStore(STORE_ARTICLES).clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
 
 function normalizeHttps(v){
   try{const u=new URL(String(v||''));return u.protocol==='https:'&&u.hostname?u.toString():''}catch{return''}
@@ -167,6 +168,7 @@ function searchArticles(arr){
 function visibleArticles(){
   let arr=state.articles.slice();
   if(state.category)arr=arr.filter(a=>a.category===state.category);
+  if(state.date)arr=arr.filter(a=>{const d=new Date(a.publishedAt||0);return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===state.date});
   arr=searchArticles(arr);
   arr.sort((a,b)=>new Date(b.publishedAt||0)-new Date(a.publishedAt||0));
   return arr;
@@ -177,8 +179,8 @@ function render(){
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
   if(state.page==='home')renderHome();
   else if(state.page==='categories')renderCategories();
+  else if(state.page==='notes')renderNotes();
   else if(state.page==='favorites')renderFavorites();
-  else if(state.page==='search')renderSearch();
   else renderSettings();
 }
 function toolbar(){return '<div class="toolbar"><input id="globalSearch" class="search" placeholder="搜索标题、股票、分类、总结" value="'+esc(state.search)+'"><button class="pill" id="clearSearch">清除</button></div>'}
@@ -215,17 +217,26 @@ function renderHome(){
   document.getElementById('emptyAction')?.addEventListener('click',()=>{const f=state.sources.length?refreshAll:()=>{state.page='settings';render()};f()});
   bindList()
 }
+function dateList(){const m=new Map();for(const a of state.articles){const d=new Date(a.publishedAt||0);if(Number.isNaN(d.getTime()))continue;const k=d.toISOString().slice(0,10);m.set(k,(m.get(k)||0)+1)}return [...m.entries()].sort((a,b)=>b[0].localeCompare(a[0]))}
 function renderCategories(){
-  const cats=categoryList();
-  const cards=cats.length?cats.map(([c,n])=>'<button class="category-card '+(c===state.category?'active':'')+'" data-cat="'+esc(c)+'"><strong>'+esc(c)+'</strong><span>'+n+' 篇</span></button>').join(''):emptyState('还没有分类','刷新订阅后分类会自动出现。');
-  const list=state.category?'<div class="category-head"><button class="secondary" id="clearCategory">全部分类</button><span>'+esc(state.category)+'</span></div><div id="articleList">'+visibleArticles().map(articleCard).join('')+'</div>':'';
-  app.innerHTML='<div class="section-head"><div><div class="section-title">分类</div><div class="section-subtitle">分类来自 RSS，不写死</div></div></div><div class="category-grid">'+cards+'</div>'+list;
-  document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{state.category=b.dataset.cat;renderCategories()});
-  document.getElementById('clearCategory')?.addEventListener('click',()=>{state.category='';renderCategories()});
+  const cats=categoryList(), dates=dateList();
+  const cards=cats.length?cats.map(([c,n])=>'<button class="category-card '+(c===state.category&&!state.date?'active':'')+'" data-cat="'+esc(c)+'"><strong>'+esc(c)+'</strong><span>'+n+' 篇</span></button>').join(''):emptyState('还没有分类','刷新订阅后分类会自动出现。');
+  const dateCards=dates.length?dates.map(([d,n])=>'<button class="date-card '+(d===state.date?'active':'')+'" data-date="'+esc(d)+'"><strong>'+esc(d.slice(5).replace('-','月')+'日')+'</strong><span>'+n+' 篇</span></button>').join(''):'<div class="settings-empty">暂无日期</div>';
+  const current=state.date?'日期：'+state.date.slice(5).replace('-','月')+'日':state.category?'分类：'+state.category:'全部文章';
+  const list=(state.category||state.date)?'<div class="category-head"><button class="secondary" id="clearCategory">全部</button><span>'+esc(current)+'</span></div><div id="articleList">'+(visibleArticles().map(articleCard).join('')||emptyState('没有文章','这个筛选条件下暂无文章。'))+'</div>':'';
+  app.innerHTML='<div class="section-head"><div><div class="section-title">分类</div><div class="section-subtitle">按分类或日期浏览</div></div></div><h3 class="browse-title">按分类</h3><div class="category-grid">'+cards+'</div><h3 class="browse-title">按日期</h3><div class="date-grid">'+dateCards+'</div>'+list;
+  document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{state.category=b.dataset.cat;state.date='';renderCategories()});
+  document.querySelectorAll('[data-date]').forEach(b=>b.onclick=()=>{state.date=b.dataset.date;state.category='';renderCategories()});
+  document.getElementById('clearCategory')?.addEventListener('click',()=>{state.category='';state.date='';renderCategories()});
+  bindList()
+}
+function renderNotes(){
+  const arr=state.articles.filter(a=>Array.isArray(a.notes)&&a.notes.length).sort((a,b)=>new Date(b.notes?.at(-1)?.time||0)-new Date(a.notes?.at(-1)?.time||0));
+  app.innerHTML='<div class="section-head"><div><div class="section-title">点评</div><div class="section-subtitle">'+arr.length+' 篇有点评的文章</div></div></div><div id="articleList">'+(arr.length?arr.map(articleCard).join(''):emptyState('还没有点评','打开文章后即可记录自己的点评。'))+'</div>';
   bindList()
 }
 function renderFavorites(){
-  state.category='';
+  state.category='';state.date='';
   const arr=state.articles.filter(a=>a.favorite);
   app.innerHTML='<div class="section-head"><div><div class="section-title">收藏</div><div class="section-subtitle">'+arr.length+' 篇</div></div></div>'+toolbar()+
     '<div id="articleList">'+(arr.length?searchArticles(arr).sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt)).map(articleCard).join(''):emptyState('还没有收藏','阅读文章时点星收藏。'))+'</div>';
@@ -239,11 +250,11 @@ function renderSearch(){
 function renderSettings(){
   const srcs=state.sources.map(s=>'<div class="source-setting-item"><div class="source-setting-main"><div class="source-setting-title"><strong>'+esc(s.name)+'</strong><span class="source-status '+(s.lastError?'error':s.lastSyncAt?'ok':'idle')+'">'+(s.lastError?'失败':s.lastSyncAt?'正常':'未刷新')+'</span></div><div class="source-setting-url">'+esc(s.url)+'</div><div class="source-setting-meta"><span>'+Number(s.lastItemCount||0)+' 条</span><span>'+(s.lastSyncAt?fmtTime(s.lastSyncAt):'尚未刷新')+'</span></div>'+(s.lastError?'<div class="source-error">'+esc(s.lastError)+'</div>':'')+'<div class="source-setting-actions"><button class="small-button" data-source-refresh="'+esc(s.id)+'">刷新</button><button class="small-button danger" data-source-delete="'+esc(s.id)+'">删除</button></div></div></div>').join('');
   app.innerHTML='<div class="settings-hero"><div class="settings-hero-mark">RSS</div><div class="settings-hero-main"><div class="eyebrow">AGU ANN FEED</div><h2>设置</h2><p>订阅源、更新、备份全部独立管理。</p></div><div class="version-badge">v'+APP_VERSION+'</div></div>'+
-    '<section class="setting-card"><h2>添加订阅源</h2><label class="field"><span>名称</span><input id="sourceName" placeholder="例如：全部公告"></label><label class="field"><span>Feed URL</span><input id="sourceUrl" value="'+esc(DEFAULT_BASE+'/feed')+'" placeholder="https://.../feed"></label><label class="field"><span>Token</span><input id="sourceToken" type="password" autocomplete="off" placeholder="x-feed-token / token"></label><label class="field"><span>分类（可选）</span><input id="sourceCategory" placeholder="重组 / 财报摘要 / 留空全量"></label><button class="primary" id="addSource">保存订阅源</button></section>'+
+    '<section class="setting-card"><h2>添加订阅源</h2><label class="field"><span>名称</span><input id="sourceName" placeholder="例如：全部公告"></label><label class="field"><span>Feed URL</span><input id="sourceUrl" value="'+esc(DEFAULT_BASE+'/feed')+'" placeholder="https://.../feed"></label><label class="field"><span>Token</span><input id="sourceToken" type="password" autocomplete="off" placeholder="x-feed-token / token"></label><div class="setting-hint">分类由公告源自动提供；在“分类”页面可按分类或日期浏览，这里不需要填写分类。</div><button class="primary" id="addSource">保存订阅源</button></section>'+
     '<section class="setting-card"><div class="settings-section-head"><div><h2>现有订阅源</h2><div class="section-subtitle">'+state.sources.length+' 个</div></div><button class="small-button" id="refreshAll">全部刷新</button></div><div class="source-settings-list">'+(srcs||'<div class="settings-empty"><div>没有订阅源</div><span>输入 agu-ann-feed 地址和 Token。</span></div>')+'</div></section>'+
     '<section class="setting-card"><div class="settings-section-head"><div><h2>应用更新</h2><div class="section-subtitle">当前 '+APP_VERSION+' · '+APP_VERSION_CODE+'</div></div></div><button class="setting-row-button" id="checkUpdate"><span><strong>检查新版本</strong><small>从官方更新清单读取并校验 SHA-256</small></span><b>›</b></button><div class="update-progress" id="updateProgress"><div class="update-progress-line"><span id="updateDesc"></span><strong id="updatePct">0%</strong></div><div class="update-progress-track"><i id="updateFill"></i></div></div></section>'+
     '<section class="setting-card"><h2>本机数据</h2><div class="data-stats"><div><strong>'+state.articles.length+'</strong><span>文章</span></div><div><strong>'+state.articles.filter(a=>a.favorite).length+'</strong><span>收藏</span></div><div><strong>'+state.articles.filter(a=>a.read).length+'</strong><span>已读</span></div><div><strong>'+state.articles.filter(a=>a.notes?.length).length+'</strong><span>点评</span></div></div><div class="settings-action-grid"><button class="secondary" id="exportData">导出备份</button><button class="secondary" id="importData">导入备份</button></div></section>'+
-    '<section class="setting-card danger-section"><h2>清空本机数据</h2><button class="danger-action" id="clearData">清空订阅、文章、收藏和点评</button></section>';
+    '<section class="setting-card danger-section"><h2>清空文章数据</h2><p class="danger-desc">只清除本机文章、已读、收藏和点评，订阅源及 Token 保留。</p><button class="danger-action" id="clearData">清空文章数据</button></section>';
   document.getElementById('addSource').onclick=addSource;
   document.getElementById('refreshAll').onclick=refreshAll;
   document.querySelectorAll('[data-source-refresh]').forEach(b=>b.onclick=async()=>{const s=state.sources.find(x=>x.id===b.dataset.sourceRefresh);if(!s)return;try{toast('正在刷新');await refreshSource(s);await loadState();render();toast('刷新成功')}catch(e){s.lastError=e.message||String(e);await storePut(STORE_SOURCES,s);await loadState();render();toast('刷新失败：'+s.lastError)}});
@@ -251,13 +262,13 @@ function renderSettings(){
   document.getElementById('checkUpdate').onclick=checkUpdate;
   document.getElementById('exportData').onclick=exportBackup;
   document.getElementById('importData').onclick=()=>window.AndroidNative?.openBackupPicker?.()||importFileEl.click();
-  document.getElementById('clearData').onclick=async()=>{if(!confirm('确定清空全部本机数据？'))return;await clearStores();state.sources=[];state.articles=[];render();toast('已清空')};
+  document.getElementById('clearData').onclick=async()=>{if(!confirm('确定清空文章、已读、收藏和点评？订阅源会保留。'))return;await clearArticles();await loadState();render();toast('文章数据已清空，订阅源已保留')};
 }
 async function addSource(){
   const name=(document.getElementById('sourceName').value||'公告订阅').trim();
   const url=normalizeHttps(document.getElementById('sourceUrl').value||'');
   const token=(document.getElementById('sourceToken').value||'').trim();
-  const category=(document.getElementById('sourceCategory').value||'').trim();
+  const category='';
   if(!url){toast('请输入 HTTPS Feed URL');return}
   if(!token){toast('请输入 Token');return}
   const s={id:sourceId(url,category),name,url,token,category,createdAt:now(),lastItemCount:0,lastSyncAt:'',lastError:''};
@@ -278,7 +289,7 @@ function closeDetail(){
 }
 function renderDetail(a){
   const ans=Object.entries(a.answers||{});
-  modalRoot.innerHTML='<div class="modal-backdrop" id="detailBackdrop"><article class="modal"><div class="modal-head"><div><div class="article-kicker">'+esc(a.category||'其他')+'</div><h2 class="modal-title">'+esc(a.title||'无标题')+'</h2></div><button class="close" id="detailClose">×</button></div>'+
+  modalRoot.innerHTML='<div class="modal-backdrop" id="detailBackdrop"><article class="modal detail-page"><div class="modal-head"><div><div class="article-kicker">'+esc(a.category||'其他')+'</div><h2 class="modal-title">'+esc(a.title||'无标题')+'</h2></div><button class="close" id="detailClose">×</button></div>'+
     '<div class="detail-meta"><span>'+esc(a.stock?.name||'综合')+(a.stock?.code?' · '+esc(a.stock.code):'')+'</span><span>'+esc(fmtTime(a.publishedAt))+'</span></div>'+
     (a.summary?'<section class="detail-section"><h3>AI总结</h3><div class="summary-box">'+esc(a.summary)+'</div></section>':'')+
     (ans.length?'<section class="detail-section"><h3>结构化信息</h3><div class="answer-list">'+ans.map(([k,v])=>'<div><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div></section>':'')+
@@ -353,7 +364,7 @@ async function loadState(){
   state.sources=await storeGetAll(STORE_SOURCES);state.articles=await storeGetAll(STORE_ARTICLES);
   state.sources.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
 }
-document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{state.page=b.dataset.page;state.search='';state.category='';render()});
+document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{state.page=b.dataset.page;state.search='';state.category='';state.date='';render()});
 document.getElementById('refreshButton').onclick=refreshAll;
 init();
 async function init(){try{await loadState();render()}catch(e){app.innerHTML=emptyState('初始化失败',e.message||String(e));}}
