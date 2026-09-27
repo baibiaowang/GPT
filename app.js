@@ -1,4 +1,4 @@
-const APP_VERSION='3.0.9',APP_VERSION_CODE=3009,
+const APP_VERSION='3.0.10',APP_VERSION_CODE=3010,
 UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
@@ -136,65 +136,146 @@ async function deleteSource(id){const s=sourceById(id);if(!s)return;if(!confirm(
 function closeModal(fromHistory=false){const hadHistory=state.modalHistory;state.modalArticleId=null;state.modalHistory=false;modalRoot.innerHTML='';if(hadHistory&&!fromHistory){history.back()}}
 async function refreshFeeds(){if(!state.sources.length)return toast('请先添加订阅源');document.getElementById('refreshButton').disabled=true;let failed=0;try{for(const s of state.sources){const ok=await refreshSource(s);if(!ok)failed++}state.sources=await getAll('sources');state.articles=await getAll('articles');render();toast(failed?('刷新完成：'+(state.sources.length-failed)+' 个成功，'+failed+' 个失败'):'订阅刷新完成')}finally{document.getElementById('refreshButton').disabled=false}}
 async function fetchFeedText(url){
+  const nativeErrors=[];
   if(window.AndroidNative?.fetchFeed&&window.AndroidNative?.readFeedChunk){
-    return await new Promise((resolve,reject)=>{
-      window.__rssNativeFeedWaiter=(ok,message)=>{
-        window.__rssNativeFeedWaiter=null;
-        if(!ok){reject(Error(message||'原生读取订阅失败'));return}
-        try{
-          let out='',offset=0,chunk=131072;
-          const decoder=new TextDecoder('utf-8');
-          for(;;){
-            const b64=AndroidNative.readFeedChunk(offset,chunk);
-            if(!b64)break;
-            const bin=atob(b64),bytes=new Uint8Array(bin.length);
-            for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-            out+=decoder.decode(bytes,{stream:true});
-            offset+=bytes.length;
-            if(bytes.length<chunk)break;
-          }
-          out+=decoder.decode();
-          resolve(out)
-        }catch(e){reject(e)}
-      };
-      try{AndroidNative.fetchFeed(url)}catch(e){window.__rssNativeFeedWaiter=null;reject(e)}
-    });
+    try{
+      return await new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>{window.__rssNativeFeedWaiter=null;reject(Error('原生读取数据源超时'))},45000);
+        window.__rssNativeFeedWaiter=(ok,message)=>{
+          clearTimeout(timer);window.__rssNativeFeedWaiter=null;
+          if(!ok){reject(Error(message||'原生读取订阅失败'));return}
+          try{
+            let out='',offset=0,chunk=131072;
+            const decoder=new TextDecoder('utf-8');
+            for(;;){
+              const b64=AndroidNative.readFeedChunk(offset,chunk);
+              if(!b64)break;
+              const bin=atob(b64),bytes=new Uint8Array(bin.length);
+              for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+              out+=decoder.decode(bytes,{stream:true});
+              offset+=bytes.length;
+              if(bytes.length<chunk)break;
+            }
+            out+=decoder.decode();
+            if(!out.trim())throw Error('原生读取到空内容');
+            resolve(out);
+          }catch(e){reject(e)}
+        };
+        try{AndroidNative.fetchFeed(url)}catch(e){clearTimeout(timer);window.__rssNativeFeedWaiter=null;reject(e)}
+      });
+    }catch(e){nativeErrors.push(String(e?.message||e))}
   }
-  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return await r.text();
+  try{
+    const endpointUrl=cacheBustUrl(url,'nocache',Date.now());
+    const r=await fetch(endpointUrl,{cache:'no-store',headers:{Accept:'application/json,application/rss+xml,application/atom+xml,application/feed+json,text/xml,text/plain,*/*'}});
+    if(!r.ok)throw Error('HTTP '+r.status);
+    const text=await r.text();
+    if(!text.trim())throw Error('服务器返回空内容');
+    return text;
+  }catch(e){
+    const webError=String(e?.message||e);
+    if(nativeErrors.length)throw Error('原生读取失败：'+nativeErrors.join('；')+'；WebView读取失败：'+webError);
+    throw Error(webError);
+  }
 }
-window.__rssNativeFeedResult=(ok,message)=>{const waiter=window.__rssNativeFeedWaiter;if(typeof waiter==='function')waiter(!!ok,String(message||''))};
-async function refreshSource(s){try{const xml=await fetchFeedText(s.url),items=parseFeed(xml,s);if(!items.length)throw Error('订阅源已读取，但未解析出任何文章，请检查 Feed 格式');for(const item of items){const id=await articleId(item,s);let old=await get('articles',id);if(!old){const legacyId=await sha(item.guid||item.link||item.title+'|'+(item.publishedAt||''));const legacy=await get('articles',legacyId);if(legacy?.sourceId===s.id)old=legacy}await put('articles',{...old,...item,id,sourceId:s.id,sourceType:s.type,fetchedAt:new Date().toISOString(),favorite:old?.favorite===true,notes:Array.isArray(old?.notes)?old.notes:[]})}await put('sources',{...s,lastSyncAt:new Date().toISOString(),lastError:null,lastItemCount:items.length});state.articles=await getAll('articles');return true}catch(e){await put('sources',{...s,lastError:String(e.message||e)});toast(s.name+' 抓取失败：'+String(e.message||e));return false}}
+async function refreshSource(s){
+ try{
+  let xml='';
+  let items=[];
+  let firstError='';
+  try{
+   xml=await fetchFeedText(s.url);
+   items=parseFeed(xml,s);
+  }catch(e){
+   firstError=String(e?.message||e);
+   try{
+    const fallback=await fetch(cacheBustUrl(s.url,'nocache',Date.now()),{cache:'no-store'});
+    if(!fallback.ok)throw Error('HTTP '+fallback.status);
+    const fallbackText=await fallback.text();
+    items=parseFeed(fallbackText,s);
+    xml=fallbackText;
+   }catch(fallbackError){
+    throw Error(firstError+(fallbackError&&fallbackError.message?'；备用通道：'+fallbackError.message:''));
+   }
+  }
+  if(!items.length)throw Error('订阅源读取成功，但未解析出任何文章，请检查 Feed 内容格式');
+for(const item of items){const id=await articleId(item,s);let old=await get('articles',id);if(!old){const legacyId=await sha(item.guid||item.link||item.title+'|'+(item.publishedAt||''));const legacy=await get('articles',legacyId);if(legacy?.sourceId===s.id)old=legacy}await put('articles',{...old,...item,id,sourceId:s.id,sourceType:s.type,fetchedAt:new Date().toISOString(),favorite:old?.favorite===true,notes:Array.isArray(old?.notes)?old.notes:[]})}await put('sources',{...s,lastSyncAt:new Date().toISOString(),lastError:null,lastItemCount:items.length});state.articles=await getAll('articles');return true}catch(e){await put('sources',{...s,lastError:String(e.message||e)});toast(s.name+' 抓取失败：'+String(e.message||e));return false}}
+function tryDecodeFeedEnvelope(value){
+ let text=String(value??'').replace(/^\uFEFF/,'').trim();
+ for(let depth=0;depth<3;depth++){
+   if(text.startsWith('{')||text.startsWith('[')||text.startsWith('<'))return text;
+   const compact=text.replace(/\\s+/g,'');
+   if(compact.length<12||compact.length%4!==0||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(compact))return text;
+   try{
+     const bin=atob(compact),bytes=new Uint8Array(bin.length);
+     for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+     const decoded=new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/,'').trim();
+     if(!decoded||decoded===text)return text;
+     text=decoded;
+   }catch{return text}
+ }
+ return text;
+}
 function parseFeed(text,s){
- const trimmed=text.replace(/^\uFEFF/,'').trim();
- if(trimmed.startsWith('{')){
+ const trimmed=tryDecodeFeedEnvelope(text);
+ if(trimmed.startsWith('{')||trimmed.startsWith('[')){
    let j;try{j=JSON.parse(trimmed)}catch{throw Error('Feed JSON 解析失败')}
-   const items=Array.isArray(j.items)?j.items:Array.isArray(j.entries)?j.entries:Array.isArray(j.articles)?j.articles:Array.isArray(j.data)?j.data:null;
+   let items;
+   if(Array.isArray(j))items=j;
+   else if(Array.isArray(j.items))items=j.items;
+   else if(Array.isArray(j.entries))items=j.entries;
+   else if(Array.isArray(j.articles))items=j.articles;
+   else if(Array.isArray(j.data))items=j.data;
+   else if(j.data&&typeof j.data==='object'){
+     if(Array.isArray(j.data.items))items=j.data.items;
+     else if(Array.isArray(j.data.entries))items=j.data.entries;
+     else if(Array.isArray(j.data.articles))items=j.data.articles;
+   }
    if(items){
      return items.map(x=>{
-       const htmlContent=typeof x.content_html==='string'?x.content_html:(typeof x.contentHtml==='string'?x.contentHtml:'');
-       const textContent=String(x.content_text||x.contentText||x.summary||x.description||x.content||'');
+       const obj=(x&&typeof x==='object')?x:{title:String(x??'')};
+       const htmlContent=typeof obj.content_html==='string'?obj.content_html:(typeof obj.contentHtml==='string'?obj.contentHtml:(typeof obj.content==='string'&&/<[a-z][\\s\\S]*>/i.test(obj.content)?obj.content:''));
+       const textContent=String(obj.content_text||obj.contentText||obj.summary||obj.description||obj.content||'');
        const content=htmlContent?sanitize(htmlContent,s.url):'<p>'+esc(textContent).replace(/\n/g,'<br>')+'</p>';
-       const title=x.title||x.name||'无标题',link=absoluteUrl(x.url||x.link||x.external_url||x.externalUrl||'',s.url),guid=x.id||x.guid||x.uid||link||title,publishedAt=x.date_published||x.datePublished||x.published_at||x.publishedAt||x.date_modified||x.updated||'',summary=onlyText(content).replace(/\s+/g,' ').trim().slice(0,700),stock=stockInfo(title+'\n'+summary+'\n'+JSON.stringify(x));
-       return {title,link,guid,content:sanitize(content,s.url),summary,publishedAt,author:x.author?.name||x.author?.url||x.author||x.creator||'',stockName:x.stockName||x.stock_name||stock.name,stockCode:x.stockCode||x.stock_code||x.symbol||stock.code,sourceId:s.id,sourceType:s.type,extra:x};
-     });
+       const title=obj.title||obj.name||'无标题';
+       const link=absoluteUrl(obj.url||obj.link||obj.external_url||obj.externalUrl||'',s.url);
+       const guid=obj.id||obj.guid||obj.uid||link||title;
+       const publishedAt=obj.date_published||obj.datePublished||obj.published_at||obj.publishedAt||obj.date_modified||obj.updated||obj.date||'';
+       const author=typeof obj.author==='object'?String(obj.author?.name||obj.author?.url||''):String(obj.author||obj.creator||'');
+       const summary=onlyText(content).replace(/\s+/g,' ').trim().slice(0,700);
+       const stock=stockInfo(title+'\n'+summary+'\n'+JSON.stringify(obj));
+       return {title,link,guid,content,summary,publishedAt,author,stockName:obj.stockName||obj.stock_name||stock.name,stockCode:obj.stockCode||obj.stock_code||obj.symbol||stock.code,sourceId:s.id,sourceType:s.type};
+     }).filter(x=>String(x.title||'').trim()||String(x.link||'').trim()||String(x.content||'').trim());
    }
+   throw Error('JSON Feed 中未找到 items/entries/articles/data 数组');
  }
- const d=new DOMParser().parseFromString(text,'application/xml');if(d.querySelector('parsererror'))throw Error('RSS/Atom XML 解析失败');
- let nodes=[...d.getElementsByTagName('item')],atom=false;if(!nodes.length){nodes=[...d.getElementsByTagName('entry')];atom=true}if(!nodes.length){nodes=[...d.getElementsByTagName('article')];atom=false}
+ if(!trimmed.startsWith('<'))throw Error('订阅源返回内容不是可识别的 RSS/Atom/JSON Feed');
+ const d=new DOMParser().parseFromString(trimmed,'application/xml');
+ if(d.querySelector('parsererror'))throw Error('RSS/Atom XML 解析失败');
+ let nodes=[...d.getElementsByTagName('item')],atom=false;
+ if(!nodes.length){nodes=[...d.getElementsByTagName('entry')];atom=true}
+ if(!nodes.length){nodes=[...d.getElementsByTagName('article')];atom=false}
  return nodes.map(n=>{
    const title=nodeText(n,'title')||'无标题';
-   const link=absoluteUrl(atom?([...n.getElementsByTagName('link')].find(x=>(x.getAttribute('rel')||'alternate')==='alternate')?.getAttribute('href')||[...n.getElementsByTagName('link')][0]?.getAttribute('href')||''):nodeText(n,'link'),s.url);
+   let link='';
+   if(atom){
+     const alternate=n.querySelector('link[rel="alternate"]')?.getAttribute('href')||n.querySelector('link[href]')?.getAttribute('href')||nodeText(n,'link');
+     link=absoluteUrl(alternate,s.url);
+   }else{
+     link=absoluteUrl(nodeText(n,'link')||n.querySelector('link[href]')?.getAttribute('href')||'',s.url);
+   }
    const guid=nodeText(n,'guid')||nodeText(n,'id')||link||title;
    const raw=nodeText(n,'content:encoded')||nodeText(n,'content')||nodeText(n,'description')||nodeText(n,'summary');
    const extra=getLocalFields(n);
    const preferred=extra.summary||extra.description||extra.content||raw;
    const summary=onlyText(preferred).replace(/\s+/g,' ').trim().slice(0,700);
-   const publishedAt=nodeText(n,'pubDate')||nodeText(n,'published')||nodeText(n,'updated')||extra.published||extra.updated||'';
+   const publishedAt=nodeText(n,'pubDate')||nodeText(n,'published')||nodeText(n,'updated')||extra.published||extra.updated||extra.pubDate||'';
    const author=extra.author||extra.creator||nodeText(n,'dc:creator')||nodeText(n,'author');
-   const code=extra.symbol||extra.stockCode||extra.code||'',name=extra.stockName||extra.company||extra.name||'';
-   const stock=stockInfo(title+'\\n'+summary);
+   const code=extra.symbol||extra.stockCode||extra.stock_code||extra.code||'';
+   const name=extra.stockName||extra.stock_name||extra.company||extra.name||'';
+   const stock=stockInfo(title+'\n'+summary);
    return {title,link,guid,content:sanitize(raw,s.url),summary,publishedAt,author,stockName:name||stock.name,stockCode:code||stock.code,sourceId:s.id,sourceType:s.type,extra};
- });
+ }).filter(x=>String(x.title||'').trim()||String(x.link||'').trim()||String(x.content||'').trim());
 }
 function getLocalFields(n){
  const out={};
