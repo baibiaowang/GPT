@@ -268,6 +268,7 @@ public class MainActivity extends BridgeActivity {
                 }
 
                 Charset charset = resolveResponseCharset(conn.getContentType());
+                boolean preserveBytes = StandardCharsets.UTF_8.equals(charset);
                 long done = 0L;
                 try (InputStream in = new BufferedInputStream(conn.getInputStream());
                      OutputStream outStream = new FileOutputStream(part, false)) {
@@ -299,7 +300,7 @@ public class MainActivity extends BridgeActivity {
                     outStream.flush();
                 }
 
-                if (length > 0 && done != length) {
+                if (preserveBytes && length > 0 && done != length) {
                     throw new Exception(label + "读取长度异常：" + done + "/" + length);
                 }
                 if (!part.exists() || part.length() == 0) {
