@@ -5,6 +5,16 @@ on:
   push:
     branches: [main]
     paths:
+      - 'app.js'
+      - 'index.html'
+      - 'styles.css'
+      - 'manifest.json'
+      - 'sw.js'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - 'native/**'
+      - 'scripts/**'
+      - 'assets/**'
       - '.github/workflows/release-rss-v3.yml'
 
 permissions:
@@ -74,13 +84,13 @@ jobs:
           echo "SIGNING_KEYSTORE_PATH=$PWD/signing.p12" >> "$GITHUB_ENV"
 
       - name: Install RSS dependencies
-                run: npm install --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: RSS pre-build self-check
-                run: node scripts/self-check.mjs
+        run: node scripts/self-check.mjs
 
       - name: Prepare mobile web
-                run: node native/inject.mjs
+        run: node native/inject.mjs
 
       - name: Prepare Android project
         run: |
@@ -88,7 +98,7 @@ jobs:
           npx cap add android
 
       - name: Inject RSS native bridge
-                run: |
+        run: |
           set -euo pipefail
           mkdir -p android/app/src/main/java/com/baibiaowang/stockjudge
           cp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java
@@ -105,7 +115,7 @@ jobs:
           ! grep -RInE 'agu-ann-feed\\.app\\.workbuddy\\.host/feed\\?token=[0-9A-Fa-f]{32,}' --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.gradle .
 
       - name: Configure fixed release signing
-                run: |
+        run: |
           set -euo pipefail
           node <<'NODE'
           const fs=require('node:fs');
@@ -130,14 +140,14 @@ jobs:
           NODE
 
       - name: Sync
-                run: npx cap sync android
+        run: npx cap sync android
 
       - name: Build release APK
         working-directory: android
         run: gradle assembleRelease --no-daemon
 
       - name: Verify signature and APK
-                run: |
+        run: |
           set -euo pipefail
           APK=android/app/build/outputs/apk/release/app-release.apk
           test -f "$APK"
@@ -173,7 +183,7 @@ jobs:
       - name: Publish 3.0 APK mirror on GPT
         env:
           GH_TOKEN: ${{ github.token }}
-                run: |
+        run: |
           set -euo pipefail
           rm -rf /tmp/gpt-apk-mirror
           git clone --depth 1 "https://x-access-token:$GH_TOKEN@github.com/${GITHUB_REPOSITORY}.git" /tmp/gpt-apk-mirror
@@ -223,7 +233,7 @@ jobs:
             gh release create "$TAG" "$ASSET" --title "$TITLE" --notes "自制RSS：由旧股票判断机正式切换为 RSS 阅读模式。\n\nRSS source commit: ${RSS_SOURCE_COMMIT}"
           fi
       - name: Verify published APK URLs
-                run: |
+        run: |
           set -euo pipefail
           PRIMARY_RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/apk/releases/${RSS_VERSION}/app.apk"
           PRIMARY_RELEASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${RSS_VERSION}/zizhi-rss-${RSS_VERSION}.apk"
@@ -251,7 +261,7 @@ jobs:
           done
 
       - name: Generate compatible update.json
-                run: |
+        run: |
           set -euo pipefail
           python - <<'PY'
           import json,os
