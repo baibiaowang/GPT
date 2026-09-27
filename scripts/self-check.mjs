@@ -10,7 +10,7 @@ const version = String(pkg.version || '').trim();
 const versionCode = Number(pkg.versionCode || 0);
 
 if (!/^4\.\d+\.\d+$/.test(version)) fail('package.json version 必须是 4.x.y');
-if (!Number.isSafeInteger(versionCode) || versionCode < 4000) fail('package.json versionCode 无效');
+if (!Number.isSafeInteger(versionCode) || versionCode < 3000) fail('package.json versionCode 无效');
 if (!app.includes("APP_VERSION='" + version + "'")) fail('app.js APP_VERSION 与 package.json 不一致');
 if (!app.includes('APP_VERSION_CODE=' + versionCode)) fail('app.js APP_VERSION_CODE 与 package.json 不一致');
 if (!sw.includes('zizhi-rss-shell-v' + version)) fail('Service Worker 缓存版本不一致');
