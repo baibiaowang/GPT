@@ -214,7 +214,8 @@ public class MainActivity extends BridgeActivity {
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(30000);
             conn.setRequestMethod("GET");
-            conn.setRequestProperty("Accept", "text/plain,*/*");
+            conn.setRequestProperty("User-Agent", "StockJudge-GPT-Updater/2.1.14");
+            conn.setRequestProperty("Accept", "application/json,text/plain,*/*");
             conn.setRequestProperty("Accept-Encoding", "identity");
             conn.setRequestProperty("Cache-Control", "no-cache");
             int code = conn.getResponseCode();
