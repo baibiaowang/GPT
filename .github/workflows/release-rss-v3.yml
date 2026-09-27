@@ -49,10 +49,15 @@ jobs:
           node-version: '22'
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.14.3'
 
       - name: Restore old signing material
         env:
@@ -130,9 +135,7 @@ jobs:
 
       - name: Build release APK
         working-directory: rss-source/android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon
 
       - name: Verify signature and APK
         working-directory: rss-source
