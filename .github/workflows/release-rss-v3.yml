@@ -125,7 +125,7 @@ jobs:
           node --check app.js
           cmp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java
           git diff --check
-          ! grep -RInE 'agu-ann-feed\\.app\\.workbuddy\\.host' --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.gradle .
+          ! grep -RInE 'agu-ann-feed\\.app\\.workbuddy\\.host/feed\\?token=[0-9A-Fa-f]{32,}' --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.gradle .
 
       - name: Configure fixed release signing
         working-directory: rss-source
@@ -341,7 +341,7 @@ jobs:
 # Release trigger 3: rebuild after idempotent Manifest patch correction.
 # Release trigger 4: rebuild after source-scan scope correction and Android callback fixes.
 # Release trigger 5: rebuild 3.0.4 with extended CDN propagation verification.
-# Release trigger 10: final RSS 3.0.5 native redirect fix.
+# Release trigger 11: fix false-positive secret scan in release validation.
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
 # Retry after Android resource deduplication in committed RSS project.
 
