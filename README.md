@@ -2,7 +2,7 @@
 
 baibiaowang/GPT 是自制 RSS 阅读器唯一代码仓库。
 
-当前版本：4.0.0 / versionCode 4000
+当前版本：3.0.12 / versionCode 3012
 
 项目按 RSS 阅读器重新实现，专用对接 agu-ann-feed。客户端不再依赖股票判断机的数据表、判断规则或旧数据库。
 
