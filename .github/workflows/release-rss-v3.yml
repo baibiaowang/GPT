@@ -107,6 +107,12 @@ jobs:
           node native/patch-manifest.mjs
           node native/patch-version.mjs
           node native/patch-icon.mjs
+          node --check native/inject.mjs
+          node --check native/patch-manifest.mjs
+          node --check native/patch-version.mjs
+          node --check native/patch-icon.mjs
+          cmp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java
+          git diff --check
 
       - name: Configure fixed release signing
         working-directory: rss-source
