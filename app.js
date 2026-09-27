@@ -1,576 +1,357 @@
-const APP_VERSION='3.0.11',APP_VERSION_CODE=3011,
-UPDATE_MANIFEST_URLS=[
+/* 自制 RSS 阅读器 4.0.0
+ * 专用于 agu-ann-feed，同时兼容标准 RSS 2.0。
+ * 本文件是全新客户端核心：本地状态只按 guid 绑定，旧股票判断机数据不参与迁移。
+ */
+const APP_VERSION='4.0.0', APP_VERSION_CODE=4000;
+const DEFAULT_BASE='https://agu-ann-feed.app.workbuddy.host';
+const UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
-  'https://fastly.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
-  'https://gcore.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
+  'https://fastly.jsdelivr.net/gh/baibiaowang/GPT@main/update.json'
 ];
-const DB_NAME='stock-rss-reader',DB_VERSION=1;
-const TITLES={subscriptions:'订阅',favorites:'收藏',notes:'点评',settings:'设置'},LOCAL_ID='__local_archive__';
-const state={page:'subscriptions',activeSourceId:null,search:'',sources:[],articles:[],modalArticleId:null,modalHistory:false};
-const app=document.getElementById('app'),modalRoot=document.getElementById('modalRoot'),toastEl=document.getElementById('toast'),importFileEl=document.getElementById('importFile');
-
-function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('sources'))d.createObjectStore('sources',{keyPath:'id'});if(!d.objectStoreNames.contains('articles'))d.createObjectStore('articles',{keyPath:'id'});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function getAll(store){const d=await db();return new Promise((res,rej)=>{const r=d.transaction(store,'readonly').objectStore(store).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
-async function get(store,key){const d=await db();return new Promise((res,rej)=>{const r=d.transaction(store,'readonly').objectStore(store).get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
-async function put(store,val){const d=await db();return new Promise((res,rej)=>{const t=d.transaction(store,'readwrite');t.objectStore(store).put(val);t.oncomplete=res;t.onerror=()=>rej(t.error)})}
-async function del(store,key){const d=await db();return new Promise((res,rej)=>{const t=d.transaction(store,'readwrite');t.objectStore(store).delete(key);t.oncomplete=res;t.onerror=()=>rej(t.error)})}
-async function clearDB(){const d=await db();return new Promise((res,rej)=>{const t=d.transaction(['sources','articles'],'readwrite');t.objectStore('sources').clear();t.objectStore('articles').clear();t.oncomplete=res;t.onerror=()=>rej(t.error)})}
-async function sha(input){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(input));return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+const DB_NAME='zizhi-rss-reader', DB_VERSION=1;
+const STORE_SOURCES='sources', STORE_ARTICLES='articles', BACKUP_VERSION=1;
+const navTitles={home:'首页',categories:'分类',favorites:'收藏',search:'搜索',settings:'设置'};
+const app=document.getElementById('app'), modalRoot=document.getElementById('modalRoot'), toastEl=document.getElementById('toast');
+const importFileEl=document.getElementById('importFile');
+const state={page:'home',search:'',category:'',sources:[],articles:[],detailGuid:null,detailHistory:false,loading:false};
+const now=()=>new Date().toISOString();
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const fmt=v=>{if(!v)return'';const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})};
-const onlyText=h=>{const d=document.createElement('div');d.innerHTML=h||'';return d.textContent||d.innerText||''};
-const toast=m=>{toastEl.textContent=m;toastEl.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>toastEl.classList.remove('show'),3000)};
-const sourceById=id=>state.sources.find(s=>s.id===id);
-const countSource=id=>state.articles.filter(a=>a.sourceId===id).length;
-const filtered=arr=>{const q=state.search.trim().toLowerCase();return q?arr.filter(a=>[a.title,a.stockName,a.stockCode,a.summary,onlyText(a.content),sourceById(a.sourceId)?.name].some(x=>String(x||'').toLowerCase().includes(q))):arr};
+const textOf=h=>{const d=document.createElement('div');d.innerHTML=String(h||'');return d.textContent||d.innerText||''};
+const fmtTime=v=>{if(!v)return'';const d=new Date(v);if(Number.isNaN(d.getTime()))return String(v);return d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})};
+const fmtDate=v=>{if(!v)return'';const d=new Date(v);if(Number.isNaN(d.getTime()))return String(v);return d.toLocaleDateString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit'})};
+const toast=m=>{toastEl.textContent=String(m||'');toastEl.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>toastEl.classList.remove('show'),2800)};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-window.addEventListener('popstate',()=>{
-  if(state.modalArticleId!==null){
-    state.modalArticleId=null;
-    state.modalHistory=false;
-    modalRoot.innerHTML='';
+function openDb(){
+  return new Promise((resolve,reject)=>{
+    const r=indexedDB.open(DB_NAME,DB_VERSION);
+    r.onupgradeneeded=()=>{const d=r.result;
+      if(!d.objectStoreNames.contains(STORE_SOURCES))d.createObjectStore(STORE_SOURCES,{keyPath:'id'});
+      if(!d.objectStoreNames.contains(STORE_ARTICLES))d.createObjectStore(STORE_ARTICLES,{keyPath:'guid'});
+    };
+    r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
+  });
+}
+async function storeGetAll(name){const d=await openDb();return new Promise((res,rej)=>{const r=d.transaction(name,'readonly').objectStore(name).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
+async function storePut(name,val){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction(name,'readwrite');t.objectStore(name).put(val);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+async function storeDel(name,key){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction(name,'readwrite');t.objectStore(name).delete(key);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+async function clearStores(){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction([STORE_SOURCES,STORE_ARTICLES],'readwrite');t.objectStore(STORE_SOURCES).clear();t.objectStore(STORE_ARTICLES).clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+
+function normalizeHttps(v){
+  try{const u=new URL(String(v||''));return u.protocol==='https:'&&u.hostname?u.toString():''}catch{return''}
+}
+function feedUrl(source){
+  const base=normalizeHttps(source.url||DEFAULT_BASE); if(!base)throw new Error('订阅地址必须是 HTTPS');
+  const u=new URL(base);
+  if(u.pathname==='/')u.pathname='/feed';
+  if(!u.pathname.startsWith('/feed'))u.pathname='/feed';
+  if(source.token)u.searchParams.set('token',source.token);
+  if(source.category)u.searchParams.set('category',source.category);
+  return u.toString();
+}
+function sourceId(url,category=''){return btoa(unescape(encodeURIComponent(String(url)+'|'+String(category)))).replace(/[^A-Za-z0-9]/g,'').slice(0,48)}
+
+function parseXml(xml){
+  const doc=new DOMParser().parseFromString(xml,'application/xml');
+  if(doc.querySelector('parsererror'))throw new Error('RSS XML 解析失败');
+  const items=[...doc.querySelectorAll('item')];
+  if(!items.length)throw new Error('RSS 中没有文章');
+  return items.map(it=>{
+    const node=n=>it.querySelector(n);
+    const html=node('description')?.textContent||'';
+    const box=document.createElement('div');box.innerHTML=html;
+    const links=[...box.querySelectorAll('a')].map(a=>normalizeHttps(a.href)).filter(Boolean);
+    const title=node('title')?.textContent?.trim()||'无标题';
+    const guid=node('guid')?.textContent?.trim()||node('link')?.textContent?.trim()||title;
+    const category=node('category')?.textContent?.trim()||extractLine(html,'分类')||extractBracketCategory(title)||'其他';
+    const stock=extractStock(title,html);
+    const summary=extractSummary(html);
+    const answers=extractAnswers(html);
+    const pub=node('pubDate')?.textContent?.trim()||new Date().toISOString();
+    return {
+      guid:String(guid), title, category, publishedAt:pub, summary, answers,
+      stock, links:{announcement:normalizeHttps(node('link')?.textContent?.trim())||links[0]||'',pdf:findPdf(links)},
+      market:{close:extractNum(html,'现价'),preClose:extractNum(html,'前收盘价')},
+      rawHtml:html
+    };
+  });
+}
+function extractLine(html,label){const t=textOf(html).split(/\r?\n/).map(s=>s.trim());const p=t.find(s=>s.startsWith(label+'：')||s.startsWith(label+':'));return p?p.replace(/^.*?[：:]\s*/,'').trim():''}
+function extractBracketCategory(t){const m=String(t).match(/^\[([^\]]+)\]/);return m?m[1]:''}
+function extractSummary(html){return extractLine(html,'AI总结')||textOf(html).replace(/^【.*?】.*$/m,'').slice(0,500)}
+function extractStock(title,html){
+  const s=title+' '+textOf(html);
+  const m=s.match(/([\\u4e00-\\u9fffA-Za-z0-9·.（）()]+?)\\s*[（(]\\s*(\\d{6})\\s*[）)]/);
+  return m?{name:m[1].trim(),code:m[2]}:{name:'',code:''};
+}
+function extractNum(html,label){const x=extractLine(html,label);if(!x||/未取到|空/.test(x))return null;const m=x.match(/-?\\d+(?:\\.\\d+)?/);return m?Number(m[0]):null}
+function findPdf(links){return links.find(x=>/\\.pdf(?:[?#]|$)/i.test(x))||''}
+function extractAnswers(html){
+  const t=textOf(html).split(/\r?\n/).map(s=>s.trim()).filter(Boolean), out={};
+  t.forEach(line=>{const m=line.match(/^([^：:]{2,40})[：:]\\s*(.+)$/);if(m&&!/^(AI总结|股票|公告标题|公告日期|现价|前收盘价|链接|分类)$/.test(m[1]))out[m[1]]=m[2].trim()});
+  return out
+}
+
+function decodeBase64Utf8(s){
+  const bin=atob(String(s||'')),bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+  return new TextDecoder('utf-8').decode(bytes);
+}
+async function readNativeFile(chunkFn){
+  let offset=0, out='';
+  for(let i=0;i<2048;i++){
+    const b=window.AndroidNative?.[chunkFn]?.(offset,131072)||'';
+    if(!b)break;
+    const part=decodeBase64Utf8(b); out+=part; offset+=part.length;
+    if(part.length<131072)break;
   }
-});
-async function init(){
- state.sources=await getAll('sources');state.articles=await getAll('articles');
- state.sources.sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
- if(state.activeSourceId!==LOCAL_ID&&(!state.activeSourceId||!sourceById(state.activeSourceId)))state.activeSourceId=state.sources[0]?.id||null;
- document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{state.page=b.dataset.page;state.search='';render()});
- document.getElementById('refreshButton').onclick=refreshFeeds;
- importFileEl.onchange=importBackup;
- render();
- if('serviceWorker'in navigator){
-  navigator.serviceWorker.register('sw.js?v='+encodeURIComponent(APP_VERSION),{updateViaCache:'none'}).then(r=>r.update().catch(()=>{})).catch(()=>{});
+  return out;
 }
+function waitNativeResult(name,trigger,timeout=45000){
+  return new Promise((resolve,reject)=>{
+    let done=false,timer=setTimeout(()=>{if(!done){done=true;reject(new Error('原生读取超时'))}},timeout);
+    window[name]=(ok,msg)=>{if(done)return;done=true;clearTimeout(timer);if(ok)resolve(msg||'');else reject(new Error(msg||'读取失败'))};
+    try{trigger()}catch(e){done=true;clearTimeout(timer);reject(e)}
+  });
 }
-async function articleId(item,source){
- const stable=String(item.guid||item.link||'').trim();
- const fallback=[item.title||'',item.publishedAt||'',item.author||''].join('|').trim()||String(item.summary||item.content||'').slice(0,500);
- return sha(String(source?.id||'')+'|'+(stable||fallback));
+async function fetchText(url,kind='feed'){
+  const u=String(url||'').trim();
+  if(window.AndroidNative){
+    const result=await waitNativeResult(kind==='feed'?'__rssNativeFeedResult':'__rssUpdateResult',
+      ()=>kind==='feed'?window.AndroidNative.fetchFeed(u):window.AndroidNative.fetchUpdateManifest(u));
+    return await readNativeFile(kind==='feed'?'readFeedChunk':'readUpdateChunk');
+  }
+  const r=await fetch(u,{cache:'no-store',headers:{'Cache-Control':'no-cache'}});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return await r.text();
 }
-function absoluteUrl(value,base){
- const v=String(value||'').trim();if(!v)return'';
- try{const u=new URL(v,base);return /^(?:https?):$/i.test(u.protocol)&&u.hostname?u.toString():''}catch{return''}
+function mergeArticle(old,a,source){
+  const meta=old||{};
+  return {...a,guid:String(a.guid),sourceId:source.id,sourceName:source.name,
+    firstSeenAt:meta.firstSeenAt||now(),lastSeenAt:now(),
+    read:Boolean(meta.read),favorite:Boolean(meta.favorite),notes:Array.isArray(meta.notes)?meta.notes:[],
+  };
 }
-function normalizeHttpsUrl(value){
- const v=String(value||'').trim();if(!v)return'';
- try{const u=new URL(v);return u.protocol==='https:'&&u.hostname?u.toString():''}catch{return''}
+async function refreshSource(source){
+  const url=feedUrl(source);
+  source.lastError=''; source.lastAttemptAt=now(); await storePut(STORE_SOURCES,source);
+  const xml=await fetchText(url,'feed');
+  const incoming=parseXml(xml);
+  const existing=await storeGetAll(STORE_ARTICLES);
+  const map=new Map(existing.map(a=>[a.guid,a]));
+  for(const item of incoming)await storePut(STORE_ARTICLES,mergeArticle(map.get(item.guid),item,source));
+  source.lastSyncAt=now();source.lastItemCount=incoming.length;source.lastError='';
+  await storePut(STORE_SOURCES,source);
+  return incoming.length;
 }
-function cacheBustUrl(value,key='nocache',stamp=Date.now()){
- const v=String(value||'').trim();if(!v)return'';
- try{const u=new URL(v);u.searchParams.set(key,String(stamp));return u.toString()}catch{return v}
+async function refreshAll(){
+  if(!state.sources.length){toast('请先在设置添加订阅源');return}
+  if(state.loading)return;
+  state.loading=true;render();
+  let ok=0,fail=0;
+  for(const s of state.sources){
+    try{await refreshSource(s);ok++}catch(e){fail++;s.lastError=String(e.message||e);await storePut(STORE_SOURCES,s)}
+  }
+  await loadState();state.loading=false;render();
+  toast(fail?('刷新完成：成功 '+ok+' 个，失败 '+fail+' 个'):('刷新完成：'+state.sources.reduce((n,s)=>n+(s.lastItemCount||0),0)+' 条'));
 }
-function isTrustedUpdateUrl(value,version){
- try{
-  const u=new URL(String(value||'').trim()),v=String(version||'').trim();
-  if(u.protocol!=='https:')return false;
-  const host=u.hostname.toLowerCase();
-  if(host==='raw.githubusercontent.com')return u.pathname===`/baibiaowang/GPT/apk/releases/${v}/app.apk`;
-  if(host==='github.com')return u.pathname===`/baibiaowang/GPT/releases/download/v${v}/zizhi-rss-${v}.apk`;
-  return false;
- }catch{return false}
+function categoryList(){
+  const m=new Map();for(const a of state.articles){const c=a.category||'其他';m.set(c,(m.get(c)||0)+1)}return [...m.entries()].sort((a,b)=>b[1]-a[1])
 }
+function searchArticles(arr){
+  const q=state.search.trim().toLowerCase();if(!q)return arr;
+  return arr.filter(a=>[a.title,a.category,a.summary,a.stock?.name,a.stock?.code,textOf(a.rawHtml),a.sourceName].some(v=>String(v||'').toLowerCase().includes(q)));
+}
+function visibleArticles(){
+  let arr=state.articles.slice();
+  if(state.category)arr=arr.filter(a=>a.category===state.category);
+  arr=searchArticles(arr);
+  arr.sort((a,b)=>new Date(b.publishedAt||0)-new Date(a.publishedAt||0));
+  return arr;
+}
+
 function render(){
- document.getElementById('pageTitle').textContent=TITLES[state.page];
- document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
- if(state.page==='subscriptions')renderSubs();else if(state.page==='favorites')renderCollection(true);else if(state.page==='notes')renderCollection(false);else renderSettings();
+  document.getElementById('pageTitle').textContent=navTitles[state.page]||'首页';
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
+  if(state.page==='home')renderHome();
+  else if(state.page==='categories')renderCategories();
+  else if(state.page==='favorites')renderFavorites();
+  else if(state.page==='search')renderSearch();
+  else renderSettings();
 }
-function toolbar(){return `<div class="toolbar"><input id="searchInput" class="search" placeholder="搜索标题、股票、摘要" value="${esc(state.search)}"/><button class="pill" id="clearSearch">清除</button></div>`}
-function empty(message,button='去设置'){return `<div class="empty"><div class="empty-icon">⌁</div><div class="empty-title">${esc(message)}</div><div class="empty-desc">历史文章、收藏与点评都保存在当前设备中。</div><button class="primary" data-empty-action>${button}</button></div>`}
-function renderSubs(){
- if(!state.sources.length&&state.articles.length){
-   state.activeSourceId=LOCAL_ID;
- }else if(!state.sources.length){
-   app.innerHTML=empty('还没有订阅源');app.querySelector('[data-empty-action]').onclick=()=>{state.page='settings';render()};return
- }
- const local=state.activeSourceId===LOCAL_ID,src=local?null:(sourceById(state.activeSourceId)||state.sources[0]);
- if(!local)state.activeSourceId=src.id;
- const base=local?state.articles:state.articles.filter(a=>a.sourceId===src.id),arr=filtered(base);
- const chips=[`<button class="source-chip ${local?'active':''}" data-source="${LOCAL_ID}"><strong>本机归档</strong><span>全部已保存 · ${state.articles.length}</span></button>`].concat(state.sources.map(s=>`<button class="source-chip ${s.id===state.activeSourceId?'active':''}" data-source="${esc(s.id)}"><strong>${esc(s.name)}</strong><span>${s.type==='summary'?'公告总结':'股票公告'} · ${countSource(s.id)}</span></button>`)).join('');
- app.innerHTML=`<div class="section-head"><div><div class="section-title">切换订阅源</div><div class="section-subtitle">${local?'本机所有已抓取文章':state.sources.length+' 个源 · '+countSource(src.id)+' 条已保存'}</div></div></div>
- <div class="source-strip">${chips}</div>${toolbar()}<div id="articleList">${cards(arr)}</div>`;
- app.querySelectorAll('[data-source]').forEach(b=>b.onclick=()=>{state.activeSourceId=b.dataset.source;state.search='';render()});
- app.querySelector('#searchInput').oninput=e=>{state.search=e.target.value;app.querySelector('#articleList').innerHTML=cards(filtered(local?state.articles:state.articles.filter(a=>a.sourceId===src.id)));wireCards()};
- app.querySelector('#clearSearch').onclick=()=>{state.search='';render()};wireCards();
+function toolbar(){return '<div class="toolbar"><input id="globalSearch" class="search" placeholder="搜索标题、股票、分类、总结" value="'+esc(state.search)+'"><button class="pill" id="clearSearch">清除</button></div>'}
+function articleCard(a){
+  const unread=!a.read, fav=a.favorite;
+  const stock=a.stock?.name?(a.stock.name+(a.stock.code?' · '+a.stock.code:'')):'';
+  const market=a.market?.close!=null?'现价 '+a.market.close:'';
+  return '<article class="article-card '+(unread?'unread':'read')+'" data-guid="'+esc(a.guid)+'">'+
+    '<div class="article-top"><div class="article-heading"><div class="article-kicker">'+esc(a.category||'其他')+'</div><h3 class="article-title">'+esc(a.title||'无标题')+'</h3></div>'+
+    '<button class="favorite-button '+(fav?'active':'')+'" data-fav="'+esc(a.guid)+'">'+(fav?'★':'☆')+'</button></div>'+
+    '<div class="article-meta"><span>'+esc(stock||'综合')+'</span><span>'+esc(fmtTime(a.publishedAt))+'</span>'+ (market?'<span>'+esc(market)+'</span>':'')+'</div>'+
+    (a.summary?'<div class="article-excerpt">'+esc(a.summary)+'</div>':'')+
+    '<div class="article-actions"><span class="read-state">'+(unread?'未读':'已读')+'</span><button class="small-button" data-open="'+esc(a.guid)+'">阅读</button></div>'+
+  '</article>'
 }
-function renderCollection(fav){
- const arr=state.articles.filter(a=>fav?a.favorite:(a.notes||[]).length);
- app.innerHTML=`<div class="section-head"><div><div class="section-title">${fav?'已收藏文章':'已有点评文章'}</div><div class="section-subtitle">${arr.length} 条 · 本机保存</div></div></div>${toolbar()}<div id="articleList">${cards(filtered(arr),true)}</div>`;
- app.querySelector('#searchInput').oninput=e=>{state.search=e.target.value;app.querySelector('#articleList').innerHTML=cards(filtered(arr),true);wireCards()};
- app.querySelector('#clearSearch').onclick=()=>{state.search='';render()};wireCards();
+function emptyState(title,desc,actionText,action){
+  return '<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">'+esc(title)+'</div><div class="empty-desc">'+esc(desc)+'</div>'+
+    (actionText?'<button class="primary" id="emptyAction">'+esc(actionText)+'</button>':'')+'</div>'
 }
-function cards(arr){
- if(!arr.length)return empty('这里还没有文章','刷新订阅');
- return arr.slice().sort((a,b)=>new Date(b.publishedAt||0)-new Date(a.publishedAt||0)).map(a=>{
-  const s=sourceById(a.sourceId),type=s?.type||a.sourceType||'announce',ex=a.summary||onlyText(a.content).slice(0,260),notes=a.notes?.length||0;
-  return `<article class="article-card" data-article="${esc(a.id)}"><div class="article-top"><h3 class="article-title">${esc(a.title||'无标题')}</h3><button class="favorite-button ${a.favorite?'active':''}" data-fav="${esc(a.id)}">${a.favorite?'★':'☆'}</button></div>
-  <div class="article-meta"><span class="badge ${type==='summary'?'summary':'announce'}">${type==='summary'?'总结':'公告'}</span><span>${esc(s?.name||'历史订阅源')}</span><span>${esc(fmt(a.publishedAt))}</span>${a.stockName?'<span>'+esc(a.stockName)+(a.stockCode?' · '+esc(a.stockCode):'')+'</span>':''}</div>
-  ${ex?'<div class="article-excerpt">'+esc(ex)+'</div>':''}<div class="article-actions"><div class="article-left-actions"><button class="small-button" data-open="'+esc(a.id)+'">阅读</button><button class="small-button" data-note="'+esc(a.id)+'">点评'+(notes?' '+notes:'')+'</button></div><span class="section-subtitle">${a.link?'原文':''}</span></div></article>`;
- }).join('')
+function bindList(){
+  const q=document.getElementById('globalSearch');if(q)q.oninput=()=>{state.search=q.value;const list=document.getElementById('articleList');if(list)list.innerHTML=visibleArticles().map(articleCard).join('')||emptyState('没有匹配文章','换个关键词再试。');bindList()};
+  const c=document.getElementById('clearSearch');if(c)c.onclick=()=>{state.search='';render()};
+  document.querySelectorAll('[data-fav]').forEach(b=>b.onclick=async e=>{e.stopPropagation();const a=state.articles.find(x=>x.guid===b.dataset.fav);if(!a)return;a.favorite=!a.favorite;await storePut(STORE_ARTICLES,a);await loadState();render();toast(a.favorite?'已收藏':'已取消收藏')});
+  document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openDetail(b.dataset.open));
+  document.querySelectorAll('.article-card').forEach(c=>c.onclick=e=>{if(!e.target.closest('button'))openDetail(c.dataset.guid)});
 }
-function wireCards(){
- app.querySelectorAll('[data-fav]').forEach(b=>b.onclick=async e=>{e.stopPropagation();const a=state.articles.find(x=>x.id===b.dataset.fav);if(!a)return;a.favorite=!a.favorite;await put('articles',a);state.articles=await getAll('articles');render();toast(a.favorite?'已收藏':'已取消收藏')});
- app.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openArticle(b.dataset.open));
- app.querySelectorAll('[data-note]').forEach(b=>b.onclick=()=>openArticle(b.dataset.note,true));
- app.querySelectorAll('.article-card').forEach(c=>c.onclick=e=>{if(!e.target.closest('button'))openArticle(c.dataset.article)});
- app.querySelectorAll('[data-empty-action]').forEach(b=>b.onclick=async()=>{await refreshFeeds()});
+function renderHome(){
+  state.category='';
+  const arr=visibleArticles();
+  const body=arr.length?arr.map(articleCard).join(''):emptyState(state.sources.length?'暂无文章':'还没有订阅源',state.sources.length?'点击刷新获取最新公告。':'在设置中添加 agu-ann-feed 订阅源。',state.sources.length?'立即刷新':'去设置',state.sources.length?refreshAll:()=>{state.page='settings';render()});
+  app.innerHTML='<div class="hero-row"><div><div class="eyebrow">AGU ANN FEED</div><div class="section-title">公告流</div><div class="section-subtitle">'+state.articles.length+' 条本机文章</div></div><button class="round-refresh '+(state.loading?'busy':'')+'" id="inlineRefresh">↻</button></div>'+toolbar()+
+    '<div class="filter-summary">'+(state.search?'搜索：'+esc(state.search):'全部文章')+'</div><div id="articleList">'+body+'</div>';
+  document.getElementById('inlineRefresh')?.addEventListener('click',refreshAll);
+  document.getElementById('emptyAction')?.addEventListener('click',()=>{const f=state.sources.length?refreshAll:()=>{state.page='settings';render()};f()});
+  bindList()
+}
+function renderCategories(){
+  const cats=categoryList();
+  const cards=cats.length?cats.map(([c,n])=>'<button class="category-card '+(c===state.category?'active':'')+'" data-cat="'+esc(c)+'"><strong>'+esc(c)+'</strong><span>'+n+' 篇</span></button>').join(''):emptyState('还没有分类','刷新订阅后分类会自动出现。');
+  const list=state.category?'<div class="category-head"><button class="secondary" id="clearCategory">全部分类</button><span>'+esc(state.category)+'</span></div><div id="articleList">'+visibleArticles().map(articleCard).join('')+'</div>':'';
+  app.innerHTML='<div class="section-head"><div><div class="section-title">分类</div><div class="section-subtitle">分类来自 RSS，不写死</div></div></div><div class="category-grid">'+cards+'</div>'+list;
+  document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{state.category=b.dataset.cat;renderCategories()});
+  document.getElementById('clearCategory')?.addEventListener('click',()=>{state.category='';renderCategories()});
+  bindList()
+}
+function renderFavorites(){
+  state.category='';
+  const arr=state.articles.filter(a=>a.favorite);
+  app.innerHTML='<div class="section-head"><div><div class="section-title">收藏</div><div class="section-subtitle">'+arr.length+' 篇</div></div></div>'+toolbar()+
+    '<div id="articleList">'+(arr.length?searchArticles(arr).sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt)).map(articleCard).join(''):emptyState('还没有收藏','阅读文章时点星收藏。'))+'</div>';
+  bindList()
+}
+function renderSearch(){
+  app.innerHTML='<div class="section-head"><div><div class="section-title">搜索</div><div class="section-subtitle">全字段检索</div></div></div>'+toolbar()+
+    '<div id="articleList">'+(state.search?visibleArticles().map(articleCard).join(''):emptyState('输入关键词','搜索公告标题、股票、分类或 AI 总结。'))+'</div>';
+  bindList()
 }
 function renderSettings(){
- const favoriteCount=state.articles.filter(a=>a.favorite===true).length;
- const noteCount=state.articles.filter(a=>Array.isArray(a.notes)&&a.notes.length).length;
- const syncedSources=state.sources.filter(s=>s.lastSyncAt).length;
- const failedSources=state.sources.filter(s=>s.lastError).length;
- const fmtSync=s=>s.lastSyncAt?fmt(s.lastSyncAt):'尚未抓取';
- const statusHtml=s=>{
-   if(s.lastError)return '<span class="source-status error">抓取失败</span>';
-   if(s.lastSyncAt)return '<span class="source-status ok">正常</span>';
-   return '<span class="source-status idle">未抓取</span>';
- };
- app.innerHTML=`
- <div class="settings-hero">
-   <div class="settings-hero-mark"><span class="icon icon-rss"></span></div>
-   <div class="settings-hero-main">
-     <div class="eyebrow">自制 RSS</div>
-     <h2>设置</h2>
-     <p>订阅源、更新、本机数据统一在这里管理。</p>
-   </div>
-   <div class="version-badge">v${APP_VERSION}</div>
- </div>
-
- <section class="setting-card settings-section">
-   <div class="settings-section-head"><div><h2>应用更新</h2><div class="section-subtitle">当前版本 ${APP_VERSION}（${APP_VERSION_CODE}）</div></div><span class="settings-section-icon">↻</span></div>
-   <button class="setting-row-button" id="checkUpdate"><span><strong>检查新版本</strong><small>从官方更新清单检查并校验 APK</small></span><b>›</b></button>
-   <div class="update-progress" id="updateProgress"><div class="update-progress-line"><span id="updateProgressDesc">准备更新…</span><strong id="updatePct">0%</strong></div><div class="update-progress-track"><i id="updateFill"></i></div></div>
- </section>
-
- <section class="setting-card settings-section">
-   <div class="settings-section-head"><div><h2>订阅源</h2><div class="section-subtitle">${state.sources.length} 个源 · ${syncedSources} 个已有抓取记录${failedSources?' · '+failedSources+' 个失败':''}</div></div></div>
-   <div class="source-settings-list">
-     ${state.sources.length?state.sources.map(s=>`
-       <div class="source-setting-item">
-         <div class="source-setting-main">
-           <div class="source-setting-title"><strong>${esc(s.name)}</strong>${statusHtml(s)}</div>
-           <div class="source-setting-url">${esc(s.url)}</div>
-           <div class="source-setting-meta"><span>${s.type==='summary'?'公告总结':'股票公告'}</span><span>${Number(s.lastItemCount||0)} 条/次</span><span>${fmtSync(s)}</span></div>
-           ${s.lastError?'<div class="source-error">'+esc(String(s.lastError))+'</div>':''}
-         </div>
-         <div class="source-setting-actions">
-           <button class="small-button" data-refresh-source="${esc(s.id)}">刷新</button>
-           <button class="small-button" data-edit="${esc(s.id)}">编辑</button>
-           <button class="small-button danger" data-delete="${esc(s.id)}">删除</button>
-         </div>
-       </div>`).join(''):'<div class="settings-empty"><div>还没有订阅源</div><span>添加一个 HTTPS RSS / Atom / JSON Feed 地址即可。</span></div>'}
-   </div>
-   <button class="add-source-button" id="addSource"><span>＋</span> 添加订阅源</button>
- </section>
-
- <section class="setting-card settings-section">
-   <div class="settings-section-head"><div><h2>本机数据</h2><div class="section-subtitle">数据只保存在这台设备的本地数据库。</div></div></div>
-   <div class="data-stats">
-     <div><strong>${state.sources.length}</strong><span>订阅源</span></div>
-     <div><strong>${state.articles.length}</strong><span>文章</span></div>
-     <div><strong>${favoriteCount}</strong><span>收藏</span></div>
-     <div><strong>${noteCount}</strong><span>点评</span></div>
-   </div>
-   <div class="settings-action-grid">
-     <button class="secondary" id="export">导出备份</button>
-     <button class="secondary" id="import">导入备份</button>
-   </div>
- </section>
-
- <section class="setting-card settings-section danger-section">
-   <div class="settings-section-head"><div><h2>危险操作</h2><div class="section-subtitle">清空会删除当前设备上的订阅、文章、收藏和点评。</div></div></div>
-   <button class="danger-action" id="clear">清空本机数据</button>
- </section>`;
-
- app.querySelector('#addSource').onclick=()=>sourceModal();
- app.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>sourceModal(sourceById(b.dataset.edit)));
- app.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>deleteSource(b.dataset.delete));
- app.querySelectorAll('[data-refresh-source]').forEach(b=>b.onclick=async()=>{
-   const id=b.dataset.refreshSource,s=sourceById(id);if(!s)return;
-   b.disabled=true;b.textContent='刷新中…';
-   await refreshSource(s);
-   state.sources=await getAll('sources');state.articles=await getAll('articles');render();
- });
- app.querySelector('#export').onclick=exportBackup;
- app.querySelector('#import').onclick=()=>{if(window.AndroidNative?.openBackupPicker){try{window.AndroidNative.openBackupPicker();return}catch(e){console.warn('原生导入选择器失败',e)}}importFileEl.click()};
- app.querySelector('#clear').onclick=clearAll;
- app.querySelector('#checkUpdate').onclick=checkUpdate;
-}function sourceModal(src){
- modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2 class="modal-title">${src?'编辑订阅源':'添加订阅源'}</h2><button class="close" id="close">×</button></div>
- <label class="field"><span>自定义名称</span><input id="sName" placeholder="例如：A股公告" value="${esc(src?.name||'')}"></label>
- <label class="field"><span>RSS / Atom / JSON Feed 地址（仅 HTTPS）</span><input id="sUrl" placeholder="https://example.com/feed.xml" value="${esc(src?.url||'')}"></label>
- <label class="field"><span>内容类型</span><select id="sType"><option value="announce" ${src?.type==='announce'?'selected':''}>股票公告</option><option value="summary" ${src?.type==='summary'?'selected':''}>公告总结</option></select></label>
- <div class="section-subtitle">抓取后文章会保存到本机。以后即使文章从 RSS 消失，已保存的版本仍可阅读。</div><div class="setting-actions" style="margin-top:14px"><button class="primary" id="save">保存并抓取</button><button class="secondary" id="cancel">取消</button></div></div></div>`;
- document.getElementById('close').onclick=closeModal;document.getElementById('cancel').onclick=closeModal;
- document.getElementById('save').onclick=async()=>{const name=document.getElementById('sName').value.trim(),rawUrl=document.getElementById('sUrl').value.trim(),url=normalizeHttpsUrl(rawUrl),type=document.getElementById('sType').value;if(!name||!url)return toast('请填写名称和有效的 HTTPS 地址');const id=src?.id||await sha(url);const record={id,name,url,type:type==='summary'?'summary':'announce',createdAt:src?.createdAt||new Date().toISOString(),lastSyncAt:src?.lastSyncAt||null,lastError:null};await put('sources',record);state.sources=await getAll('sources');state.activeSourceId=id;closeModal();await refreshSource(record);render()};
+  const srcs=state.sources.map(s=>'<div class="source-setting-item"><div class="source-setting-main"><div class="source-setting-title"><strong>'+esc(s.name)+'</strong><span class="source-status '+(s.lastError?'error':s.lastSyncAt?'ok':'idle')+'">'+(s.lastError?'失败':s.lastSyncAt?'正常':'未刷新')+'</span></div><div class="source-setting-url">'+esc(s.url)+'</div><div class="source-setting-meta"><span>'+Number(s.lastItemCount||0)+' 条</span><span>'+(s.lastSyncAt?fmtTime(s.lastSyncAt):'尚未刷新')+'</span></div>'+(s.lastError?'<div class="source-error">'+esc(s.lastError)+'</div>':'')+'<div class="source-setting-actions"><button class="small-button" data-source-refresh="'+esc(s.id)+'">刷新</button><button class="small-button danger" data-source-delete="'+esc(s.id)+'">删除</button></div></div></div>').join('');
+  app.innerHTML='<div class="settings-hero"><div class="settings-hero-mark">RSS</div><div class="settings-hero-main"><div class="eyebrow">AGU ANN FEED</div><h2>设置</h2><p>订阅源、更新、备份全部独立管理。</p></div><div class="version-badge">v'+APP_VERSION+'</div></div>'+
+    '<section class="setting-card"><h2>添加订阅源</h2><label class="field"><span>名称</span><input id="sourceName" placeholder="例如：全部公告"></label><label class="field"><span>Feed URL</span><input id="sourceUrl" value="'+esc(DEFAULT_BASE+'/feed')+'" placeholder="https://.../feed"></label><label class="field"><span>Token</span><input id="sourceToken" type="password" autocomplete="off" placeholder="x-feed-token / token"></label><label class="field"><span>分类（可选）</span><input id="sourceCategory" placeholder="重组 / 财报摘要 / 留空全量"></label><button class="primary" id="addSource">保存订阅源</button></section>'+
+    '<section class="setting-card"><div class="settings-section-head"><div><h2>现有订阅源</h2><div class="section-subtitle">'+state.sources.length+' 个</div></div><button class="small-button" id="refreshAll">全部刷新</button></div><div class="source-settings-list">'+(srcs||'<div class="settings-empty"><div>没有订阅源</div><span>输入 agu-ann-feed 地址和 Token。</span></div>')+'</div></section>'+
+    '<section class="setting-card"><div class="settings-section-head"><div><h2>应用更新</h2><div class="section-subtitle">当前 '+APP_VERSION+' · '+APP_VERSION_CODE+'</div></div></div><button class="setting-row-button" id="checkUpdate"><span><strong>检查新版本</strong><small>从官方更新清单读取并校验 SHA-256</small></span><b>›</b></button><div class="update-progress" id="updateProgress"><div class="update-progress-line"><span id="updateDesc"></span><strong id="updatePct">0%</strong></div><div class="update-progress-track"><i id="updateFill"></i></div></div></section>'+
+    '<section class="setting-card"><h2>本机数据</h2><div class="data-stats"><div><strong>'+state.articles.length+'</strong><span>文章</span></div><div><strong>'+state.articles.filter(a=>a.favorite).length+'</strong><span>收藏</span></div><div><strong>'+state.articles.filter(a=>a.read).length+'</strong><span>已读</span></div><div><strong>'+state.articles.filter(a=>a.notes?.length).length+'</strong><span>点评</span></div></div><div class="settings-action-grid"><button class="secondary" id="exportData">导出备份</button><button class="secondary" id="importData">导入备份</button></div></section>'+
+    '<section class="setting-card danger-section"><h2>清空本机数据</h2><button class="danger-action" id="clearData">清空订阅、文章、收藏和点评</button></section>';
+  document.getElementById('addSource').onclick=addSource;
+  document.getElementById('refreshAll').onclick=refreshAll;
+  document.querySelectorAll('[data-source-refresh]').forEach(b=>b.onclick=async()=>{const s=state.sources.find(x=>x.id===b.dataset.sourceRefresh);if(!s)return;try{toast('正在刷新');await refreshSource(s);await loadState();render();toast('刷新成功')}catch(e){s.lastError=e.message||String(e);await storePut(STORE_SOURCES,s);await loadState();render();toast('刷新失败：'+s.lastError)}});
+  document.querySelectorAll('[data-source-delete]').forEach(b=>b.onclick=async()=>{const s=state.sources.find(x=>x.id===b.dataset.sourceDelete);if(!s)return;if(!confirm('删除这个订阅源？本机已经保存的文章不会删除。'))return;await storeDel(STORE_SOURCES,s.id);await loadState();render()});
+  document.getElementById('checkUpdate').onclick=checkUpdate;
+  document.getElementById('exportData').onclick=exportBackup;
+  document.getElementById('importData').onclick=()=>window.AndroidNative?.openBackupPicker?.()||importFileEl.click();
+  document.getElementById('clearData').onclick=async()=>{if(!confirm('确定清空全部本机数据？'))return;await clearStores();state.sources=[];state.articles=[];render();toast('已清空')};
 }
-async function deleteSource(id){const s=sourceById(id);if(!s)return;if(!confirm(`删除订阅源“${s.name}”？\n\n只删除订阅配置，不删除已经保存在本机的文章、收藏和点评。`))return;await del('sources',id);state.sources=await getAll('sources');if(state.activeSourceId===id)state.activeSourceId=state.sources[0]?.id||LOCAL_ID;render();toast('订阅源已删除，历史文章仍保留')}
-function closeModal(fromHistory=false){const hadHistory=state.modalHistory;state.modalArticleId=null;state.modalHistory=false;modalRoot.innerHTML='';if(hadHistory&&!fromHistory){history.back()}}
-window.__rssNativeFeedResult=(ok,message)=>{const waiter=window.__rssNativeFeedWaiter;if(typeof waiter!=='function')return;window.__rssNativeFeedWaiter=null;ok?waiter(true,String(message||'')):waiter(false,String(message||'原生读取订阅失败'))};
-async function refreshFeeds(){if(!state.sources.length)return toast('请先添加订阅源');document.getElementById('refreshButton').disabled=true;let failed=0;try{for(const s of state.sources){const ok=await refreshSource(s);if(!ok)failed++}state.sources=await getAll('sources');state.articles=await getAll('articles');render();toast(failed?('刷新完成：'+(state.sources.length-failed)+' 个成功，'+failed+' 个失败'):'订阅刷新完成')}finally{document.getElementById('refreshButton').disabled=false}}
-async function fetchFeedText(url){
-  const nativeErrors=[];
-  if(window.AndroidNative?.fetchFeed&&window.AndroidNative?.readFeedChunk){
-    try{
-      return await new Promise((resolve,reject)=>{
-        const timer=setTimeout(()=>{window.__rssNativeFeedWaiter=null;reject(Error('原生读取数据源超时'))},45000);
-        window.__rssNativeFeedWaiter=(ok,message)=>{
-          clearTimeout(timer);window.__rssNativeFeedWaiter=null;
-          if(!ok){reject(Error(message||'原生读取订阅失败'));return}
-          try{
-            let out='',offset=0,chunk=131072;
-            const decoder=new TextDecoder('utf-8');
-            for(;;){
-              const b64=AndroidNative.readFeedChunk(offset,chunk);
-              if(!b64)break;
-              const bin=atob(b64),bytes=new Uint8Array(bin.length);
-              for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-              out+=decoder.decode(bytes,{stream:true});
-              offset+=bytes.length;
-              if(bytes.length<chunk)break;
-            }
-            out+=decoder.decode();
-            if(!out.trim())throw Error('原生读取到空内容');
-            resolve(out);
-          }catch(e){reject(e)}
-        };
-        try{AndroidNative.fetchFeed(url)}catch(e){clearTimeout(timer);window.__rssNativeFeedWaiter=null;reject(e)}
-      });
-    }catch(e){nativeErrors.push(String(e?.message||e))}
-  }
-  try{
-    const endpointUrl=cacheBustUrl(url,'nocache',Date.now());
-    const r=await fetch(endpointUrl,{cache:'no-store',headers:{Accept:'application/json,application/rss+xml,application/atom+xml,application/feed+json,text/xml,text/plain,*/*'}});
-    if(!r.ok)throw Error('HTTP '+r.status);
-    const text=await r.text();
-    if(!text.trim())throw Error('服务器返回空内容');
-    return text;
-  }catch(e){
-    const webError=String(e?.message||e);
-    if(nativeErrors.length)throw Error('原生读取失败：'+nativeErrors.join('；')+'；WebView读取失败：'+webError);
-    throw Error(webError);
-  }
-}
-async function refreshSource(s){
- try{
-  let xml='';
-  let items=[];
-  let firstError='';
-  try{
-   xml=await fetchFeedText(s.url);
-   items=parseFeed(xml,s);
-  }catch(e){
-   firstError=String(e?.message||e);
-   try{
-    const fallback=await fetch(cacheBustUrl(s.url,'nocache',Date.now()),{cache:'no-store'});
-    if(!fallback.ok)throw Error('HTTP '+fallback.status);
-    const fallbackText=await fallback.text();
-    items=parseFeed(fallbackText,s);
-    xml=fallbackText;
-   }catch(fallbackError){
-    throw Error(firstError+(fallbackError&&fallbackError.message?'；备用通道：'+fallbackError.message:''));
-   }
-  }
-  if(!items.length)throw Error('订阅源读取成功，但未解析出任何文章，请检查 Feed 内容格式');
-for(const item of items){const id=await articleId(item,s);let old=await get('articles',id);if(!old){const legacyId=await sha(item.guid||item.link||item.title+'|'+(item.publishedAt||''));const legacy=await get('articles',legacyId);if(legacy?.sourceId===s.id)old=legacy}await put('articles',{...old,...item,id,sourceId:s.id,sourceType:s.type,fetchedAt:new Date().toISOString(),favorite:old?.favorite===true,notes:Array.isArray(old?.notes)?old.notes:[]})}await put('sources',{...s,lastSyncAt:new Date().toISOString(),lastError:null,lastItemCount:items.length});state.articles=await getAll('articles');return true}catch(e){await put('sources',{...s,lastError:String(e.message||e)});toast(s.name+' 抓取失败：'+String(e.message||e));return false}}
-function tryDecodeFeedEnvelope(value){
- let text=String(value??'').replace(/^\uFEFF/,'').trim();
- for(let depth=0;depth<3;depth++){
-   if(text.startsWith('{')||text.startsWith('[')||text.startsWith('<'))return text;
-   const compact=text.replace(/\\s+/g,'');
-   if(compact.length<12||compact.length%4!==0||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(compact))return text;
-   try{
-     const bin=atob(compact),bytes=new Uint8Array(bin.length);
-     for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-     const decoded=new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/,'').trim();
-     if(!decoded||decoded===text)return text;
-     text=decoded;
-   }catch{return text}
- }
- return text;
-}
-function parseFeed(text,s){
- const trimmed=tryDecodeFeedEnvelope(text);
- if(trimmed.startsWith('{')||trimmed.startsWith('[')){
-   let j;try{j=JSON.parse(trimmed)}catch{throw Error('Feed JSON 解析失败')}
-   let items;
-   if(Array.isArray(j))items=j;
-   else if(Array.isArray(j.items))items=j.items;
-   else if(Array.isArray(j.entries))items=j.entries;
-   else if(Array.isArray(j.articles))items=j.articles;
-   else if(Array.isArray(j.data))items=j.data;
-   else if(j.data&&typeof j.data==='object'){
-     if(Array.isArray(j.data.items))items=j.data.items;
-     else if(Array.isArray(j.data.entries))items=j.data.entries;
-     else if(Array.isArray(j.data.articles))items=j.data.articles;
-   }
-   if(items){
-     return items.map(x=>{
-       const obj=(x&&typeof x==='object')?x:{title:String(x??'')};
-       const htmlContent=typeof obj.content_html==='string'?obj.content_html:(typeof obj.contentHtml==='string'?obj.contentHtml:(typeof obj.content==='string'&&/<[a-z][\\s\\S]*>/i.test(obj.content)?obj.content:''));
-       const textContent=String(obj.content_text||obj.contentText||obj.summary||obj.description||obj.content||'');
-       const content=htmlContent?sanitize(htmlContent,s.url):'<p>'+esc(textContent).replace(/\n/g,'<br>')+'</p>';
-       const title=obj.title||obj.name||'无标题';
-       const link=absoluteUrl(obj.url||obj.link||obj.external_url||obj.externalUrl||'',s.url);
-       const guid=obj.id||obj.guid||obj.uid||link||title;
-       const publishedAt=obj.date_published||obj.datePublished||obj.published_at||obj.publishedAt||obj.date_modified||obj.updated||obj.date||'';
-       const author=typeof obj.author==='object'?String(obj.author?.name||obj.author?.url||''):String(obj.author||obj.creator||'');
-       const summary=onlyText(content).replace(/\s+/g,' ').trim().slice(0,700);
-       const stock=stockInfo(title+'\n'+summary+'\n'+JSON.stringify(obj));
-       return {title,link,guid,content,summary,publishedAt,author,stockName:obj.stockName||obj.stock_name||stock.name,stockCode:obj.stockCode||obj.stock_code||obj.symbol||stock.code,sourceId:s.id,sourceType:s.type};
-     }).filter(x=>String(x.title||'').trim()||String(x.link||'').trim()||String(x.content||'').trim());
-   }
-   throw Error('JSON Feed 中未找到 items/entries/articles/data 数组');
- }
- if(!trimmed.startsWith('<'))throw Error('订阅源返回内容不是可识别的 RSS/Atom/JSON Feed');
- const d=new DOMParser().parseFromString(trimmed,'application/xml');
- if(d.querySelector('parsererror'))throw Error('RSS/Atom XML 解析失败');
- let nodes=[...d.getElementsByTagName('item')],atom=false;
- if(!nodes.length){nodes=[...d.getElementsByTagName('entry')];atom=true}
- if(!nodes.length){nodes=[...d.getElementsByTagName('article')];atom=false}
- return nodes.map(n=>{
-   const title=nodeText(n,'title')||'无标题';
-   let link='';
-   if(atom){
-     const alternate=n.querySelector('link[rel="alternate"]')?.getAttribute('href')||n.querySelector('link[href]')?.getAttribute('href')||nodeText(n,'link');
-     link=absoluteUrl(alternate,s.url);
-   }else{
-     link=absoluteUrl(nodeText(n,'link')||n.querySelector('link[href]')?.getAttribute('href')||'',s.url);
-   }
-   const guid=nodeText(n,'guid')||nodeText(n,'id')||link||title;
-   const raw=nodeText(n,'content:encoded')||nodeText(n,'content')||nodeText(n,'description')||nodeText(n,'summary');
-   const extra=getLocalFields(n);
-   const preferred=extra.summary||extra.description||extra.content||raw;
-   const summary=onlyText(preferred).replace(/\s+/g,' ').trim().slice(0,700);
-   const publishedAt=nodeText(n,'pubDate')||nodeText(n,'published')||nodeText(n,'updated')||extra.published||extra.updated||extra.pubDate||'';
-   const author=extra.author||extra.creator||nodeText(n,'dc:creator')||nodeText(n,'author');
-   const code=extra.symbol||extra.stockCode||extra.stock_code||extra.code||'';
-   const name=extra.stockName||extra.stock_name||extra.company||extra.name||'';
-   const stock=stockInfo(title+'\n'+summary);
-   return {title,link,guid,content:sanitize(raw,s.url),summary,publishedAt,author,stockName:name||stock.name,stockCode:code||stock.code,sourceId:s.id,sourceType:s.type,extra};
- }).filter(x=>String(x.title||'').trim()||String(x.link||'').trim()||String(x.content||'').trim());
-}
-function getLocalFields(n){
- const out={};
- for(const el of n.children){
-   const key=String(el.localName||el.tagName||'').replace(/^.*:/,'');
-   const value=el.textContent?.trim();
-   if(key&&value&&!out[key])out[key]=value;
- }
- return out;
-}
-function nodeText(n,q){
- if(q.includes(':')){
-   const direct=n.getElementsByTagName(q);
-   if(direct[0]?.textContent)return direct[0].textContent.trim();
-   const local=q.split(':').pop(),ns=n.getElementsByTagNameNS('*',local);
-   if(ns[0]?.textContent)return ns[0].textContent.trim();
- }
- return n.querySelector(q)?.textContent?.trim()||'';
-}
-function sanitize(html,baseUrl){const w=document.createElement('div');w.innerHTML=html||'';w.querySelectorAll('script,style,iframe,object,embed,form,base,meta,link,title,svg,math').forEach(x=>x.remove());w.querySelectorAll('*').forEach(x=>[...x.attributes].forEach(a=>{const n=a.name.toLowerCase(),v=a.value||'';if(n.startsWith('on')||n==='srcdoc'||n==='style')x.removeAttribute(a.name);if(n==='href'){if(!/^(?:https?:|mailto:|tel:|#)/i.test(v))x.removeAttribute(a.name);else if(baseUrl&&!/^(?:mailto:|tel:|#)/i.test(v))a.value=absoluteUrl(v,baseUrl)}if(n==='src'){if(!/^https?:/i.test(v))x.removeAttribute(a.name);else if(baseUrl&&/^https?:/i.test(v))a.value=absoluteUrl(v,baseUrl)}}));w.querySelectorAll('a[href]').forEach(a=>{a.setAttribute('target','_blank');a.setAttribute('rel','noopener noreferrer')});return w.innerHTML}
-function stockInfo(t){return{code:t.match(/(?<!\d)(?:00|30|60|68|83|87|43)\d{4}(?!\d)/)?.[0]||'',name:t.match(/(?:股票简称|证券简称)[：:]?\s*([\u4e00-\u9fa5A-Za-z0-9·.-]{2,20})/)?.[1]||''}}
-
-function openArticle(id,focusNote=false){
- const a=state.articles.find(x=>x.id===id);if(!a)return toast('本机找不到这篇文章');const s=sourceById(a.sourceId);
- if(!state.modalHistory||state.modalArticleId!==id){state.modalArticleId=id;state.modalHistory=true;history.pushState({rssArticle:id},'', '#article='+encodeURIComponent(id));}
- modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2 class="modal-title">${esc(a.title)}</h2><button class="close" id="close">×</button></div>
- <div class="article-meta"><span class="badge ${a.sourceType==='summary'?'summary':'announce'}">${a.sourceType==='summary'?'总结':'公告'}</span><span>${esc(s?.name||'历史订阅源')}</span><span>${esc(fmt(a.publishedAt))}</span></div>
- <div class="article-body">${a.content||'<p>'+esc(a.summary||'没有可显示的正文')+'</p>'}</div>
- <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap"><button class="secondary" id="fav">${a.favorite?'★ 已收藏':'☆ 收藏'}</button>${a.link?'<button class="primary" id="original">打开原文</button>':''}</div>
- <div class="setting-card" style="margin-top:14px;padding:14px"><h2>我的点评</h2><textarea id="noteText" placeholder="记录你的观察、后续验证点或交易计划…" style="width:100%;min-height:110px;border:1px solid var(--line);border-radius:13px;padding:11px;resize:vertical"></textarea><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="primary" id="saveNote">保存点评</button></div><div class="note-list">${(a.notes||[]).slice().reverse().map(n=>'<div class="note-item"><div class="note-time">'+esc(fmt(n.createdAt))+'</div><div class="note-text">'+esc(n.text)+'</div></div>').join('')||'<div class="section-subtitle">还没有点评。</div>'}</div></div>
- </div></div>`;
- document.getElementById('close').onclick=closeModal;
- document.getElementById('fav').onclick=async()=>{a.favorite=!a.favorite;await put('articles',a);state.articles=await getAll('articles');openArticle(id,focusNote);render()};
- if(a.link)document.getElementById('original').onclick=()=>{if(window.AndroidNative?.openUrl){try{window.AndroidNative.openUrl(a.link);return}catch(e){}}window.open(a.link,'_blank','noopener,noreferrer')};
- document.getElementById('saveNote').onclick=async()=>{const t=document.getElementById('noteText').value.trim();if(!t)return toast('点评内容不能为空');a.notes=a.notes||[];a.notes.push({id:crypto.randomUUID?.()||String(Date.now()),text:t,createdAt:new Date().toISOString()});await put('articles',a);state.articles=await getAll('articles');openArticle(id);toast('点评已保存')};
- if(focusNote)document.getElementById('noteText').focus();
+async function addSource(){
+  const name=(document.getElementById('sourceName').value||'公告订阅').trim();
+  const url=normalizeHttps(document.getElementById('sourceUrl').value||'');
+  const token=(document.getElementById('sourceToken').value||'').trim();
+  const category=(document.getElementById('sourceCategory').value||'').trim();
+  if(!url){toast('请输入 HTTPS Feed URL');return}
+  if(!token){toast('请输入 Token');return}
+  const s={id:sourceId(url,category),name,url,token,category,createdAt:now(),lastItemCount:0,lastSyncAt:'',lastError:''};
+  await storePut(STORE_SOURCES,s);await loadState();render();toast('订阅源已保存');
+  try{await refreshSource(s);await loadState();render();toast('首轮刷新完成')}catch(e){s.lastError=e.message||String(e);await storePut(STORE_SOURCES,s);await loadState();render();toast('订阅已保存，刷新失败：'+s.lastError)}
 }
 
-function updateMessage(message){const e=document.getElementById('updateProgressDesc');if(e)e.textContent=String(message||'')}
-function updateProgress(percent,message){const p=document.getElementById('updateProgress'),f=document.getElementById('updateFill'),t=document.getElementById('updatePct');if(p)p.style.display='block';if(f)f.style.width=Math.max(0,Math.min(100,Number(percent)||0))+'%';if(t)t.textContent=Math.round(Number(percent)||0)+'%';if(message)updateMessage(message)}
-window.__rssSaveResult=(ok,message)=>{const waiter=window.__rssSaveWaiter;if(typeof waiter==='function'){window.__rssSaveWaiter=null;waiter(!!ok,String(message||''))}};
-window.__rssApkDownloadProgress=(percent,status,message)=>updateProgress(percent,message||'正在下载更新…');
-window.__rssApkDownloadComplete=()=>{const waiter=window.__rssApkWaiter;window.__rssApkWaiter=null;if(typeof waiter==='function'){waiter(true,'');return}updateProgress(100,'APK 已下载完成，正在打开安装界面。');toast('下载完成，正在安装')};
-window.__rssApkDownloadFailed=message=>{const waiter=window.__rssApkWaiter;window.__rssApkWaiter=null;if(typeof waiter==='function'){waiter(false,String(message||'APK 下载失败'));return}updateMessage(String(message||'APK 下载失败'));toast(String(message||'APK 下载失败'))};
-window.__rssUpdateResult=(ok,message)=>{const waiter=window.__rssUpdateWaiter;if(typeof waiter==='function'){window.__rssUpdateWaiter=null;waiter(!!ok,String(message||''))}};
-function validateUpdateManifest(m){
- const version=String(m?.version||'').trim();
- const versionCode=Number(m?.versionCode||0);
- const sha256=String(m?.sha256||'').trim().toLowerCase();
- const size=Number(m?.apk_size||0);
- const rawUrls=[];if(m?.apk_url)rawUrls.push(m.apk_url);if(Array.isArray(m?.apk_urls))rawUrls.push(...m.apk_urls);
- const urls=[...new Set(rawUrls.map(x=>String(x||'').trim()).filter(Boolean))];
- if(String(m?.repo||'')!=='baibiaowang/GPT')throw Error('更新清单来源仓库不受信任');
- if(!/^3\.\d+\.\d+$/.test(version)||!Number.isSafeInteger(versionCode)||versionCode<3000)throw Error('更新清单版本无效');
- if(!/^[0-9a-f]{64}$/.test(sha256))throw Error('更新清单 SHA-256 无效');
- if(!Number.isSafeInteger(size)||size<=1024*1024)throw Error('更新清单 APK 大小无效');
- if(!urls.length||urls.some(u=>!isTrustedUpdateUrl(u,version)))throw Error('更新清单包含不受信任或与版本不匹配的 APK 地址');
- return {version,versionCode,sha256,size,urls};
+function openDetail(guid,push=true){
+  const a=state.articles.find(x=>x.guid===guid);if(!a)return;
+  a.read=true;storePut(STORE_ARTICLES,a).then(()=>loadState()).catch(()=>{});
+  state.detailGuid=guid;
+  if(push){history.pushState({reader:true},'',location.href.split('#')[0]+'#article='+encodeURIComponent(guid));state.detailHistory=true}
+  renderDetail(a)
 }
-function validateBackupPayload(p){
- if(p?.schema!==1||!Array.isArray(p.sources)||!Array.isArray(p.articles))throw Error('备份格式不正确');
- if(p.sources.length>1000||p.articles.length>50000)throw Error('备份条目数量超出安全上限');
- for(const src of p.sources){
-   if(!src||typeof src!=='object'||typeof src.id!=='string'||typeof src.name!=='string'||typeof src.url!=='string')throw Error('备份中的订阅源数据无效');
-   if(src.id.length>500||src.name.length>200||src.url.length>4096||!normalizeHttpsUrl(src.url))throw Error('备份中的订阅源数据无效');
- }
- for(const a of p.articles){
-   if(!a||typeof a!=='object'||typeof a.id!=='string'||typeof a.title!=='string')throw Error('备份中的文章数据无效');
-   if(a.id.length>500||a.title.length>500)throw Error('备份中的文章字段过长');
-   if(typeof a.content==='string'&&a.content.length>8*1024*1024)throw Error('备份中的单篇正文过大');
- }
- return p;
+function closeDetail(){
+  modalRoot.innerHTML='';state.detailGuid=null;
+  if(state.detailHistory){state.detailHistory=false;history.replaceState({},'',location.href.split('#')[0])}
 }
-function decodeUtf8Base64(value){
- const bin=atob(String(value||'').replace(/\s+/g,''));
- const bytes=new Uint8Array(bin.length);
- for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
- return new TextDecoder('utf-8',{fatal:false}).decode(bytes);
+function renderDetail(a){
+  const ans=Object.entries(a.answers||{});
+  modalRoot.innerHTML='<div class="modal-backdrop" id="detailBackdrop"><article class="modal"><div class="modal-head"><div><div class="article-kicker">'+esc(a.category||'其他')+'</div><h2 class="modal-title">'+esc(a.title||'无标题')+'</h2></div><button class="close" id="detailClose">×</button></div>'+
+    '<div class="detail-meta"><span>'+esc(a.stock?.name||'综合')+(a.stock?.code?' · '+esc(a.stock.code):'')+'</span><span>'+esc(fmtTime(a.publishedAt))+'</span></div>'+
+    (a.summary?'<section class="detail-section"><h3>AI总结</h3><div class="summary-box">'+esc(a.summary)+'</div></section>':'')+
+    (ans.length?'<section class="detail-section"><h3>结构化信息</h3><div class="answer-list">'+ans.map(([k,v])=>'<div><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div></section>':'')+
+    '<section class="detail-section"><h3>行情</h3><div class="market-row"><span>现价</span><strong>'+(a.market?.close??'未取到')+'</strong><span>前收盘</span><strong>'+(a.market?.preClose??'未取到')+'</strong></div></section>'+
+    '<section class="detail-section"><h3>操作</h3><div class="detail-actions"><button class="primary" id="detailFav">'+(a.favorite?'取消收藏':'收藏')+'</button><button class="secondary" id="detailLink" '+(a.links?.announcement?'':'disabled')+'>公告详情</button><button class="secondary" id="detailPdf" '+(a.links?.pdf?'':'disabled')+'>PDF原文</button></div></section>'+
+    '<section class="detail-section"><h3>我的点评</h3><div id="notes">'+(a.notes?.length?a.notes.map(n=>'<div class="note-item"><div class="note-time">'+esc(fmtTime(n.time))+'</div><div class="note-text">'+esc(n.text)+'</div></div>').join(''):'<div class="settings-empty">还没有点评</div>')+'</div><textarea id="noteInput" class="note-input" placeholder="记录自己的判断或备注"></textarea><button class="secondary" id="saveNote">保存点评</button></section>'+
+    '<section class="detail-section"><details><summary>原始正文</summary><div class="article-body">'+(a.rawHtml||'<p>无</p>')+'</div></details></section>'+
+  '</article></div>';
+  document.getElementById('detailClose').onclick=()=>{history.back()};
+  document.getElementById('detailBackdrop').addEventListener('click',e=>{if(e.target.id==='detailBackdrop')history.back()});
+  document.getElementById('detailFav').onclick=async()=>{a.favorite=!a.favorite;await storePut(STORE_ARTICLES,a);await loadState();renderDetail(a);render();};
+  document.getElementById('detailLink').onclick=()=>a.links.announcement&&openExternal(a.links.announcement);
+  document.getElementById('detailPdf').onclick=()=>a.links.pdf&&openExternal(a.links.pdf);
+  document.getElementById('saveNote').onclick=async()=>{const v=document.getElementById('noteInput').value.trim();if(!v)return;const x=Array.isArray(a.notes)?a.notes:[];x.push({time:now(),text:v});a.notes=x;await storePut(STORE_ARTICLES,a);await loadState();renderDetail(a);toast('点评已保存')};
 }
-function parseUpdateManifestText(text){
- let value=String(text??'').replace(/^\uFEFF/,'').trim();
- for(let depth=0;depth<3;depth++){
-   if(value.startsWith('{')||value.startsWith('[')){
-     const parsed=JSON.parse(value);
-     if(parsed&&typeof parsed==='object'&&parsed.encoding==='base64'&&typeof parsed.content==='string'){
-       value=decodeUtf8Base64(parsed.content).replace(/^\uFEFF/,'').trim();
-       continue;
-     }
-     return parsed;
-   }
-   const compact=value.replace(/\s+/g,'');
-   if(!compact||compact.length%4!==0||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(compact))break;
-   let decoded='';
-   try{decoded=decodeUtf8Base64(compact).replace(/^\uFEFF/,'').trim()}catch{break}
-   if(!(decoded.startsWith('{')||decoded.startsWith('[')))break;
-   value=decoded;
- }
- throw Error('更新清单不是有效 JSON');
+function openExternal(url){
+  const u=normalizeHttps(url);if(!u)return;
+  if(window.AndroidNative?.openUrl){window.AndroidNative.openUrl(u);return}
+  window.open(u,'_blank','noopener,noreferrer');
 }
-async function fetchUpdateManifest(){
-  const errors=[];
-  for(const endpoint of UPDATE_MANIFEST_URLS){
-    if(window.AndroidNative?.fetchUpdateManifest&&window.AndroidNative?.readUpdateChunk){
-      try{
-        const result=await new Promise((resolve,reject)=>{
-          const timer=setTimeout(()=>{window.__rssUpdateWaiter=null;reject(Error('原生读取更新清单超时'))},15000);
-          window.__rssUpdateWaiter=(ok,message)=>{
-            clearTimeout(timer);window.__rssUpdateWaiter=null;
-            ok?resolve():reject(Error(message||'更新清单读取失败'));
-          };
-          try{AndroidNative.fetchUpdateManifest(endpoint+'?nocache='+Date.now())}catch(e){clearTimeout(timer);window.__rssUpdateWaiter=null;reject(e)}
-        });
-        let raw='',offset=0,chunk=131072;
-        const decoder=new TextDecoder('utf-8');
-        for(;;){
-          const b64=AndroidNative.readUpdateChunk(offset,chunk);
-          if(!b64)break;
-          const bin=atob(b64),bytes=new Uint8Array(bin.length);
-          for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-          raw+=decoder.decode(bytes,{stream:true});offset+=bytes.length;
-          if(bytes.length<chunk)break;
-        }
-        raw+=decoder.decode();
-        if(!raw.trim())throw Error('更新清单为空');
-        return parseUpdateManifestText(raw);
-      }catch(e){errors.push('native '+endpoint+': '+String(e?.message||e))}
-    }
-    try{
-      const endpointUrl=cacheBustUrl(endpoint,'nocache',Date.now());
-      const response=await fetch(endpointUrl,{cache:'no-store',headers:{Accept:'application/json,text/plain,*/*'}});
-      if(!response.ok)throw Error('HTTP '+response.status);
-      const raw=await response.text();
-      if(!raw.trim())throw Error('更新清单为空');
-      return parseUpdateManifestText(raw);
-    }catch(e){errors.push('web '+endpoint+': '+String(e?.message||e))}
-  }
-  throw Error('更新清单读取失败：'+errors.join('；').slice(0,1800));
-}
-async function checkUpdate(){
-  const button=document.getElementById('checkUpdate');if(button)button.disabled=true;updateProgress(0,'正在检查最新版本…');
-  try{
-    const m=await fetchUpdateManifest();
-    const validated=validateUpdateManifest(m),remoteCode=validated.versionCode,remoteName=validated.version;
-    if(!Number.isSafeInteger(remoteCode)||remoteCode<=0)throw Error('更新清单 versionCode 无效');
-    if(remoteCode<=APP_VERSION_CODE){updateMessage('当前已是最新版本 '+APP_VERSION+'（'+APP_VERSION_CODE+'）');toast('当前已是最新版本');return}
-    updateMessage('发现新版本 '+remoteName);if(!confirm('发现新版本 '+remoteName+'，现在下载并安装？'))return;
-    const list=validated.urls;
-    if(window.AndroidNative?.downloadApk){
-      const expected=validated.sha256,expectedSize=validated.size;
-      let last='APK 下载失败';
-      for(const url of list){try{updateMessage('正在尝试下载：'+url.replace(/^https:\/\//,''));await new Promise((resolve,reject)=>{window.__rssApkWaiter=(ok,message)=>{window.__rssApkWaiter=null;ok?resolve():reject(Error(message||'APK 下载失败'))};window.AndroidNative.downloadApk(url,'zizhi-rss-'+remoteName+'.apk',expected,expectedSize)});return}catch(e){last=String(e?.message||e)}}
-      throw Error(last);
-    }
-    const webUrl=cacheBustUrl(list[0]);window.open(webUrl,'_blank','noopener,noreferrer');updateMessage('已打开 APK 下载地址');
-  }catch(e){updateMessage('检查更新失败：'+String(e?.message||e));toast('检查更新失败')}finally{if(button)button.disabled=false}
-}
+window.addEventListener('popstate',()=>{if(state.detailGuid){state.detailHistory=false;modalRoot.innerHTML='';state.detailGuid=null}});
+if(location.hash.startsWith('#article=')){const guid=decodeURIComponent(location.hash.slice(9));setTimeout(()=>openDetail(guid,false),200)}
 
 async function exportBackup(){
- const payload={schema:1,exportedAt:new Date().toISOString(),sources:await getAll('sources'),articles:await getAll('articles')};
- const content=JSON.stringify(payload,null,2);
- const filename='stock-rss-backup-'+new Date().toISOString().slice(0,10)+'.json';
- if(window.AndroidNative?.saveTextFile){
+  const payload={backupVersion:BACKUP_VERSION,app:'zizhi-rss-reader',exportedAt:now(),sources:state.sources,articles:state.articles};
+  const json=JSON.stringify(payload,null,2);
+  const filename='zizhi-rss-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  if(window.AndroidNative?.saveTextFile){window.__rssSaveResult=(ok,msg)=>toast(msg);window.AndroidNative.saveTextFile(filename,json);return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([json],{type:'application/json'}));a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)
+}
+async function importBackupText(json){
   try{
-    await new Promise((resolve,reject)=>{
-      window.__rssSaveWaiter=(ok,message)=>{window.__rssSaveWaiter=null;ok?resolve():reject(Error(message||'备份保存失败'))};
-      try{window.AndroidNative.saveTextFile(filename,content)}catch(e){window.__rssSaveWaiter=null;reject(e)}
-    });
-    toast('备份已保存到 下载 / 自制RSS');return;
-  }catch(e){toast('备份导出失败：'+String(e?.message||e));return}
- }
- const blob=new Blob([content],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('本机备份已导出')
+    const p=JSON.parse(json);if(p?.app!=='zizhi-rss-reader'||Number(p.backupVersion)!==BACKUP_VERSION)throw new Error('备份文件版本不兼容');
+    await clearStores();
+    for(const s of Array.isArray(p.sources)?p.sources:[])await storePut(STORE_SOURCES,s);
+    for(const a of Array.isArray(p.articles)?p.articles:[])if(a?.guid)await storePut(STORE_ARTICLES,a);
+    await loadState();render();toast('备份恢复完成')
+  }catch(e){toast('恢复失败：'+(e.message||e))}
 }
-async function restoreBackupText(text){
- try{
-  const rawText=String(text||'');
-  if(rawText.length>64*1024*1024)throw Error('备份文件过大，超过 64 MB 限制');
-  const p=validateBackupPayload(JSON.parse(rawText));
-  const sourceMap=new Map();
-  for(const raw of p.sources){
-    const url=normalizeHttpsUrl(raw.url);if(!url)throw Error('备份中的订阅源 URL 无效');
-    const src={...raw,id:String(raw.id),name:String(raw.name).slice(0,200),url,type:raw.type==='summary'?'summary':'announce'};
-    sourceMap.set(src.id,src);
-    await put('sources',src);
+window.restoreBackupText=importBackupText;
+importFileEl.onchange=async()=>{const f=importFileEl.files?.[0];if(f)await importBackupText(await f.text());importFileEl.value=''}
+
+async function checkUpdate(){
+  const progress=document.getElementById('updateProgress'),desc=document.getElementById('updateDesc'),pct=document.getElementById('updatePct'),fill=document.getElementById('updateFill');
+  if(progress)progress.style.display='block';
+  if(desc)desc.textContent='读取更新清单…';
+  let manifest=null,last='';
+  for(const base of UPDATE_MANIFEST_URLS){
+    try{
+      const text=await fetchText(base,'update');manifest=JSON.parse(text);break
+    }catch(e){last=e.message||String(e)}
   }
-  for(const raw of p.articles){
-    const src=sourceMap.get(String(raw.sourceId));
-    const safeContent=sanitize(String(raw.content||''),src?.url||'');
-    const safeLink=absoluteUrl(raw.link||'',src?.url||'');
-    const notes=Array.isArray(raw.notes)?raw.notes.filter(n=>n&&typeof n==='object'&&typeof n.text==='string').slice(-500).map(n=>({
-      id:String(n.id||crypto.randomUUID?.()||String(Date.now())),
-      text:String(n.text).slice(0,5000),
-      createdAt:String(n.createdAt||'')
-    })):[];
-    const article={
-      ...raw,
-      id:String(raw.id),
-      title:String(raw.title).slice(0,500),
-      link:safeLink,
-      content:safeContent,
-      summary:String(raw.summary||onlyText(safeContent)).replace(/\s+/g,' ').trim().slice(0,700),
-      favorite:raw.favorite===true,
-      notes,
-      sourceId:String(raw.sourceId||'')
-    };
-    await put('articles',article);
+  if(!manifest){if(desc)desc.textContent='更新清单读取失败：'+last;toast('更新清单读取失败');return}
+  const v=String(manifest.version||''),code=Number(manifest.versionCode||0);
+  if(!/^4\\.\\d+\\.\\d+$/.test(v)||!Number.isSafeInteger(code)){if(desc)desc.textContent='更新清单版本无效';return}
+  if(code<=APP_VERSION_CODE){if(desc)desc.textContent='当前已是最新版本';if(pct)pct.textContent='100%';if(fill)fill.style.width='100%';return}
+  const urls=[manifest.apk_url,...(manifest.apk_urls||[])].filter(Boolean);
+  const url=urls.find(u=>/^https:\\/\\/(?:raw\\.githubusercontent\\.com|github\\.com)\\//.test(u));
+  if(!url){desc.textContent='没有可信 APK 地址';return}
+  if(desc)desc.textContent='发现 '+v+'，开始下载…';
+  if(window.AndroidNative?.downloadApk){
+    window.__rssApkDownloadProgress=(p,s,m)=>{if(pct)pct.textContent=p+'%';if(fill)fill.style.width=p+'%';if(desc)desc.textContent=m||s||'下载中…'};
+    window.__rssApkDownloadComplete=()=>{if(desc)desc.textContent='下载完成，准备安装…'};
+    window.__rssApkDownloadFailed=m=>{if(desc)desc.textContent='更新失败：'+m;toast('更新失败')};
+    window.AndroidNative.downloadApk(url,'zizhi-rss-'+v+'.apk',String(manifest.sha256||''),Number(manifest.apk_size||0));
+  }else{
+    desc.innerHTML='新版本 '+esc(v)+'：<a href="'+esc(url)+'" target="_blank" rel="noopener">下载 APK</a>';
   }
-  state.sources=await getAll('sources');
-  state.articles=await getAll('articles');
-  state.activeSourceId=state.activeSourceId||state.sources[0]?.id||null;
-  render();
-  toast('备份已合并导入');
-  return true;
- }catch(e){toast('导入失败：'+String(e?.message||e));return false}
 }
-window.restoreBackupText=restoreBackupText;
-async function importBackup(){
- const f=importFileEl.files?.[0];if(!f)return;
- try{await restoreBackupText(await f.text())}finally{importFileEl.value=''}
+
+async function loadState(){
+  state.sources=await storeGetAll(STORE_SOURCES);state.articles=await storeGetAll(STORE_ARTICLES);
+  state.sources.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
 }
-async function clearAll(){if(!confirm('确定清空本机所有订阅、文章、收藏和点评吗？\n\n此操作不可撤销。'))return;await clearDB();try{window.AndroidNative?.clearLocalFiles?.()}catch{}state.sources=[];state.articles=[];state.activeSourceId=null;state.search='';closeModal(true);render();toast('本机数据已清空')}
-window.addEventListener('popstate',()=>{if(state.modalHistory){state.modalHistory=false;state.modalArticleId=null;modalRoot.innerHTML=''}});
-init().catch(e=>{console.error(e);app.innerHTML='<div class="empty"><div class="empty-title">读取本机数据失败</div><div class="empty-desc">'+esc(e.message||e)+'</div></div>'});
+document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{state.page=b.dataset.page;state.search='';state.category='';render()});
+document.getElementById('refreshButton').onclick=refreshAll;
+init();
+async function init(){try{await loadState();render()}catch(e){app.innerHTML=emptyState('初始化失败',e.message||String(e));}}
