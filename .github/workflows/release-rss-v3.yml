@@ -88,6 +88,7 @@ jobs:
           cp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java
           node native/patch-manifest.mjs
           node native/patch-version.mjs
+          node native/patch-icon.mjs
 
       - name: Configure fixed release signing
         working-directory: rss-source
