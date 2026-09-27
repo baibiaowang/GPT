@@ -422,7 +422,7 @@ public class MainActivity extends BridgeActivity {
             @Override public void run() {
                 downloadApkNative(rawUrl, safeName, partFile, apkFile, expectedDigest, expectedSize);
             }
-        }, "stock-judge-apk-download");
+        }, "zizhi-rss-apk-download");
         apkDownloadThread.start();
     }
 
@@ -450,7 +450,7 @@ public class MainActivity extends BridgeActivity {
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(45000);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "ZizhiRSS-Updater/3.0");
+                conn.setRequestProperty("User-Agent", "ZizhiRSS-Updater/4.0");
                 conn.setRequestProperty("Accept", "application/vnd.android.package-archive,application/octet-stream,*/*");
                 conn.setRequestProperty("Accept-Encoding", "identity");
                 conn.setRequestProperty("Cache-Control", "no-cache");
