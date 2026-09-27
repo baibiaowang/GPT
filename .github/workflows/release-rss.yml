@@ -36,7 +36,7 @@ jobs:
       - name: Checkout GPT bridge repository
         uses: actions/checkout@v4
 
-      - name: Validate RSS 4 identity
+      - name: Validate RSS identity
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -46,7 +46,7 @@ jobs:
           const app=fs.readFileSync('app.js','utf8');
           const version=String(pkg.version||'').trim();
           const versionCode=Number(pkg.versionCode||0);
-          if(!/^4\.\d+\.\d+$/.test(version))throw new Error('RSS 4 package version must be 4.x.y');
+          if(!/^4\.\d+\.\d+$/.test(version))throw new Error('RSS package version must be 4.x.y');
           if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('RSS 4 package versionCode invalid');
           if(cap.appId!=='com.baibiaowang.stockjudge')throw new Error('RSS applicationId mismatch');
           if(!app.includes("APP_VERSION='"+version+"'")||!app.includes('APP_VERSION_CODE='+versionCode))throw new Error('RSS app.js version constants incorrect');
@@ -180,7 +180,7 @@ jobs:
           } >> "$GITHUB_ENV"
           sha256sum dist/app.apk | tee dist/app.sha256
 
-      - name: Publish RSS 4 APK mirror on GPT
+      - name: Publish RSS APK mirror on GPT
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -281,7 +281,7 @@ jobs:
             'apk_urls':[
               f'https://raw.githubusercontent.com/{repo}/apk/releases/{version}/app.apk',
               f'https://github.com/{repo}/releases/download/v{version}/zizhi-rss-{version}.apk'],
-            'notes':f'自制RSS {version}：RSS 4.0：agu-ann-feed 专用阅读器重构版。'}
+            'notes':f'自制RSS {version}：agu-ann-feed RSS 阅读器重构版。'}
           json.dump(data,open('gpt-update.json','w',encoding='utf-8'),ensure_ascii=False,indent=2);open('gpt-update.json','a',encoding='utf-8').write('\n')
           PY
 
