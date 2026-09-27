@@ -249,7 +249,7 @@ jobs:
           print('Old 2.1.x compatible update manifest verified.')
           PY
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
-# Retry after restoring native feed-fetch helper and UTF-8-safe Base64 chunking.
+# Retry after Android resource deduplication in committed RSS project.
 
 # Retry after RSS native bridge compile fix.
 
