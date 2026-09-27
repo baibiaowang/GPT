@@ -239,3 +239,5 @@ jobs:
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for 2.x upgrades.
 
 # Retry after RSS native bridge compile fix.
+
+# Retry after FEED_PART migration cleanup.
