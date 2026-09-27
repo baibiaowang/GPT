@@ -1,4 +1,4 @@
-name: Build 自制RSS APK · GPT 4
+name: Build 自制RSS APK · GPT
 
 on:
   workflow_dispatch:
