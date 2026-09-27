@@ -332,7 +332,7 @@ public class MainActivity extends BridgeActivity {
         try {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)\\bcharset\\s*=\\s*([^;]+)").matcher(contentType);
             if (m.find()) {
-                String name = m.group(1).trim().replace(""", "").replace("'", "");
+                String name = m.group(1).trim().replace("\"", "").replace("'", "");
                 if (!name.isEmpty()) return Charset.forName(name);
             }
         } catch (Exception ignored) { }
