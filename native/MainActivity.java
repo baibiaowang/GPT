@@ -896,10 +896,10 @@ public class MainActivity extends BridgeActivity {
             String host = u.getHost();
             String path = u.getPath();
             if ("raw.githubusercontent.com".equalsIgnoreCase(host)) {
-                return path.matches("/baibiaowang/GPT/apk/releases/4\\.\\d+\\.\\d+/app\\.apk");
+                return path.matches("/baibiaowang/GPT/apk/releases/[34]\\.\\d+\\.\\d+/app\\.apk");
             }
             if ("github.com".equalsIgnoreCase(host)) {
-                return path.matches("/baibiaowang/GPT/releases/download/v4\\.\\d+\\.\\d+/zizhi-rss-4\\.\\d+\\.\\d+\\.apk");
+                return path.matches("/baibiaowang/GPT/releases/download/v[34]\\.\\d+\\.\\d+/zizhi-rss-[34]\\.\\d+\\.\\d+\\.apk");
             }
             return false;
         } catch (Exception ignored) {
