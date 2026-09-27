@@ -1,4 +1,4 @@
-const APP_VERSION='3.0.8',APP_VERSION_CODE=3008,
+const APP_VERSION='3.0.9',APP_VERSION_CODE=3009,
 UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
@@ -41,7 +41,7 @@ async function init(){
  importFileEl.onchange=importBackup;
  render();
  if('serviceWorker'in navigator){
-  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update().catch(()=>{})).catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v='+encodeURIComponent(APP_VERSION),{updateViaCache:'none'}).then(r=>r.update().catch(()=>{})).catch(()=>{});
 }
 }
 async function articleId(item,source){
@@ -268,6 +268,32 @@ function validateBackupPayload(p){
  }
  return p;
 }
+function decodeUtf8Base64(value){
+ const bin=atob(String(value||'').replace(/\s+/g,''));
+ const bytes=new Uint8Array(bin.length);
+ for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+ return new TextDecoder('utf-8',{fatal:false}).decode(bytes);
+}
+function parseUpdateManifestText(text){
+ let value=String(text??'').replace(/^\uFEFF/,'').trim();
+ for(let depth=0;depth<3;depth++){
+   if(value.startsWith('{')||value.startsWith('[')){
+     const parsed=JSON.parse(value);
+     if(parsed&&typeof parsed==='object'&&parsed.encoding==='base64'&&typeof parsed.content==='string'){
+       value=decodeUtf8Base64(parsed.content).replace(/^\uFEFF/,'').trim();
+       continue;
+     }
+     return parsed;
+   }
+   const compact=value.replace(/\s+/g,'');
+   if(!compact||compact.length%4!==0||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(compact))break;
+   let decoded='';
+   try{decoded=decodeUtf8Base64(compact).replace(/^\uFEFF/,'').trim()}catch{break}
+   if(!(decoded.startsWith('{')||decoded.startsWith('[')))break;
+   value=decoded;
+ }
+ throw Error('更新清单不是有效 JSON');
+}
 async function fetchUpdateManifest(){
   const errors=[];
   for(const endpoint of UPDATE_MANIFEST_URLS){
@@ -293,7 +319,7 @@ async function fetchUpdateManifest(){
         }
         raw+=decoder.decode();
         if(!raw.trim())throw Error('更新清单为空');
-        return JSON.parse(raw);
+        return parseUpdateManifestText(raw);
       }catch(e){errors.push('native '+endpoint+': '+String(e?.message||e))}
     }
     try{
@@ -302,7 +328,7 @@ async function fetchUpdateManifest(){
       if(!response.ok)throw Error('HTTP '+response.status);
       const raw=await response.text();
       if(!raw.trim())throw Error('更新清单为空');
-      return JSON.parse(raw.replace(/^\uFEFF/,'').trim());
+      return parseUpdateManifestText(raw);
     }catch(e){errors.push('web '+endpoint+': '+String(e?.message||e))}
   }
   throw Error('更新清单读取失败：'+errors.join('；').slice(0,1800));
