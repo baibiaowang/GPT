@@ -333,10 +333,10 @@ async function checkUpdate(){
   }
   if(!manifest){if(desc)desc.textContent='更新清单读取失败：'+last;toast('更新清单读取失败');return}
   const v=String(manifest.version||''),code=Number(manifest.versionCode||0);
-  if(!/^4\.\d+\.\d+$/.test(v)||!Number.isSafeInteger(code)){if(desc)desc.textContent='更新清单版本无效';return}
+  if(!/^(?:3|4)\.\d+\.\d+$/.test(v)||!Number.isSafeInteger(code)){if(desc)desc.textContent='更新清单版本无效';return}
   if(code<=APP_VERSION_CODE){if(desc)desc.textContent='当前已是最新版本';if(pct)pct.textContent='100%';if(fill)fill.style.width='100%';return}
   const urls=[manifest.apk_url,...(manifest.apk_urls||[])].filter(Boolean);
-  const url=urls.find(u=>/^https:\/\/(?:raw\.githubusercontent\.com|github\.com)\//.test(u));
+  const url=urls.find(u=>{try{const x=new URL(u),p=x.pathname;return x.protocol==='https:'&&((x.hostname==='raw.githubusercontent.com'&&/^\/baibiaowang\/GPT\/releases\/.*\/app\.apk$/.test(p))||(x.hostname==='github.com'&&/^\/baibiaowang\/GPT\/releases\/download\/v.*\/zizhi-rss-.*\.apk$/.test(p)))}catch{return false}});
   if(!url){desc.textContent='没有可信 APK 地址';return}
   if(desc)desc.textContent='发现 '+v+'，开始下载…';
   if(window.AndroidNative?.downloadApk){
