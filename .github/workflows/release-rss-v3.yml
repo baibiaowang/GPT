@@ -76,9 +76,17 @@ jobs:
         working-directory: rss-source
         run: node native/inject.mjs
 
-      - name: Add Android
+      - name: Prepare Android project
         working-directory: rss-source
-        run: npx cap add android
+        run: |
+          set -euo pipefail
+          if [ -d android ]; then
+            echo "使用 RSS 仓库中已提交的 Android 工程"
+            npx cap sync android
+          else
+            echo "仓库尚无 Android 工程，使用 Capacitor 生成"
+            npx cap add android
+          fi
 
       - name: Inject RSS native bridge
         working-directory: rss-source
