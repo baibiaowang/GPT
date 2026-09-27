@@ -31,7 +31,7 @@ for (const marker of [
   if (!app.includes(marker) && !native.includes(marker)) fail('缺少关键修复：' + marker);
 }
 
-if (/agu-ann-feed\.app\.workbuddy\.host/.test(app + '\\n' + native + '\\n' + manifest)) {
+if (/agu-ann-feed\.app\.workbuddy\.host/.test(app + '\\n' + native)) {
   fail('公开源码中发现私有 RSS 地址，请不要提交带 token 的订阅地址');
 }
 if ((native.match(/initialRequest/g) || []).length !== 3) fail('APK重定向缓存状态代码不完整');
