@@ -2,7 +2,7 @@ import fs from 'node:fs';
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
 const version=String(pkg.version||'').trim();
 const versionCode=Number(pkg.versionCode||0);
-if(!/^4\.\d+\.\d+$/.test(version))throw new Error('package version must be a 4.x.y RSS version');
+if(!/^3\.\d+\.\d+$/.test(version))throw new Error('package version must be a 3.x.y RSS version');
 if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('package versionCode must be a positive integer');
 const p='android/app/build.gradle';
 let s=fs.readFileSync(p,'utf8');
