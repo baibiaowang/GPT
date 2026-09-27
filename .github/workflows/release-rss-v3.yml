@@ -1,4 +1,4 @@
-name: Build 自制RSS APK · GPT 单仓库
+name: Build 自制RSS APK · GPT 4
 
 on:
   workflow_dispatch:
@@ -36,7 +36,7 @@ jobs:
       - name: Checkout GPT bridge repository
         uses: actions/checkout@v4
 
-      - name: Validate RSS 3.0 identity
+      - name: Validate RSS 4 identity
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -46,8 +46,8 @@ jobs:
           const app=fs.readFileSync('app.js','utf8');
           const version=String(pkg.version||'').trim();
           const versionCode=Number(pkg.versionCode||0);
-          if(!/^3\.\d+\.\d+$/.test(version))throw new Error('RSS package version must be 3.x.y');
-          if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('RSS package versionCode invalid');
+          if(!/^3\.\d+\.\d+$/.test(version))throw new Error('RSS 4 package version must be 4.x.y');
+          if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('RSS 4 package versionCode invalid');
           if(cap.appId!=='com.baibiaowang.stockjudge')throw new Error('RSS applicationId mismatch');
           if(!app.includes("APP_VERSION='"+version+"'")||!app.includes('APP_VERSION_CODE='+versionCode))throw new Error('RSS app.js version constants incorrect');
           fs.appendFileSync(process.env.GITHUB_ENV,'RSS_VERSION='+version+'\nRSS_VERSION_CODE='+versionCode+'\nRSS_SOURCE_COMMIT='+process.env.GITHUB_SHA+'\n');
@@ -79,7 +79,7 @@ jobs:
           [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
           [ -z "${ANDROID_KEY_ALIAS:-}" ] && missing="$missing ANDROID_KEY_ALIAS"
           [ -z "${ANDROID_KEY_PASSWORD:-}" ] && missing="$missing ANDROID_KEY_PASSWORD"
-          if [ -n "$missing" ]; then echo "::error::旧股票判断机签名 secrets 不完整:$missing"; exit 1; fi
+          if [ -n "$missing" ]; then echo "::error::固定签名 secrets 不完整:$missing"; exit 1; fi
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > signing.p12
           echo "SIGNING_KEYSTORE_PATH=$PWD/signing.p12" >> "$GITHUB_ENV"
 
@@ -155,7 +155,7 @@ jobs:
           "$BT/apksigner" verify --print-certs "$APK"
           CURRENT_DIGEST=$("$BT/apksigner" verify --print-certs "$APK" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
           test -n "$CURRENT_DIGEST"
-          echo "3.0 signing cert: $CURRENT_DIGEST"
+          echo "RSS signing cert: $CURRENT_DIGEST"
           for VERSION in 2.1.13 2.1.7 2.1.6; do
             URL="https://github.com/baibiaowang/GPT/releases/download/v${VERSION}/app.apk"
             if curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 "$URL" -o "/tmp/gpt-${VERSION}.apk"; then
@@ -180,7 +180,7 @@ jobs:
           } >> "$GITHUB_ENV"
           sha256sum dist/app.apk | tee dist/app.sha256
 
-      - name: Publish 3.0 APK mirror on GPT
+      - name: Publish RSS 4 APK mirror on GPT
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -211,7 +211,7 @@ jobs:
           git add "releases/${RSS_VERSION}/app.apk"
           if ! git diff --cached --quiet; then git commit -m "发布自制RSS ${RSS_VERSION} 升级 APK"; git push origin HEAD:apk; fi
 
-      - name: Create or refresh GPT Release
+      - name: Create or refresh RSS Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -281,7 +281,7 @@ jobs:
             'apk_urls':[
               f'https://raw.githubusercontent.com/{repo}/apk/releases/{version}/app.apk',
               f'https://github.com/{repo}/releases/download/v{version}/zizhi-rss-{version}.apk'],
-            'notes':f'自制RSS {version}：旧股票判断机正式切换为 RSS 模式。'}
+            'notes':f'自制RSS {version}：RSS 4.0：agu-ann-feed 专用阅读器重构版。'}
           json.dump(data,open('gpt-update.json','w',encoding='utf-8'),ensure_ascii=False,indent=2);open('gpt-update.json','a',encoding='utf-8').write('\n')
           PY
 
