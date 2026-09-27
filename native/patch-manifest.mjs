@@ -1,62 +1,55 @@
 import fs from 'node:fs';
 
-const P = 'android/app/src/main/AndroidManifest.xml';
-const INSTALL_PERMISSION = 'android.permission.REQUEST_INSTALL_PACKAGES';
-const PROVIDER_MARK = 'sj-file-provider';
+const p='android/app/src/main/AndroidManifest.xml';
+if(!fs.existsSync(p))throw new Error('AndroidManifest.xml not found');
+let s=fs.readFileSync(p,'utf8');
 
-if (!fs.existsSync(P)) {
-  console.error('[patch-manifest] not found: ' + P);
-  process.exit(1);
+const hasAppIcon=s.includes('android:icon=');
+const hasAppRoundIcon=s.includes('android:roundIcon=');
+if(hasAppIcon) {
+  s=s.replace(/android:icon="[^"]*"/g,'android:icon="@mipmap/ic_launcher"');
+} else {
+  s=s.replace('<application','<application android:icon="@mipmap/ic_launcher"');
+}
+if(hasAppRoundIcon) {
+  s=s.replace(/android:roundIcon="[^"]*"/g,'android:roundIcon="@mipmap/ic_launcher_round"');
+} else {
+  s=s.replace('<application','<application android:roundIcon="@mipmap/ic_launcher_round"');
 }
 
-let m = fs.readFileSync(P, 'utf8');
-
-if (m.indexOf('uses-permission android:name="' + INSTALL_PERMISSION + '"') < 0) {
-  const appIdx = m.indexOf('<application');
-  if (appIdx < 0) {
-    console.error('[patch-manifest] cannot find <application>');
-    process.exit(1);
-  }
-  m = m.slice(0, appIdx) +
-    '    <uses-permission android:name="' + INSTALL_PERMISSION + '" />\n' +
-    m.slice(appIdx);
+if(!s.includes('android.permission.REQUEST_INSTALL_PACKAGES')) {
+  s=s.replace('<application','<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <application');
 }
 
-
-const xmlDir = 'android/app/src/main/res/xml';
-fs.mkdirSync(xmlDir, {recursive: true});
-const pathsXml = `<?xml version="1.0" encoding="utf-8"?>
+const xmlDir='android/app/src/main/res/xml';
+fs.mkdirSync(xmlDir,{recursive:true});
+fs.writeFileSync(xmlDir+'/rss_file_paths.xml',`<?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="stock_judge_downloads" path="Download/股票判断机" />
-    <external-files-path name="external_files" path="." />
-    <cache-path name="cache" path="." />
-    <files-path name="files" path="." />
-</paths>
-`;
-fs.writeFileSync(xmlDir + '/sj_file_paths.xml', pathsXml);
+  <cache-path name="cache" path="." />
+  <files-path name="files" path="." />
+  <external-files-path name="external_files" path="." />
+</paths>\n`);
 
-if (m.indexOf(PROVIDER_MARK) < 0) {
-  const appEnd = m.lastIndexOf('</application>');
-  if (appEnd < 0) {
-    console.error('[patch-manifest] cannot find </application>');
-    process.exit(1);
-  }
-  const provider = [
-    '',
-    '        <!-- ' + PROVIDER_MARK + ': 将本地 APK 包装成 content:// URI，供安装器安全读取 -->',
-    '        <provider',
-    '            android:name="androidx.core.content.FileProvider"',
-    '            android:authorities="${applicationId}.fileprovider"',
-    '            android:exported="false"',
-    '            android:grantUriPermissions="true">',
-    '            <meta-data',
-    '                android:name="android.support.FILE_PROVIDER_PATHS"',
-    '                android:resource="@xml/sj_file_paths" />',
-    '        </provider>',
-    '    '
-  ].join('\n');
-  m = m.slice(0, appEnd) + provider + m.slice(appEnd);
+const providerBlock=`    <!-- zizhi-rss-file-provider -->
+    <provider
+        android:name="androidx.core.content.FileProvider"
+        android:authorities="\${applicationId}.fileprovider"
+        android:exported="false"
+        android:grantUriPermissions="true">
+        <meta-data
+            android:name="android.support.FILE_PROVIDER_PATHS"
+            android:resource="@xml/rss_file_paths" />
+    </provider>`;
+
+const providerRe=/[ \t]*<provider\b[^>]*android:name="androidx\.core\.content\.FileProvider"[^>]*>[\s\S]*?<\/provider>[ \t]*/;
+if(providerRe.test(s)) {
+  s=s.replace(providerRe,'\n'+providerBlock+'\n');
+} else {
+  if(!s.includes('</application>'))throw new Error('application closing tag not found');
+  s=s.replace('</application>','\n'+providerBlock+'\n    </application>');
 }
 
-fs.writeFileSync(P, m);
-console.log('[patch-manifest] patched ok');
+s=s.replace(/[ \t]+\r?\n/g,'\n');
+s=s.replace(/\n{3,}/g,'\n\n');
+fs.writeFileSync(p,s);
+console.log('RSS FileProvider manifest patched');

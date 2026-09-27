@@ -1,1 +1,0 @@
-(function(g){class CellModel{constructor({columnId,value='',valueId='',type='text'}={}){this.columnId=String(columnId||'');this.value=value==null?'':value;this.valueId=String(valueId||'');this.type=String(type||'text')}}g.CellModel=CellModel;})(window);
