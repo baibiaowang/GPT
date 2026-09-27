@@ -297,6 +297,7 @@ jobs:
           PY
 # Release trigger: rebuild from current RSS main and verify the published APK bytes before publishing update.json.
 # Release trigger 2: rebuild after RSS source-script correction.
+# Release trigger 3: rebuild after idempotent Manifest patch correction.
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
 # Retry after Android resource deduplication in committed RSS project.
 
