@@ -341,7 +341,7 @@ jobs:
 # Release trigger 3: rebuild after idempotent Manifest patch correction.
 # Release trigger 4: rebuild after source-scan scope correction and Android callback fixes.
 # Release trigger 5: rebuild 3.0.4 with extended CDN propagation verification.
-# Release trigger 11: fix false-positive secret scan in release validation.
+# Release trigger 12: final 3.0.6 service-worker cache and update hardening.
 # RSS source of truth: baibiaowang/RSS main; GPT remains distribution bridge for legacy upgrade continuity.
 # Retry after Android resource deduplication in committed RSS project.
 
