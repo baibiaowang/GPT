@@ -117,13 +117,87 @@ function wireCards(){
  app.querySelectorAll('[data-empty-action]').forEach(b=>b.onclick=async()=>{await refreshFeeds()});
 }
 function renderSettings(){
- app.innerHTML=`<div class="setting-card"><h2>应用</h2><div class="section-subtitle">自制RSS v${APP_VERSION}（${APP_VERSION_CODE}） · 3.0 新版 RSS 模式</div><div class="setting-actions" style="margin-top:12px"><button class="primary" id="checkUpdate">检查更新</button></div><div class="update-progress" id="updateProgress"><div class="update-progress-line"><span id="updateProgressDesc">准备更新…</span><strong id="updatePct">0%</strong></div><div class="update-progress-track"><i id="updateFill"></i></div></div></div>
- <div class="setting-card"><h2>订阅源</h2><div id="sourceRows">${state.sources.length?state.sources.map(s=>`<div class="source-row"><div class="source-info"><strong>${esc(s.name)}</strong><small>${esc(s.url)}</small></div><div class="setting-actions"><button class="small-button" data-edit="${esc(s.id)}">编辑</button><button class="small-button danger" data-delete="${esc(s.id)}">删除</button></div></div>`).join(''):'<div class="section-subtitle">尚未添加订阅源。</div>'}</div><div style="margin-top:12px"><button class="primary" id="addSource">＋ 添加订阅源</button></div></div>
- <div class="setting-card"><h2>本机数据</h2><div class="section-subtitle">正文、摘要、收藏、点评全部保存在当前浏览器的 IndexedDB。删除订阅源不会删除已经保存的文章。</div><div class="setting-actions" style="margin-top:12px"><button class="secondary" id="export">导出本机备份</button><button class="secondary" id="import">导入备份</button><button class="small-button danger" id="clear">清空本机数据</button></div></div>
- <div class="setting-card"><h2>阅读状态</h2><div class="section-subtitle">订阅源：${state.sources.length} 个 · 本机文章：${state.articles.length} 条 · 收藏：${state.articles.filter(a=>a.favorite).length} 条 · 点评：${state.articles.filter(a=>(a.notes||[]).length).length} 条</div></div>`;
- app.querySelector('#addSource').onclick=()=>sourceModal();app.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>sourceModal(sourceById(b.dataset.edit)));app.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>deleteSource(b.dataset.delete));app.querySelector('#export').onclick=exportBackup;app.querySelector('#import').onclick=()=>{if(window.AndroidNative?.openBackupPicker){try{window.AndroidNative.openBackupPicker();return}catch(e){console.warn('原生导入选择器失败',e)}}importFileEl.click()};app.querySelector('#clear').onclick=clearAll;app.querySelector('#checkUpdate').onclick=checkUpdate;
-}
-function sourceModal(src){
+ const favoriteCount=state.articles.filter(a=>a.favorite===true).length;
+ const noteCount=state.articles.filter(a=>Array.isArray(a.notes)&&a.notes.length).length;
+ const syncedSources=state.sources.filter(s=>s.lastSyncAt).length;
+ const failedSources=state.sources.filter(s=>s.lastError).length;
+ const fmtSync=s=>s.lastSyncAt?fmt(s.lastSyncAt):'尚未抓取';
+ const statusHtml=s=>{
+   if(s.lastError)return '<span class="source-status error">抓取失败</span>';
+   if(s.lastSyncAt)return '<span class="source-status ok">正常</span>';
+   return '<span class="source-status idle">未抓取</span>';
+ };
+ app.innerHTML=`
+ <div class="settings-hero">
+   <div class="settings-hero-mark"><span class="icon icon-rss"></span></div>
+   <div class="settings-hero-main">
+     <div class="eyebrow">自制 RSS</div>
+     <h2>设置</h2>
+     <p>订阅源、更新、本机数据统一在这里管理。</p>
+   </div>
+   <div class="version-badge">v${APP_VERSION}</div>
+ </div>
+
+ <section class="setting-card settings-section">
+   <div class="settings-section-head"><div><h2>应用更新</h2><div class="section-subtitle">当前版本 ${APP_VERSION}（${APP_VERSION_CODE}）</div></div><span class="settings-section-icon">↻</span></div>
+   <button class="setting-row-button" id="checkUpdate"><span><strong>检查新版本</strong><small>从官方更新清单检查并校验 APK</small></span><b>›</b></button>
+   <div class="update-progress" id="updateProgress"><div class="update-progress-line"><span id="updateProgressDesc">准备更新…</span><strong id="updatePct">0%</strong></div><div class="update-progress-track"><i id="updateFill"></i></div></div>
+ </section>
+
+ <section class="setting-card settings-section">
+   <div class="settings-section-head"><div><h2>订阅源</h2><div class="section-subtitle">${state.sources.length} 个源 · ${syncedSources} 个已有抓取记录${failedSources?' · '+failedSources+' 个失败':''}</div></div></div>
+   <div class="source-settings-list">
+     ${state.sources.length?state.sources.map(s=>`
+       <div class="source-setting-item">
+         <div class="source-setting-main">
+           <div class="source-setting-title"><strong>${esc(s.name)}</strong>${statusHtml(s)}</div>
+           <div class="source-setting-url">${esc(s.url)}</div>
+           <div class="source-setting-meta"><span>${s.type==='summary'?'公告总结':'股票公告'}</span><span>${Number(s.lastItemCount||0)} 条/次</span><span>${fmtSync(s)}</span></div>
+           ${s.lastError?'<div class="source-error">'+esc(String(s.lastError))+'</div>':''}
+         </div>
+         <div class="source-setting-actions">
+           <button class="small-button" data-refresh-source="${esc(s.id)}">刷新</button>
+           <button class="small-button" data-edit="${esc(s.id)}">编辑</button>
+           <button class="small-button danger" data-delete="${esc(s.id)}">删除</button>
+         </div>
+       </div>`).join(''):'<div class="settings-empty"><div>还没有订阅源</div><span>添加一个 HTTPS RSS / Atom / JSON Feed 地址即可。</span></div>'}
+   </div>
+   <button class="add-source-button" id="addSource"><span>＋</span> 添加订阅源</button>
+ </section>
+
+ <section class="setting-card settings-section">
+   <div class="settings-section-head"><div><h2>本机数据</h2><div class="section-subtitle">数据只保存在这台设备的本地数据库。</div></div></div>
+   <div class="data-stats">
+     <div><strong>${state.sources.length}</strong><span>订阅源</span></div>
+     <div><strong>${state.articles.length}</strong><span>文章</span></div>
+     <div><strong>${favoriteCount}</strong><span>收藏</span></div>
+     <div><strong>${noteCount}</strong><span>点评</span></div>
+   </div>
+   <div class="settings-action-grid">
+     <button class="secondary" id="export">导出备份</button>
+     <button class="secondary" id="import">导入备份</button>
+   </div>
+ </section>
+
+ <section class="setting-card settings-section danger-section">
+   <div class="settings-section-head"><div><h2>危险操作</h2><div class="section-subtitle">清空会删除当前设备上的订阅、文章、收藏和点评。</div></div></div>
+   <button class="danger-action" id="clear">清空本机数据</button>
+ </section>`;
+
+ app.querySelector('#addSource').onclick=()=>sourceModal();
+ app.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>sourceModal(sourceById(b.dataset.edit)));
+ app.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>deleteSource(b.dataset.delete));
+ app.querySelectorAll('[data-refresh-source]').forEach(b=>b.onclick=async()=>{
+   const id=b.dataset.refreshSource,s=sourceById(id);if(!s)return;
+   b.disabled=true;b.textContent='刷新中…';
+   await refreshSource(s);
+   state.sources=await getAll('sources');state.articles=await getAll('articles');render();
+ });
+ app.querySelector('#export').onclick=exportBackup;
+ app.querySelector('#import').onclick=()=>{if(window.AndroidNative?.openBackupPicker){try{window.AndroidNative.openBackupPicker();return}catch(e){console.warn('原生导入选择器失败',e)}}importFileEl.click()};
+ app.querySelector('#clear').onclick=clearAll;
+ app.querySelector('#checkUpdate').onclick=checkUpdate;
+}function sourceModal(src){
  modalRoot.innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2 class="modal-title">${src?'编辑订阅源':'添加订阅源'}</h2><button class="close" id="close">×</button></div>
  <label class="field"><span>自定义名称</span><input id="sName" placeholder="例如：A股公告" value="${esc(src?.name||'')}"></label>
  <label class="field"><span>RSS / Atom / JSON Feed 地址（仅 HTTPS）</span><input id="sUrl" placeholder="https://example.com/feed.xml" value="${esc(src?.url||'')}"></label>
@@ -134,6 +208,7 @@ function sourceModal(src){
 }
 async function deleteSource(id){const s=sourceById(id);if(!s)return;if(!confirm(`删除订阅源“${s.name}”？\n\n只删除订阅配置，不删除已经保存在本机的文章、收藏和点评。`))return;await del('sources',id);state.sources=await getAll('sources');if(state.activeSourceId===id)state.activeSourceId=state.sources[0]?.id||LOCAL_ID;render();toast('订阅源已删除，历史文章仍保留')}
 function closeModal(fromHistory=false){const hadHistory=state.modalHistory;state.modalArticleId=null;state.modalHistory=false;modalRoot.innerHTML='';if(hadHistory&&!fromHistory){history.back()}}
+window.__rssNativeFeedResult=(ok,message)=>{const waiter=window.__rssNativeFeedWaiter;if(typeof waiter!=='function')return;window.__rssNativeFeedWaiter=null;ok?waiter(true,String(message||'')):waiter(false,String(message||'原生读取订阅失败'))};
 async function refreshFeeds(){if(!state.sources.length)return toast('请先添加订阅源');document.getElementById('refreshButton').disabled=true;let failed=0;try{for(const s of state.sources){const ok=await refreshSource(s);if(!ok)failed++}state.sources=await getAll('sources');state.articles=await getAll('articles');render();toast(failed?('刷新完成：'+(state.sources.length-failed)+' 个成功，'+failed+' 个失败'):'订阅刷新完成')}finally{document.getElementById('refreshButton').disabled=false}}
 async function fetchFeedText(url){
   const nativeErrors=[];
