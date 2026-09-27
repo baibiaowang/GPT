@@ -332,13 +332,12 @@ public class MainActivity extends BridgeActivity {
         try {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)\\bcharset\\s*=\\s*([^;]+)").matcher(contentType);
             if (m.find()) {
-                String name = m.group(1).trim().replace("\\\"", "").replace("'", "");
+                String name = m.group(1).trim().replace(""", "").replace("'", "");
                 if (!name.isEmpty()) return Charset.forName(name);
             }
         } catch (Exception ignored) { }
         return StandardCharsets.UTF_8;
     }
-
     private void notifyJsTextResult(final String callbackFn, final boolean ok, final String message) {
         runOnUiThread(new Runnable() {
             @Override public void run() {
