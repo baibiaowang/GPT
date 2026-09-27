@@ -21,6 +21,8 @@ import android.provider.DocumentsContract;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.content.FileProvider;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -70,6 +72,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        configureWebViewSystemInsets();
         installBackHandler();
         installNativeBridge();
     }
@@ -84,6 +87,25 @@ public class MainActivity extends BridgeActivity {
                 @Override public void run() { installDownloadedApk(uri); }
             }, 250L);
         }
+    }
+
+    /** Android 15+ edge-to-edge：把系统导航栏安全区同步给 WebView/CSS，避免固定底栏被系统三键/手势区域盖住。 */
+    private void configureWebViewSystemInsets() {
+        final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
+        if (wv == null) {
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override public void run() { configureWebViewSystemInsets(); }
+            }, 250L);
+            return;
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(wv, (view, insets) -> {
+            androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            String js = "document.documentElement.style.setProperty('--android-top-inset','" + bars.top + "px');" +
+                        "document.documentElement.style.setProperty('--android-bottom-inset','" + bars.bottom + "px');";
+            try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(wv);
     }
 
     /** App-local JS bridge: export user backup to Downloads, download updates, and open external links. */
@@ -234,7 +256,7 @@ public class MainActivity extends BridgeActivity {
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(30000);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "ZizhiRSS-Updater/3.0.10");
+                conn.setRequestProperty("User-Agent", "ZizhiRSS-Updater/3.0.11");
                 conn.setRequestProperty("Accept", "application/json,text/plain,application/rss+xml,application/atom+xml,application/feed+json,*/*");
                 conn.setRequestProperty("Accept-Encoding", "identity");
                 conn.setRequestProperty("Cache-Control", "no-cache");
