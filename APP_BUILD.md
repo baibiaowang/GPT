@@ -1,8 +1,8 @@
-# 自制 RSS 阅读器 4.0
+# 自制 RSS 阅读器 3.0.12
 
 ## 身份
-- versionName：4.0.0
-- versionCode：4000
+- versionName：3.0.12
+- versionCode：3012
 - applicationId：com.baibiaowang.stockjudge（仅用于覆盖升级已有安装包）
 - 数字签名继续使用现有 release signing
 
