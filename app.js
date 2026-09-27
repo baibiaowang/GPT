@@ -1,4 +1,4 @@
-const APP_VERSION='3.0.10',APP_VERSION_CODE=3010,
+const APP_VERSION='3.0.11',APP_VERSION_CODE=3011,
 UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
   'https://cdn.jsdelivr.net/gh/baibiaowang/GPT@main/update.json',
