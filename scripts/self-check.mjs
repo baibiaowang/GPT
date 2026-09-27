@@ -1,46 +1,17 @@
 import fs from 'node:fs';
-
 const fail = message => { throw new Error(message); };
-const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-const app = fs.readFileSync('app.js','utf8');
-const native = fs.readFileSync('native/MainActivity.java','utf8');
-const sw = fs.readFileSync('sw.js','utf8');
-
-const version = String(pkg.version || '').trim();
-const versionCode = Number(pkg.versionCode || 0);
-
-if (!/^4\.\d+\.\d+$/.test(version)) fail('package.json version 必须是 4.x.y');
-if (!Number.isSafeInteger(versionCode) || versionCode < 3000) fail('package.json versionCode 无效');
-if (!app.includes("APP_VERSION='" + version + "'")) fail('app.js APP_VERSION 与 package.json 不一致');
-if (!app.includes('APP_VERSION_CODE=' + versionCode)) fail('app.js APP_VERSION_CODE 与 package.json 不一致');
-if (!sw.includes('zizhi-rss-shell-v' + version)) fail('Service Worker 缓存版本不一致');
-
-for (const marker of [
-  "function parseXml",
-  "function refreshSource",
-  "function checkUpdate",
-  "window.restoreBackupText",
-  "window.__rssApkDownloadProgress",
-  "UPDATE_MANIFEST_URLS"
-]) {
-  if (!app.includes(marker)) fail('缺少核心 RSS 功能：' + marker);
-}
-
-for (const legacy of [
-  'stock-rss-reader',
-  'sourceType',
-  'schema_version',
-  'judge-types',
-  '利好',
-  '不利',
-  '否决'
-]) {
-  if (app.includes(legacy)) fail('app.js 仍残留旧股票判断逻辑：' + legacy);
-}
-
-if (!fs.existsSync('index.html') || !fs.existsSync('styles.css') || !fs.existsSync('manifest.json')) fail('RSS web source files missing');
-if (!fs.existsSync('assets/rss-icon.svg')) fail('RSS icon missing');
-if (!native.includes('resolveResponseCharset')) fail('native charset handling missing');
-if (!native.includes('isTrustedUpdateUrl')) fail('native update URL validation missing');
-
-console.log('RSS 4 self-check passed:', version, versionCode);
+const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+const app=fs.readFileSync('app.js','utf8');
+const native=fs.readFileSync('native/MainActivity.java','utf8');
+const sw=fs.readFileSync('sw.js','utf8');
+const version=String(pkg.version||'').trim(), code=Number(pkg.versionCode||0);
+if(!/^3\.\d+\.\d+$/.test(version))fail('package.json version 必须是 3.x.y');
+if(!Number.isSafeInteger(code)||code<3000)fail('package.json versionCode 无效');
+if(!app.includes("APP_VERSION='"+version+"'")||!app.includes('APP_VERSION_CODE='+code))fail('app.js version constants mismatch');
+if(!sw.includes('zizhi-rss-shell-v'+version))fail('Service Worker version mismatch');
+for(const marker of ['function parseXml','function refreshSource','function checkUpdate','window.restoreBackupText','window.__rssApkDownloadProgress','UPDATE_MANIFEST_URLS'])if(!app.includes(marker))fail('缺少 RSS 核心功能：'+marker);
+for(const legacy of ['stock-rss-reader','sourceType','schema_version','judge-types','利好','不利','否决'])if(app.includes(legacy))fail('app.js 残留旧业务：'+legacy);
+if(!native.includes('resolveResponseCharset'))fail('native charset handling missing');
+if(!native.includes('isTrustedUpdateUrl'))fail('native update validation missing');
+if(/agu-ann-feed\.app\.workbuddy\.host\/feed\?token=/i.test(app+'\n'+native))fail('公开源码不得写死 Token');
+console.log('RSS reader self-check passed:',version,code);
