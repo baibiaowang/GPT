@@ -357,3 +357,5 @@ document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{state.page=b.da
 document.getElementById('refreshButton').onclick=refreshAll;
 init();
 async function init(){try{await loadState();render()}catch(e){app.innerHTML=emptyState('初始化失败',e.message||String(e));}}
+
+// RSS 3.0.12 clean-core build marker
