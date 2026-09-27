@@ -47,7 +47,7 @@ jobs:
           const version=String(pkg.version||'').trim();
           const versionCode=Number(pkg.versionCode||0);
           if(!/^4\.\d+\.\d+$/.test(version))throw new Error('RSS package version must be 4.x.y');
-          if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('RSS 4 package versionCode invalid');
+          if(!Number.isSafeInteger(versionCode)||versionCode<=0)throw new Error('RSS package versionCode invalid');
           if(cap.appId!=='com.baibiaowang.stockjudge')throw new Error('RSS applicationId mismatch');
           if(!app.includes("APP_VERSION='"+version+"'")||!app.includes('APP_VERSION_CODE='+versionCode))throw new Error('RSS app.js version constants incorrect');
           fs.appendFileSync(process.env.GITHUB_ENV,'RSS_VERSION='+version+'\nRSS_VERSION_CODE='+versionCode+'\nRSS_SOURCE_COMMIT='+process.env.GITHUB_SHA+'\n');
