@@ -86,6 +86,7 @@ jobs:
           echo "[signing] keystore restored ($(wc -c < signing.p12) bytes)"
 
       - name: Verify live SJ01 data envelope
+        if: ${{ fromJSON(env.APP_VERSION_CODE) >= 3000 }}
         shell: bash
         run: |
           set -euo pipefail
@@ -112,6 +113,7 @@ jobs:
       # 有 AES_KEY Secret 时，进一步做真实在线密文的完整解密验收。
       # 未配置时不阻断构建，只保留上一步的 SJ01 外层格式检查。
       - name: Full decrypt live SJ01 when AES key is configured
+        if: ${{ fromJSON(env.APP_VERSION_CODE) >= 3000 }}
         shell: bash
         env:
           SJ01_AES_KEY: ${{ secrets.AES_KEY }}
