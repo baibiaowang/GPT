@@ -36,7 +36,7 @@ function openDb(){
 async function storeGetAll(name){const d=await openDb();return new Promise((res,rej)=>{const r=d.transaction(name,'readonly').objectStore(name).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
 async function storePut(name,val){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction(name,'readwrite');t.objectStore(name).put(val);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
 async function storeDel(name,key){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction(name,'readwrite');t.objectStore(name).delete(key);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
-async async function clearStores(){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction([STORE_SOURCES,STORE_ARTICLES],'readwrite');t.objectStore(STORE_SOURCES).clear();t.objectStore(STORE_ARTICLES).clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+async function clearStores(){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction([STORE_SOURCES,STORE_ARTICLES],'readwrite');t.objectStore(STORE_SOURCES).clear();t.objectStore(STORE_ARTICLES).clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
 async function clearArticles(){const d=await openDb();return new Promise((res,rej)=>{const t=d.transaction(STORE_ARTICLES,'readwrite');t.objectStore(STORE_ARTICLES).clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
 
 function normalizeHttps(v){
