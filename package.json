@@ -1,13 +1,13 @@
 {
   "name": "zizhi-rss-reader",
-  "version": "3.0.16",
+  "version": "3.0.17",
   "private": true,
-  "description": "自制RSS阅读器 3.0.16 · agu-ann-feed 专用版",
+  "description": "自制RSS阅读器 3.0.17 · agu-ann-feed 专用版",
   "scripts": {
     "build:mobile-web": "node scripts/prepare-mobile.mjs",
     "build:apk": "node scripts/self-check.mjs && node native/inject.mjs && (test -d android || npx cap add android) && cp native/MainActivity.java android/app/src/main/java/com/baibiaowang/stockjudge/MainActivity.java && node native/patch-manifest.mjs && node native/patch-version.mjs && node native/patch-icon.mjs && npx cap sync android && cd android && gradle assembleRelease --no-daemon"
   },
   "devDependencies": {"@capacitor/cli": "8.0.0"},
   "dependencies": {"@capacitor/android": "8.0.0", "@capacitor/core": "8.0.0"},
-  "versionCode": 3016
+  "versionCode": 3017
 }
