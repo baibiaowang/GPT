@@ -2,7 +2,7 @@
  * 专用于 agu-ann-feed，同时兼容标准 RSS 2.0。
  * 本文件是全新客户端核心：本地状态只按 guid 绑定，旧股票判断机数据不参与迁移。
  */
-const APP_VERSION='3.0.17', APP_VERSION_CODE=3017;
+const APP_VERSION='3.0.18', APP_VERSION_CODE=3018;
 const DEFAULT_BASE='https://agu-ann-feed.app.workbuddy.host';
 const UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -177,10 +177,12 @@ function visibleArticles(){
 
 function render(){
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
+  document.querySelector('.bottom-nav')?.classList.toggle('hidden-nav',state.page==='source-add');
   if(state.page==='home')renderHome();
   else if(state.page==='categories')renderCategories();
   else if(state.page==='notes')renderNotes();
   else if(state.page==='favorites')renderFavorites();
+  else if(state.page==='source-add')renderSourceAdd();
   else renderSettings();
 }
 function toolbar(){return '<div class="toolbar"><input id="globalSearch" class="search" placeholder="搜索标题、股票、分类、总结" value="'+esc(state.search)+'"><button class="pill" id="clearSearch">清除</button></div>'}
@@ -253,15 +255,26 @@ function renderSearch(){
     '<div id="articleList">'+(state.search?visibleArticles().map(articleCard).join(''):emptyState('输入关键词','搜索公告标题、股票、分类或 AI 总结。'))+'</div>';
   bindList()
 }
+function renderSourceAdd(){
+  app.innerHTML='<div class="source-add-page"><button class="back-button" id="backSettings">‹ <span>设置</span></button>'+
+    '<div class="source-add-hero"><div class="eyebrow">AGU ANN FEED</div><h2>添加订阅源</h2><p>配置完成后返回设置即可管理。</p></div>'+
+    '<section class="setting-card add-source-card"><label class="field"><span>名称</span><input id="sourceName" placeholder="例如：公告流"></label>'+
+    '<label class="field"><span>Feed URL</span><input id="sourceUrl" value="'+esc(DEFAULT_BASE+'/feed')+'" placeholder="https://.../feed"></label>'+
+    '<label class="field"><span>Token</span><input id="sourceToken" type="password" autocomplete="off" placeholder="请输入订阅 Token"></label>'+
+    '<div class="setting-hint">分类由 RSS 自动提供。添加后可在“分类”页面按日期浏览并选择分类筛选。</div>'+
+    '<button class="primary add-source-submit" id="addSource">保存并获取最新文章</button></section></div>';
+  document.getElementById('backSettings')?.addEventListener('click',()=>{state.page='settings';render()});
+  document.getElementById('addSource')?.addEventListener('click',addSource);
+}
 function renderSettings(){
   const srcs=state.sources.map(s=>'<div class="source-setting-item"><div class="source-setting-main"><div class="source-setting-title"><strong>'+esc(s.name)+'</strong><span class="source-status '+(s.lastError?'error':s.lastSyncAt?'ok':'idle')+'">'+(s.lastError?'失败':s.lastSyncAt?'正常':'未刷新')+'</span></div><div class="source-setting-url">'+esc(s.url)+'</div><div class="source-setting-meta"><span>'+Number(s.lastItemCount||0)+' 条</span><span>'+(s.lastSyncAt?fmtTime(s.lastSyncAt):'尚未刷新')+'</span></div>'+(s.lastError?'<div class="source-error">'+esc(s.lastError)+'</div>':'')+'<div class="source-setting-actions"><button class="small-button" data-source-refresh="'+esc(s.id)+'">刷新</button><button class="small-button danger" data-source-delete="'+esc(s.id)+'">删除</button></div></div></div>').join('');
   app.innerHTML='<div class="settings-hero"><div class="settings-hero-mark">RSS</div><div class="settings-hero-main"><div class="eyebrow">AGU ANN FEED</div><h2>设置</h2><p>订阅源、更新、备份全部独立管理。</p></div><div class="version-badge">v'+APP_VERSION+'</div></div>'+
-    '<section class="setting-card"><h2>添加订阅源</h2><label class="field"><span>名称</span><input id="sourceName" placeholder="例如：全部公告"></label><label class="field"><span>Feed URL</span><input id="sourceUrl" value="'+esc(DEFAULT_BASE+'/feed')+'" placeholder="https://.../feed"></label><label class="field"><span>Token</span><input id="sourceToken" type="password" autocomplete="off" placeholder="x-feed-token / token"></label><div class="setting-hint">分类由公告源自动提供；在“分类”页面可按分类或日期浏览，这里不需要填写分类。</div><button class="primary" id="addSource">保存订阅源</button></section>'+
+    '<section class="setting-card compact-setting"><div class="settings-section-head"><div><h2>订阅源</h2><div class="section-subtitle">'+state.sources.length+' 个已配置</div></div><button class="primary" id="openAddSource">添加</button></div></section>'+
     '<section class="setting-card"><div class="settings-section-head"><div><h2>现有订阅源</h2><div class="section-subtitle">'+state.sources.length+' 个</div></div><button class="small-button" id="refreshAll">全部刷新</button></div><div class="source-settings-list">'+(srcs||'<div class="settings-empty"><div>没有订阅源</div><span>输入 agu-ann-feed 地址和 Token。</span></div>')+'</div></section>'+
     '<section class="setting-card"><div class="settings-section-head"><div><h2>应用更新</h2><div class="section-subtitle">当前 '+APP_VERSION+' · '+APP_VERSION_CODE+'</div></div></div><button class="setting-row-button" id="checkUpdate"><span><strong>检查新版本</strong><small>从官方更新清单读取并校验 SHA-256</small></span><b>›</b></button><div class="update-progress" id="updateProgress"><div class="update-progress-line"><span id="updateDesc"></span><strong id="updatePct">0%</strong></div><div class="update-progress-track"><i id="updateFill"></i></div></div></section>'+
     '<section class="setting-card"><h2>本机数据</h2><div class="data-stats"><div><strong>'+state.articles.length+'</strong><span>文章</span></div><div><strong>'+state.articles.filter(a=>a.favorite).length+'</strong><span>收藏</span></div><div><strong>'+state.articles.filter(a=>a.read).length+'</strong><span>已读</span></div><div><strong>'+state.articles.filter(a=>a.notes?.length).length+'</strong><span>点评</span></div></div><div class="settings-action-grid"><button class="secondary" id="exportData">导出备份</button><button class="secondary" id="importData">导入备份</button></div></section>'+
     '<section class="setting-card danger-section"><h2>清空文章数据</h2><p class="danger-desc">只清除本机文章、已读、收藏和点评，订阅源及 Token 保留。</p><button class="danger-action" id="clearData">清空文章数据</button></section>';
-  document.getElementById('addSource').onclick=addSource;
+  document.getElementById('openAddSource')?.addEventListener('click',()=>{state.page='source-add';render()});
   document.getElementById('refreshAll').onclick=refreshAll;
   document.querySelectorAll('[data-source-refresh]').forEach(b=>b.onclick=async()=>{const s=state.sources.find(x=>x.id===b.dataset.sourceRefresh);if(!s)return;try{toast('正在刷新');await refreshSource(s);await loadState();render();toast('刷新成功')}catch(e){s.lastError=e.message||String(e);await storePut(STORE_SOURCES,s);await loadState();render();toast('刷新失败：'+s.lastError)}});
   document.querySelectorAll('[data-source-delete]').forEach(b=>b.onclick=async()=>{const s=state.sources.find(x=>x.id===b.dataset.sourceDelete);if(!s)return;if(!confirm('删除这个订阅源？本机已经保存的文章不会删除。'))return;await storeDel(STORE_SOURCES,s.id);await loadState();render()});
@@ -369,7 +382,7 @@ async function loadState(){
   state.sources.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
 }
 document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{state.page=b.dataset.page;state.search='';state.category='';state.date='';render()});
-document.getElementById('refreshButton').onclick=refreshAll;
+document.getElementById('refreshButton')?.addEventListener('click',refreshAll);
 init();
 async function init(){try{await loadState();render()}catch(e){app.innerHTML=emptyState('初始化失败',e.message||String(e));}}
 
