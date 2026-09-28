@@ -6,6 +6,8 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.graphics.Color;
+import android.view.View;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
@@ -74,6 +76,11 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+        getWindow().setStatusBarColor(Color.rgb(244,245,247));
+        getWindow().setNavigationBarColor(Color.rgb(20,21,24));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        }
         configureWebViewSystemInsets();
         installBackHandler();
         installNativeBridge();
