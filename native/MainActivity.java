@@ -91,7 +91,7 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    /** Android 15+ edge-to-edge：把系统导航栏安全区同步给 WebView/CSS，避免固定底栏被系统三键/手势区域盖住。 */
+    /** WebView 使用系统默认安全区域，不再把原生 systemBars 像素重复注入 CSS，避免底栏被抬离屏幕底部。 */
     private void configureWebViewSystemInsets() {
         final WebView wv = (getBridge() == null) ? null : getBridge().getWebView();
         if (wv == null) {
@@ -100,14 +100,7 @@ public class MainActivity extends BridgeActivity {
             }, 250L);
             return;
         }
-        ViewCompat.setOnApplyWindowInsetsListener(wv, (view, insets) -> {
-            androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            String js = "document.documentElement.style.setProperty('--android-top-inset','" + bars.top + "px');" +
-                        "document.documentElement.style.setProperty('--android-bottom-inset','" + bars.bottom + "px');";
-            try { wv.evaluateJavascript(js, null); } catch (Exception ignored) { }
-            return insets;
-        });
-        ViewCompat.requestApplyInsets(wv);
+        try { wv.setFitsSystemWindows(true); } catch (Exception ignored) { }
     }
 
     /** App-local JS bridge: export user backup to Downloads, download updates, and open external links. */
