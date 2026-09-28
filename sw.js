@@ -1,4 +1,4 @@
-const CACHE='zizhi-rss-shell-v3.0.13';
+const CACHE='zizhi-rss-shell-v3.0.14';
 const SHELL=['./','./index.html','./styles.css','./app.js','./manifest.json','./assets/rss-icon.svg'];
 const NETWORK_FIRST=new Set(['/','/index.html','/styles.css','/app.js','/manifest.json','/sw.js']);
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
