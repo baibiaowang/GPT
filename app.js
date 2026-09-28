@@ -2,7 +2,7 @@
  * 专用于 agu-ann-feed，同时兼容标准 RSS 2.0。
  * 本文件是全新客户端核心：本地状态只按 guid 绑定，旧股票判断机数据不参与迁移。
  */
-const APP_VERSION='3.0.13', APP_VERSION_CODE=3013;
+const APP_VERSION='3.0.14', APP_VERSION_CODE=3014;
 const DEFAULT_BASE='https://agu-ann-feed.app.workbuddy.host';
 const UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -11,6 +11,7 @@ const UPDATE_MANIFEST_URLS=[
 ];
 const DB_NAME='zizhi-rss-reader', DB_VERSION=1;
 const STORE_SOURCES='sources', STORE_ARTICLES='articles', BACKUP_VERSION=1;
+const MIN_REFRESH_INTERVAL_MS=60*1000;
 const navTitles={home:'首页',categories:'分类',notes:'点评',favorites:'收藏',settings:'设置'};
 const app=document.getElementById('app'), modalRoot=document.getElementById('modalRoot'), toastEl=document.getElementById('toast');
 const importFileEl=document.getElementById('importFile');
@@ -136,6 +137,8 @@ function mergeArticle(old,a,source){
   };
 }
 async function refreshSource(source){
+  const last=Date.parse(source.lastAttemptAt||'');
+  if(Number.isFinite(last)){const remain=MIN_REFRESH_INTERVAL_MS-(Date.now()-last);if(remain>0)throw new Error('为避免频繁请求，请 '+Math.ceil(remain/1000)+' 秒后再刷新');}
   const url=feedUrl(source);
   source.lastError=''; source.lastAttemptAt=now(); await storePut(STORE_SOURCES,source);
   const xml=await fetchText(url,'feed');
@@ -175,7 +178,6 @@ function visibleArticles(){
 }
 
 function render(){
-  document.getElementById('pageTitle').textContent=navTitles[state.page]||'首页';
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
   if(state.page==='home')renderHome();
   else if(state.page==='categories')renderCategories();
@@ -220,13 +222,13 @@ function renderHome(){
 function dateList(){const m=new Map();for(const a of state.articles){const d=new Date(a.publishedAt||0);if(Number.isNaN(d.getTime()))continue;const k=d.toISOString().slice(0,10);m.set(k,(m.get(k)||0)+1)}return [...m.entries()].sort((a,b)=>b[0].localeCompare(a[0]))}
 function renderCategories(){
   const cats=categoryList(), dates=dateList();
-  const cards=cats.length?cats.map(([c,n])=>'<button class="category-card '+(c===state.category&&!state.date?'active':'')+'" data-cat="'+esc(c)+'"><strong>'+esc(c)+'</strong><span>'+n+' 篇</span></button>').join(''):emptyState('还没有分类','刷新订阅后分类会自动出现。');
+  const cards=cats.length?cats.map(([c,n])=>'<button class="category-card '+(c===state.category?'active':'')+'" data-cat="'+esc(c)+'"><strong>'+esc(c)+'</strong><span>'+n+' 篇</span></button>').join(''):emptyState('还没有分类','刷新订阅后分类会自动出现。');
   const dateCards=dates.length?dates.map(([d,n])=>'<button class="date-card '+(d===state.date?'active':'')+'" data-date="'+esc(d)+'"><strong>'+esc(d.slice(5).replace('-','月')+'日')+'</strong><span>'+n+' 篇</span></button>').join(''):'<div class="settings-empty">暂无日期</div>';
-  const current=state.date?'日期：'+state.date.slice(5).replace('-','月')+'日':state.category?'分类：'+state.category:'全部文章';
-  const list=(state.category||state.date)?'<div class="category-head"><button class="secondary" id="clearCategory">全部</button><span>'+esc(current)+'</span></div><div id="articleList">'+(visibleArticles().map(articleCard).join('')||emptyState('没有文章','这个筛选条件下暂无文章。'))+'</div>':'';
+  const current=(state.category?'分类：'+state.category:'')+(state.category&&state.date?' · ':'')+(state.date?'日期：'+state.date.slice(5).replace('-','月')+'日':'')||'全部文章';
+  const list=(state.category||state.date)?'<div class="category-head"><button class="secondary" id="clearCategory">清除筛选</button><span>'+esc(current)+'</span></div><div id="articleList">'+(visibleArticles().map(articleCard).join('')||emptyState('没有文章','这个筛选条件下暂无文章。'))+'</div>':'';
   app.innerHTML='<div class="section-head"><div><div class="section-title">分类</div><div class="section-subtitle">按分类或日期浏览</div></div></div><h3 class="browse-title">按分类</h3><div class="category-grid">'+cards+'</div><h3 class="browse-title">按日期</h3><div class="date-grid">'+dateCards+'</div>'+list;
-  document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{state.category=b.dataset.cat;state.date='';renderCategories()});
-  document.querySelectorAll('[data-date]').forEach(b=>b.onclick=()=>{state.date=b.dataset.date;state.category='';renderCategories()});
+  document.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{state.category=b.dataset.cat;renderCategories()});
+  document.querySelectorAll('[data-date]').forEach(b=>b.onclick=()=>{state.date=b.dataset.date;renderCategories()});
   document.getElementById('clearCategory')?.addEventListener('click',()=>{state.category='';state.date='';renderCategories()});
   bindList()
 }
@@ -294,15 +296,13 @@ function renderDetail(a){
     (a.summary?'<section class="detail-section"><h3>AI总结</h3><div class="summary-box">'+esc(a.summary)+'</div></section>':'')+
     (ans.length?'<section class="detail-section"><h3>结构化信息</h3><div class="answer-list">'+ans.map(([k,v])=>'<div><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div></section>':'')+
     '<section class="detail-section"><h3>行情</h3><div class="market-row"><span>现价</span><strong>'+(a.market?.close??'未取到')+'</strong><span>前收盘</span><strong>'+(a.market?.preClose??'未取到')+'</strong></div></section>'+
-    '<section class="detail-section"><h3>操作</h3><div class="detail-actions"><button class="primary" id="detailFav">'+(a.favorite?'取消收藏':'收藏')+'</button><button class="secondary" id="detailLink" '+(a.links?.announcement?'':'disabled')+'>公告详情</button><button class="secondary" id="detailPdf" '+(a.links?.pdf?'':'disabled')+'>PDF原文</button></div></section>'+
+    '<section class="detail-section"><h3>RSS原始正文</h3><div class="article-body rss-original-body">'+(a.rawHtml||'<p>无</p>')+'</div></section>'+
+    '<section class="detail-section"><h3>操作</h3><div class="detail-actions"><button class="primary" id="detailFav">'+(a.favorite?'取消收藏':'收藏')+'</button></div></section>'+
     '<section class="detail-section"><h3>我的点评</h3><div id="notes">'+(a.notes?.length?a.notes.map(n=>'<div class="note-item"><div class="note-time">'+esc(fmtTime(n.time))+'</div><div class="note-text">'+esc(n.text)+'</div></div>').join(''):'<div class="settings-empty">还没有点评</div>')+'</div><textarea id="noteInput" class="note-input" placeholder="记录自己的判断或备注"></textarea><button class="secondary" id="saveNote">保存点评</button></section>'+
-    '<section class="detail-section"><details><summary>原始正文</summary><div class="article-body">'+(a.rawHtml||'<p>无</p>')+'</div></details></section>'+
   '</article></div>';
   document.getElementById('detailClose').onclick=()=>{history.back()};
   document.getElementById('detailBackdrop').addEventListener('click',e=>{if(e.target.id==='detailBackdrop')history.back()});
   document.getElementById('detailFav').onclick=async()=>{a.favorite=!a.favorite;await storePut(STORE_ARTICLES,a);await loadState();renderDetail(a);render();};
-  document.getElementById('detailLink').onclick=()=>a.links.announcement&&openExternal(a.links.announcement);
-  document.getElementById('detailPdf').onclick=()=>a.links.pdf&&openExternal(a.links.pdf);
   document.getElementById('saveNote').onclick=async()=>{const v=document.getElementById('noteInput').value.trim();if(!v)return;const x=Array.isArray(a.notes)?a.notes:[];x.push({time:now(),text:v});a.notes=x;await storePut(STORE_ARTICLES,a);await loadState();renderDetail(a);toast('点评已保存')};
 }
 function openExternal(url){
