@@ -190,7 +190,7 @@ function articleCard(a){
     return '<article class="article-card '+(unread?'unread':'read')+'" data-guid="'+esc(a.guid)+'">'+
     '<div class="article-top"><div class="article-heading"><div class="article-kicker">'+esc(a.category||'其他')+'</div><h3 class="article-title">'+esc(a.title||'无标题')+'</h3></div>'+
     '<button class="favorite-button '+(fav?'active':'')+'" data-fav="'+esc(a.guid)+'">'+(fav?'★':'☆')+'</button></div>'+
-    '<div class="article-meta"><span>'+esc(stock||'综合')+'</span><span>'+esc(fmtTime(a.publishedAt))+'</span>+'</div>'+
+    '<div class="article-meta"><span>'+esc(stock||'综合')+'</span><span>'+esc(fmtTime(a.publishedAt))+'</span></div>'+
     (a.summary?'<div class="article-excerpt">'+esc(a.summary)+'</div>':'')+
     '<div class="article-actions"><span class="read-state">'+(unread?'未读':'已读')+'</span><button class="small-button" data-open="'+esc(a.guid)+'">阅读</button></div>'+
   '</article>'
