@@ -1,15 +1,15 @@
 {
-  "version": "3.0.18",
-  "versionCode": 3018,
-  "published_at": "2026-09-28T06:07:22Z",
+  "version": "3.0.19",
+  "versionCode": 3019,
+  "published_at": "2026-09-28T06:15:29Z",
   "repo": "baibiaowang/GPT",
-  "apk_size": 3197911,
-  "source_commit": "c8d9cc5e3aa77eaceaf4a4bef5c80b984a0a3283",
-  "sha256": "aafd80418947ced70d0af9fbee71a96b5e9a8eef796c5b76789f0c284188d578",
-  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.18/app.apk",
+  "apk_size": 3198011,
+  "source_commit": "30b80c06b39f23dd8556d8fafa3e2cbee6d91423",
+  "sha256": "59c90e8d802f33b6f1b3ccc3f0f063bf33899021d5fd887ebb0eac1de4ac1c31",
+  "apk_url": "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.19/app.apk",
   "apk_urls": [
-    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.18/app.apk",
-    "https://github.com/baibiaowang/GPT/releases/download/v3.0.18/zizhi-rss-3.0.18.apk"
+    "https://raw.githubusercontent.com/baibiaowang/GPT/apk/releases/3.0.19/app.apk",
+    "https://github.com/baibiaowang/GPT/releases/download/v3.0.19/zizhi-rss-3.0.19.apk"
   ],
-  "notes": "自制RSS 3.0.18：agu-ann-feed RSS 阅读器重构版。"
+  "notes": "自制RSS 3.0.19：agu-ann-feed RSS 阅读器重构版。"
 }
