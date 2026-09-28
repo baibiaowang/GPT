@@ -89,7 +89,7 @@ function extractStock(title,html){
 function findPdf(links){return links.find(x=>/\\.pdf(?:[?#]|$)/i.test(x))||''}
 function extractAnswers(html){
   const t=textOf(html).split(/\r?\n/).map(s=>s.trim()).filter(Boolean), out={};
-  t.forEach(line=>{const m=line.match(/^([^：:]{2,40})[：:]\\s*(.+)$/);if(m&&!/^(AI总结|股票|公告标题|公告日期|现价|前收盘价|链接|分类)$/.test(m[1]))out[m[1]]=m[2].trim()});
+  t.forEach(line=>{const m=line.match(/^([^：:]{2,40})[：:]\\s*(.+)$/);if(m&&!/^(AI总结|股票|公告标题|公告日期|链接|分类)$/.test(m[1]))out[m[1]]=m[2].trim()});
   return out
 }
 
