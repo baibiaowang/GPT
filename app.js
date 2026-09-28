@@ -2,7 +2,7 @@
  * 专用于 agu-ann-feed，同时兼容标准 RSS 2.0。
  * 本文件是全新客户端核心：本地状态只按 guid 绑定，旧股票判断机数据不参与迁移。
  */
-const APP_VERSION='3.0.18', APP_VERSION_CODE=3018;
+const APP_VERSION='3.0.19', APP_VERSION_CODE=3019;
 const DEFAULT_BASE='https://agu-ann-feed.app.workbuddy.host';
 const UPDATE_MANIFEST_URLS=[
   'https://raw.githubusercontent.com/baibiaowang/GPT/main/update.json',
@@ -263,7 +263,10 @@ function renderSourceAdd(){
     '<label class="field"><span>Token</span><input id="sourceToken" type="password" autocomplete="off" placeholder="请输入订阅 Token"></label>'+
     '<div class="setting-hint">分类由 RSS 自动提供。添加后可在“分类”页面按日期浏览并选择分类筛选。</div>'+
     '<button class="primary add-source-submit" id="addSource">保存并获取最新文章</button></section></div>';
-  document.getElementById('backSettings')?.addEventListener('click',()=>{state.page='settings';render()});
+  document.getElementById('backSettings')?.addEventListener('click',()=>{
+    if(history.length>1){history.back();return}
+    state.page='settings';render();
+  });
   document.getElementById('addSource')?.addEventListener('click',addSource);
 }
 function renderSettings(){
@@ -274,7 +277,11 @@ function renderSettings(){
     '<section class="setting-card"><div class="settings-section-head"><div><h2>应用更新</h2><div class="section-subtitle">当前 '+APP_VERSION+' · '+APP_VERSION_CODE+'</div></div></div><button class="setting-row-button" id="checkUpdate"><span><strong>检查新版本</strong><small>从官方更新清单读取并校验 SHA-256</small></span><b>›</b></button><div class="update-progress" id="updateProgress"><div class="update-progress-line"><span id="updateDesc"></span><strong id="updatePct">0%</strong></div><div class="update-progress-track"><i id="updateFill"></i></div></div></section>'+
     '<section class="setting-card"><h2>本机数据</h2><div class="data-stats"><div><strong>'+state.articles.length+'</strong><span>文章</span></div><div><strong>'+state.articles.filter(a=>a.favorite).length+'</strong><span>收藏</span></div><div><strong>'+state.articles.filter(a=>a.read).length+'</strong><span>已读</span></div><div><strong>'+state.articles.filter(a=>a.notes?.length).length+'</strong><span>点评</span></div></div><div class="settings-action-grid"><button class="secondary" id="exportData">导出备份</button><button class="secondary" id="importData">导入备份</button></div></section>'+
     '<section class="setting-card danger-section"><h2>清空文章数据</h2><p class="danger-desc">只清除本机文章、已读、收藏和点评，订阅源及 Token 保留。</p><button class="danger-action" id="clearData">清空文章数据</button></section>';
-  document.getElementById('openAddSource')?.addEventListener('click',()=>{state.page='source-add';render()});
+  document.getElementById('openAddSource')?.addEventListener('click',()=>{
+    state.page='source-add';
+    history.pushState({readerPage:'source-add'},'',location.href.split('#')[0]+'#add-source');
+    render();
+  });
   document.getElementById('refreshAll').onclick=refreshAll;
   document.querySelectorAll('[data-source-refresh]').forEach(b=>b.onclick=async()=>{const s=state.sources.find(x=>x.id===b.dataset.sourceRefresh);if(!s)return;try{toast('正在刷新');await refreshSource(s);await loadState();render();toast('刷新成功')}catch(e){s.lastError=e.message||String(e);await storePut(STORE_SOURCES,s);await loadState();render();toast('刷新失败：'+s.lastError)}});
   document.querySelectorAll('[data-source-delete]').forEach(b=>b.onclick=async()=>{const s=state.sources.find(x=>x.id===b.dataset.sourceDelete);if(!s)return;if(!confirm('删除这个订阅源？本机已经保存的文章不会删除。'))return;await storeDel(STORE_SOURCES,s.id);await loadState();render()});
@@ -327,8 +334,18 @@ function openExternal(url){
   if(window.AndroidNative?.openUrl){window.AndroidNative.openUrl(u);return}
   window.open(u,'_blank','noopener,noreferrer');
 }
-window.addEventListener('popstate',()=>{if(state.detailGuid){state.detailHistory=false;modalRoot.innerHTML='';state.detailGuid=null}});
+window.addEventListener('popstate',e=>{
+  if(state.detailGuid){
+    state.detailHistory=false;modalRoot.innerHTML='';state.detailGuid=null;return;
+  }
+  if(state.page==='source-add'||location.hash==='#add-source'){
+    state.page='settings';
+    document.querySelector('.bottom-nav')?.classList.remove('hidden-nav');
+    render();
+  }
+});
 if(location.hash.startsWith('#article=')){const guid=decodeURIComponent(location.hash.slice(9));setTimeout(()=>openDetail(guid,false),200)}
+else if(location.hash==='#add-source'){setTimeout(()=>{state.page='source-add';render()},200)}
 
 async function exportBackup(){
   const payload={backupVersion:BACKUP_VERSION,app:'zizhi-rss-reader',exportedAt:now(),sources:state.sources,articles:state.articles};
